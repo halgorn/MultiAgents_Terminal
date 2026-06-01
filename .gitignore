@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.worktrees/
+.ai-memory/
+evidence/
+history/
+tasks/
+.env
+*.js.map
