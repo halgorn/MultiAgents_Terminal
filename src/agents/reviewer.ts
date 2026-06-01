@@ -4,6 +4,7 @@ import { ReviewReportSchema, type ReviewReport } from '../schemas/review.js';
 import type { PatchReport } from '../schemas/patch.js';
 import type { EvidenceReport } from '../schemas/evidence.js';
 import type { TaskState } from '../core/state-machine.js';
+import type { ProviderName } from '../core/runtime-policy.js';
 
 export interface ReviewerInput {
   patch: PatchReport;
@@ -12,10 +13,10 @@ export interface ReviewerInput {
 }
 
 export class ReviewerAgent extends BaseAgent<ReviewerInput, ReviewReport> {
-  constructor() {
+  constructor(provider: ProviderName = 'claude') {
     super({
       name: 'reviewer',
-      model: 'claude-haiku-4-5',
+      provider,
       systemPrompt: buildReviewerPrompt(),
     });
   }

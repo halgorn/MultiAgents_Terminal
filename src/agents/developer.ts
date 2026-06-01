@@ -4,6 +4,7 @@ import { PatchReportSchema, type PatchReport } from '../schemas/patch.js';
 import type { EvidenceReport } from '../schemas/evidence.js';
 import type { PlanReport } from '../schemas/plan.js';
 import type { TaskState } from '../core/state-machine.js';
+import type { ProviderName } from '../core/runtime-policy.js';
 
 export interface DeveloperInput {
   evidence: EvidenceReport;
@@ -12,10 +13,10 @@ export interface DeveloperInput {
 }
 
 export class DeveloperAgent extends BaseAgent<DeveloperInput, PatchReport> {
-  constructor() {
+  constructor(provider: ProviderName = 'codex') {
     super({
       name: 'developer',
-      model: 'claude-haiku-4-5',
+      provider,
       systemPrompt: buildDeveloperPrompt(),
     });
   }

@@ -1,14 +1,15 @@
 import type { Command } from 'commander';
 import { Orchestrator } from '../../core/orchestrator.js';
 import { Renderer } from '../ui/renderer.js';
+import { addRuntimeOptions, toRuntimePolicyInput, type RuntimeCliOptions } from '../runtime-options.js';
 
 export function registerAnalyze(program: Command): void {
-  program
+  addRuntimeOptions(program
     .command('analyze <target>')
-    .description('Spawn parallel investigators to analyze a bug or issue')
-    .action(async (target: string) => {
+    .description('Analyze a bug or issue with budgeted investigators'))
+    .action(async (target: string, options: RuntimeCliOptions) => {
       const renderer = new Renderer();
-      const orch = new Orchestrator(process.cwd());
+      const orch = new Orchestrator(process.cwd(), toRuntimePolicyInput(options));
 
       orch.on('state:change', ({ state }) => renderer.showState(state));
       orch.on('agent:start', ({ agentName }) => renderer.agentStart(agentName));

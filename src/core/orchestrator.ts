@@ -11,12 +11,14 @@ import { PlannerAgent } from '../agents/planner.js';
 import { InvestigatorAgent } from '../agents/investigator.js';
 import { DeveloperAgent } from '../agents/developer.js';
 import { ReviewerAgent } from '../agents/reviewer.js';
-import { QAAgent } from '../agents/qa.js';
+import { runLocalQA } from '../infra/local-qa.js';
+import { createRuntimePolicy, type RuntimePolicy, type RuntimePolicyInput } from './runtime-policy.js';
 import type { EvidenceReport } from '../schemas/evidence.js';
 import type { PlanReport } from '../schemas/plan.js';
 import type { PatchReport } from '../schemas/patch.js';
 import type { ReviewReport } from '../schemas/review.js';
 import type { QAResult } from '../schemas/qa.js';
+import type { InvestigatorDomain } from '../prompts/investigator.js';
 
 export interface OrchestratorEvents {
   'state:change': { taskId: string; state: TaskState };
@@ -28,10 +30,12 @@ export interface OrchestratorEvents {
 
 export class Orchestrator extends EventEmitter {
   private readonly knowledge: KnowledgeStore;
+  private readonly policy: RuntimePolicy;
 
-  constructor(private readonly cwd: string) {
+  constructor(private readonly cwd: string, policyInput: RuntimePolicyInput = {}) {
     super();
     this.knowledge = new KnowledgeStore(cwd);
+    this.policy = createRuntimePolicy(policyInput);
   }
 
   private onChunk = (agentName: string, text: string): void => {
@@ -77,16 +81,16 @@ export class Orchestrator extends EventEmitter {
       const plannerWT = createWorktree(this.cwd, 'planner', task.id);
       worktrees.push(['planner', task.id]);
 
-      const planRun = await new PlannerAgent().run(
+      const planRun = await new PlannerAgent(this.policy.plannerProvider).run(
         { taskId: task.id, bugDescription: target, codebaseSummary, worktreePath: plannerWT },
+        this.policy,
         this.onChunk,
       );
       plan = planRun.output;
       this.emit('agent:done', { agentName: 'planner', durationMs: planRun.durationMs });
 
-      // 3 parallel Investigators
       const resolvedPlan = plan;
-      const domains = ['backend', 'frontend', 'bug-history'] as const;
+      const domains = this.pickInvestigatorDomains(target, resolvedPlan);
       const investigatorWTs = domains.map((d) => {
         const wt = createWorktree(this.cwd, `investigator-${d}`, task.id);
         worktrees.push([`investigator-${d}`, task.id]);
@@ -97,8 +101,9 @@ export class Orchestrator extends EventEmitter {
 
       const evidenceRuns = await Promise.all(
         domains.map((domain, i) =>
-          new InvestigatorAgent(domain).run(
+          new InvestigatorAgent(domain, this.policy.investigatorProvider).run(
             { plan: resolvedPlan, bugDescription: target, worktreePath: investigatorWTs[i]!, domain },
+            this.policy,
             this.onChunk,
           ),
         ),
@@ -126,8 +131,9 @@ export class Orchestrator extends EventEmitter {
       const devWT = createWorktree(this.cwd, 'developer', task.id);
       worktrees.push(['developer', task.id]);
 
-      const devRun = await new DeveloperAgent().run(
+      const devRun = await new DeveloperAgent(this.policy.developerProvider).run(
         { evidence, plan, worktreePath: devWT },
+        this.policy,
         this.onChunk,
       );
       patch = devRun.output;
@@ -136,7 +142,11 @@ export class Orchestrator extends EventEmitter {
 
       // Reviewer inspects the developer worktree so it sees the actual patch.
       this.emit('agent:start', { agentName: 'reviewer' });
-      const reviewRun = await new ReviewerAgent().run({ patch, evidence, worktreePath: devWT }, this.onChunk);
+      const reviewRun = await new ReviewerAgent(this.policy.reviewerProvider).run(
+        { patch, evidence, worktreePath: devWT },
+        this.policy,
+        this.onChunk,
+      );
       review = reviewRun.output;
       this.emit('agent:done', { agentName: 'reviewer', durationMs: reviewRun.durationMs });
 
@@ -149,11 +159,10 @@ export class Orchestrator extends EventEmitter {
 
       await this.transition(task, 'REVIEWED', 'reviewer');
 
-      // QA runs in the developer worktree because the patch is applied there.
       this.emit('agent:start', { agentName: 'qa' });
-      const qaRun = await new QAAgent().run({ patch, evidence, worktreePath: devWT }, this.onChunk);
-      qaResult = qaRun.output;
-      this.emit('agent:done', { agentName: 'qa', durationMs: qaRun.durationMs });
+      const qaStart = Date.now();
+      qaResult = runLocalQA(devWT, patch, evidence, this.policy);
+      this.emit('agent:done', { agentName: 'qa', durationMs: Date.now() - qaStart });
 
       this.assertVerificationPolicy(qaResult);
       await this.transition(task, 'TESTED', 'qa');
@@ -204,14 +213,15 @@ export class Orchestrator extends EventEmitter {
       worktrees.push(['planner', task.id]);
 
       this.emit('agent:start', { agentName: 'planner' });
-      const planRun = await new PlannerAgent().run(
+      const planRun = await new PlannerAgent(this.policy.plannerProvider).run(
         { taskId: task.id, bugDescription: target, codebaseSummary, worktreePath: plannerWT },
+        this.policy,
         this.onChunk,
       );
       const plan = planRun.output;
       this.emit('agent:done', { agentName: 'planner', durationMs: planRun.durationMs });
 
-      const domains = ['backend', 'frontend', 'bug-history'] as const;
+      const domains = this.pickInvestigatorDomains(target, plan);
       const investigatorWTs = domains.map((d) => {
         const wt = createWorktree(this.cwd, `investigator-${d}`, task.id);
         worktrees.push([`investigator-${d}`, task.id]);
@@ -222,8 +232,9 @@ export class Orchestrator extends EventEmitter {
 
       const evidenceRuns = await Promise.all(
         domains.map((domain, i) =>
-          new InvestigatorAgent(domain).run(
+          new InvestigatorAgent(domain, this.policy.investigatorProvider).run(
             { plan, bugDescription: target, worktreePath: investigatorWTs[i]!, domain },
+            this.policy,
             this.onChunk,
           ),
         ),
@@ -304,8 +315,9 @@ export class Orchestrator extends EventEmitter {
       this.emit('agent:start', { agentName: 'reviewer' });
       const reviewWT = createWorktree(this.cwd, 'reviewer', task.id);
       worktrees.push(['reviewer', task.id]);
-      const reviewRun = await new ReviewerAgent().run(
+      const reviewRun = await new ReviewerAgent(this.policy.reviewerProvider).run(
         { patch: syntheticPatch, evidence: syntheticEvidence, worktreePath: reviewWT },
+        this.policy,
         this.onChunk,
       );
       this.emit('agent:done', { agentName: 'reviewer', durationMs: reviewRun.durationMs });
@@ -372,6 +384,24 @@ export class Orchestrator extends EventEmitter {
     if (qa.reproductionStillFails) {
       throw new Error('Verification policy failed: original bug still reproducible after patch.');
     }
+  }
+
+  private pickInvestigatorDomains(target: string, plan: PlanReport): InvestigatorDomain[] {
+    if (this.policy.deep) {
+      return ['backend', 'frontend', 'bug-history'].slice(0, this.policy.maxAgents) as InvestigatorDomain[];
+    }
+
+    const text = [
+      target,
+      plan.summary,
+      plan.estimatedFiles.join(' '),
+      plan.relevantModules.join(' '),
+    ].join(' ').toLowerCase();
+
+    const domain: InvestigatorDomain = /frontend|ui|component|react|css|browser|client/.test(text)
+      ? 'frontend'
+      : 'backend';
+    return [domain];
   }
 
   private cleanupWorktrees(pairs: Array<[string, string]>): void {

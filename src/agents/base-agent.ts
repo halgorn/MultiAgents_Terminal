@@ -1,13 +1,13 @@
-import { spawn } from 'child_process';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import type { TaskState } from '../core/state-machine.js';
-
-const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
+import type { ProviderName, RuntimePolicy } from '../core/runtime-policy.js';
+import { createRuntimePolicy, limitChars, limitLines } from '../core/runtime-policy.js';
+import { createProvider } from '../providers/cli-provider.js';
 
 export interface AgentConfig {
   name: string;
-  model: 'claude-haiku-4-5';
+  provider: ProviderName;
   systemPrompt: string; // written as .claude/CLAUDE.md in the worktree
 }
 
@@ -29,6 +29,7 @@ export abstract class BaseAgent<TInput, TOutput> {
 
   async run(
     input: TInput,
+    policy: RuntimePolicy = createRuntimePolicy(),
     onChunk?: (agentName: string, text: string) => void,
   ): Promise<AgentRun<TOutput>> {
     const start = Date.now();
@@ -36,9 +37,18 @@ export abstract class BaseAgent<TInput, TOutput> {
 
     this.writeClaudeMd(worktreePath);
 
-    const userMessage = this.buildUserMessage(input);
+    const userMessage = this.applyLimits(this.buildUserMessage(input), policy);
 
-    const rawText = await this.runClaude(worktreePath, userMessage, onChunk);
+    const rawText = await createProvider(this.config.provider).run(
+      {
+        agentName: this.config.name,
+        cwd: worktreePath,
+        systemPrompt: this.config.systemPrompt,
+        userMessage,
+        policy,
+      },
+      onChunk,
+    );
     const output = this.parseOutput(rawText);
 
     return {
@@ -56,94 +66,15 @@ export abstract class BaseAgent<TInput, TOutput> {
     writeFileSync(join(claudeDir, 'CLAUDE.md'), this.config.systemPrompt, 'utf8');
   }
 
-  private runClaude(
-    cwd: string,
-    userMessage: string,
-    onChunk?: (agentName: string, text: string) => void,
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const args = [
-        '-p', userMessage,
-        '--output-format', 'stream-json',
-        '--verbose',
-        '--model', this.config.model,
-        '--dangerously-skip-permissions',
-      ];
+  private applyLimits(message: string, policy: RuntimePolicy): string {
+    const policyBlock = `Runtime policy:
+- Maximum read per file/context block: ${policy.maxFileLines} lines.
+- Maximum retained CLI output: ${policy.maxOutputChars} chars.
+- Budget: ${policy.budget}.
 
-      const proc = spawn('claude', args, {
-        cwd,
-        env: process.env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      let buffer = '';
-      let finalResult = '';
-      let accumulatedText = '';
-      let settled = false;
-
-      const timer = setTimeout(() => {
-        if (!settled) {
-          proc.kill('SIGTERM');
-          reject(new Error(`[${this.config.name}] timed out after ${AGENT_TIMEOUT_MS / 1000}s`));
-        }
-      }, AGENT_TIMEOUT_MS);
-
-      proc.stdout.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const event = JSON.parse(line) as Record<string, unknown>;
-
-            // Stream assistant text as it arrives
-            if (event['type'] === 'assistant') {
-              const msg = event['message'] as { content?: Array<{ type: string; text?: string }> };
-              for (const block of msg?.content ?? []) {
-                if (block.type === 'text' && block.text) {
-                  accumulatedText += block.text;
-                  onChunk?.(this.config.name, block.text);
-                }
-              }
-            }
-
-            // Final result event contains the clean text response
-            if (event['type'] === 'result' && typeof event['result'] === 'string') {
-              finalResult = event['result'];
-            }
-          } catch {
-            // skip malformed lines
-          }
-        }
-      });
-
-      proc.stderr.on('data', (chunk: Buffer) => {
-        // claude writes progress/status to stderr — not errors
-        const text = chunk.toString();
-        onChunk?.(this.config.name, text);
-      });
-
-      proc.on('close', (code) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        const text = finalResult || accumulatedText;
-        if (!text && code !== 0) {
-          reject(new Error(`[${this.config.name}] claude exited with code ${code}`));
-        } else {
-          resolve(text);
-        }
-      });
-
-      proc.on('error', (err) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(new Error(`[${this.config.name}] failed to spawn claude: ${err.message}. Is 'claude' installed and in PATH?`));
-      });
-    });
+`;
+    const limitedLines = limitLines(policyBlock + message, policy.maxFileLines * 8);
+    return limitChars(limitedLines, policy.maxOutputChars);
   }
 
   protected parseJson<T>(text: string, label: string): T {

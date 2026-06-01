@@ -2,6 +2,7 @@ import { BaseAgent } from './base-agent.js';
 import { buildPlannerPrompt } from '../prompts/planner.js';
 import { PlanReportSchema, type PlanReport } from '../schemas/plan.js';
 import type { TaskState } from '../core/state-machine.js';
+import type { ProviderName } from '../core/runtime-policy.js';
 
 export interface PlannerInput {
   taskId: string;
@@ -11,10 +12,10 @@ export interface PlannerInput {
 }
 
 export class PlannerAgent extends BaseAgent<PlannerInput, PlanReport> {
-  constructor() {
+  constructor(provider: ProviderName = 'claude') {
     super({
       name: 'planner',
-      model: 'claude-haiku-4-5',
+      provider,
       systemPrompt: buildPlannerPrompt(),
     });
   }

@@ -3,6 +3,7 @@ import { buildInvestigatorPrompt, type InvestigatorDomain } from '../prompts/inv
 import { EvidenceReportSchema, type EvidenceReport } from '../schemas/evidence.js';
 import type { PlanReport } from '../schemas/plan.js';
 import type { TaskState } from '../core/state-machine.js';
+import type { ProviderName } from '../core/runtime-policy.js';
 
 export interface InvestigatorInput {
   plan: PlanReport;
@@ -12,10 +13,10 @@ export interface InvestigatorInput {
 }
 
 export class InvestigatorAgent extends BaseAgent<InvestigatorInput, EvidenceReport> {
-  constructor(private readonly domain: InvestigatorDomain) {
+  constructor(private readonly domain: InvestigatorDomain, provider: ProviderName = 'codex') {
     super({
       name: `investigator-${domain}`,
-      model: 'claude-haiku-4-5',
+      provider,
       systemPrompt: buildInvestigatorPrompt(domain),
     });
   }

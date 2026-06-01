@@ -12,6 +12,26 @@ const CATEGORIES: KnowledgeCategory[] = [
 ];
 
 const MAX_CONTEXT_CHARS = 8000;
+const MAX_ENTRY_CHARS = 1800;
+
+interface KnowledgeEntry {
+  category: KnowledgeCategory;
+  filename: string;
+  text: string;
+  score: number;
+}
+
+function keywords(query: string): string[] {
+  return [...new Set(query
+    .toLowerCase()
+    .split(/[^a-z0-9_-]+/)
+    .filter((word) => word.length > 2))];
+}
+
+function scoreText(text: string, queryWords: string[]): number {
+  const haystack = text.toLowerCase();
+  return queryWords.reduce((score, word) => score + (haystack.includes(word) ? 1 : 0), 0);
+}
 
 export class KnowledgeStore {
   private readonly root: string;
@@ -37,6 +57,26 @@ export class KnowledgeStore {
       .join('\n\n---\n\n');
   }
 
+  private readEntries(query: string): KnowledgeEntry[] {
+    const queryWords = keywords(query);
+    return CATEGORIES.flatMap((category) => {
+      const dir = join(this.root, category);
+      if (!existsSync(dir)) return [];
+
+      return readdirSync(dir)
+        .filter((f) => f.endsWith('.md'))
+        .map((filename) => {
+          const text = readFileSync(join(dir, filename), 'utf8');
+          return {
+            category,
+            filename,
+            text: text.length > MAX_ENTRY_CHARS ? text.slice(0, MAX_ENTRY_CHARS) : text,
+            score: scoreText(`${filename}\n${text}`, queryWords),
+          };
+        });
+    });
+  }
+
   writeEntry(category: KnowledgeCategory, title: string, content: string): string {
     const slug = title
       .toLowerCase()
@@ -49,16 +89,15 @@ export class KnowledgeStore {
     return filepath;
   }
 
-  // At MVP: concatenate all categories up to MAX_CONTEXT_CHARS.
-  // Phase 2 will replace this with Qdrant semantic search without changing the signature.
-  buildContext(_query: string): string {
+  buildContext(query: string): string {
     const parts: string[] = [];
     let total = 0;
+    const entries = this.readEntries(query)
+      .sort((a, b) => b.score - a.score || b.filename.localeCompare(a.filename));
 
-    for (const cat of CATEGORIES) {
-      const text = this.readCategory(cat);
-      if (!text) continue;
-      const section = `## ${cat}\n\n${text}`;
+    for (const entry of entries) {
+      if (entry.score === 0 && parts.length > 0) continue;
+      const section = `## ${entry.category}/${entry.filename}\n\n${entry.text}`;
       if (total + section.length > MAX_CONTEXT_CHARS) break;
       parts.push(section);
       total += section.length;

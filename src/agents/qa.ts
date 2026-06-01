@@ -15,7 +15,7 @@ export class QAAgent extends BaseAgent<QAInput, QAResult> {
   constructor() {
     super({
       name: 'qa',
-      model: 'claude-haiku-4-5',
+      provider: 'codex',
       systemPrompt: buildQAPrompt(),
     });
   }
