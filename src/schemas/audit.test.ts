@@ -11,3 +11,20 @@ test('ScanReportSchema tolerates numeric filesScanned from LLM output', () => {
 
   assert.deepEqual(parsed.filesScanned, []);
 });
+
+test('ScanReportSchema normalizes non-positive finding line to null', () => {
+  const parsed = ScanReportSchema.parse({
+    filesScanned: [],
+    summary: 'One finding.',
+    findings: [{
+      file: 'src/app.ts',
+      line: 0,
+      severity: 'low',
+      category: 'testing',
+      finding: 'Missing direct test.',
+      recommendation: 'Add a focused test.',
+    }],
+  });
+
+  assert.equal(parsed.findings[0]?.line, null);
+});

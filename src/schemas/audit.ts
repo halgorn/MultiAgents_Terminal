@@ -7,7 +7,10 @@ const KNOWN_CATEGORIES = [
 
 export const AuditFindingSchema = z.object({
   file: z.string(),
-  line: z.number().int().positive().nullish(),
+  line: z.preprocess(
+    (value) => (typeof value === 'number' && value <= 0 ? null : value),
+    z.number().int().positive().nullish(),
+  ),
   severity: z.enum(['critical', 'high', 'medium', 'low', 'info']),
   // Accept any category string — normalize unknowns to 'maintainability'
   category: z.string().transform((v) =>
