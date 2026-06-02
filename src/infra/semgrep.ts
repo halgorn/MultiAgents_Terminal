@@ -8,6 +8,8 @@ export interface SemgrepResult {
   error?: string;
 }
 
+const SEMGREP_MAX_BUFFER = 50 * 1024 * 1024;
+
 interface SemgrepRawResult {
   results?: Array<{
     check_id: string;
@@ -91,9 +93,10 @@ export function parseSemgrepOutput(stdout: string): SemgrepResult {
 
 export function runSemgrep(cwd: string): SemgrepResult {
   // Check semgrep is available
-  const check = spawnSync('semgrep', ['--version'], { encoding: 'utf8' });
+  const check = spawnSync('semgrep', ['--version'], { encoding: 'utf8', maxBuffer: SEMGREP_MAX_BUFFER });
   if (check.status !== 0) {
-    return { findings: [], filesScanned: 0, available: false, error: 'semgrep not found' };
+    const error = check.stderr?.slice(0, 200) || check.error?.message || 'semgrep not found';
+    return { findings: [], filesScanned: 0, available: false, error };
   }
 
   const result = spawnSync(
@@ -112,9 +115,14 @@ export function runSemgrep(cwd: string): SemgrepResult {
       cwd,
       encoding: 'utf8',
       timeout: 120_000,
-      env: { ...process.env, SEMGREP_SEND_METRICS: 'off' },
+      maxBuffer: SEMGREP_MAX_BUFFER,
+      env: process.env,
     },
   );
+
+  if (result.error) {
+    return { findings: [], filesScanned: 0, available: true, error: result.error.message };
+  }
 
   if (!result.stdout) {
     return {
