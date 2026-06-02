@@ -7,6 +7,7 @@ import { KnowledgeStore } from '../../infra/knowledge.js';
 import { chunkFile } from '../../infra/chunker.js';
 import { buildDepGraph, formatDepReport } from '../../infra/dep-graph.js';
 import { buildRepoIndex, writeRepoIndex } from '../../infra/repo-index.js';
+import { formatRepoQuery, loadRepoIndex, queryRepoIndex } from '../../infra/repo-query.js';
 
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs']);
 const IGNORE_DIRS = new Set(['node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage', '.next', '__pycache__']);
@@ -183,6 +184,21 @@ export function registerMemory(program: Command): void {
         spinner.fail(chalk.red('Repo index failed: ' + String(err)));
         process.exit(1);
       }
+    });
+
+  memory
+    .command('query <query>')
+    .description('Query deterministic repository index')
+    .option('-k, --top-k <n>', 'number of file/symbol results', '10')
+    .action((query: string, options: { topK: string }) => {
+      const index = loadRepoIndex(process.cwd());
+      if (!index) {
+        console.error(chalk.yellow('No repo index found. Run `ai memory index` first.'));
+        process.exit(1);
+      }
+
+      const topK = Math.max(1, parseInt(options.topK, 10) || 10);
+      console.log(formatRepoQuery(queryRepoIndex(index, query, topK)));
     });
 
   memory
