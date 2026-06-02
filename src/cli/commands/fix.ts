@@ -19,6 +19,7 @@ export function registerFix(program: Command): void {
 
       const result = await orch.runFixPipeline(target);
       renderer.showResult(result);
+      renderer.showCost(orch.costs.summary());
 
       process.exit(result.state === 'DONE' ? 0 : 1);
     });

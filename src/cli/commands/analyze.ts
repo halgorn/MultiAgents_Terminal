@@ -19,6 +19,7 @@ export function registerAnalyze(program: Command): void {
 
       const result = await orch.runAnalyzePipeline(target);
       renderer.showResult(result);
+      renderer.showCost(orch.costs.summary());
 
       process.exit(result.state === 'DONE' || result.state === 'REPRODUCED' ? 0 : 1);
     });

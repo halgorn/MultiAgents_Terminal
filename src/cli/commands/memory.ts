@@ -1,7 +1,30 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
+import { readdirSync, statSync, writeFileSync, mkdirSync } from 'fs';
+import { join, relative } from 'path';
 import { KnowledgeStore } from '../../infra/knowledge.js';
+import { chunkFile } from '../../infra/chunker.js';
+import { buildDepGraph, formatDepReport } from '../../infra/dep-graph.js';
+
+const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs']);
+const IGNORE_DIRS = new Set(['node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage', '.next', '__pycache__']);
+
+function collectSourceFiles(dir: string): string[] {
+  const results: string[] = [];
+  try {
+    for (const entry of readdirSync(dir)) {
+      if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) continue;
+      const full = join(dir, entry);
+      try {
+        const st = statSync(full);
+        if (st.isDirectory()) results.push(...collectSourceFiles(full));
+        else if (SOURCE_EXTS.has(entry.slice(entry.lastIndexOf('.')))) results.push(full);
+      } catch { /* skip */ }
+    }
+  } catch { /* skip */ }
+  return results;
+}
 
 export function registerMemory(program: Command): void {
   const memory = program
@@ -11,20 +34,50 @@ export function registerMemory(program: Command): void {
   // ── ai memory build ───────────────────────────────────────────────────────
   memory
     .command('build')
-    .description('Index .ai-memory/ entries into the embedding vector store')
-    .action(async () => {
-      const store = new KnowledgeStore(process.cwd());
+    .description('Index .ai-memory/ + source code into the embedding vector store')
+    .option('--no-src', 'skip source code indexing, only index .ai-memory/')
+    .option('--src-dir <dir>', 'source directory to index (default: cwd)')
+    .action(async (options: { src: boolean; srcDir?: string }) => {
+      const cwd = process.cwd();
+      const store = new KnowledgeStore(cwd);
       const spinner = ora('Building embedding index...').start();
 
       try {
-        const count = await store.embeddings.buildIndex([
-          'architecture',
-          'bugs',
-          'features',
-          'decisions',
-          'patterns',
+        // 1. Index .ai-memory/ entries (bugs, decisions, patterns, etc.)
+        const knowledgeCount = await store.embeddings.buildIndex([
+          'architecture', 'bugs', 'features', 'decisions', 'patterns',
         ]);
-        spinner.succeed(chalk.green(`Indexed ${count} entries into .ai-memory/.embeddings/`));
+
+        let srcCount = 0;
+        if (options.src !== false) {
+          // 2. Index source code via Tree-sitter chunks
+          const srcDir = options.srcDir ? join(cwd, options.srcDir) : cwd;
+          const files = collectSourceFiles(srcDir);
+          spinner.text = `Chunking ${files.length} source files...`;
+
+          const srcMemoryDir = join(cwd, '.ai-memory', 'architecture');
+          mkdirSync(srcMemoryDir, { recursive: true });
+
+          for (const file of files) {
+            const chunks = await chunkFile(file, 1200);
+            for (const chunk of chunks) {
+              const relPath = relative(cwd, file);
+              const slug = `${relPath.replace(/[/\\]/g, '__')}__${chunk.name}`.replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
+              const content = `\`\`\`\n// ${relPath}:${chunk.startLine}-${chunk.endLine} [${chunk.type}: ${chunk.name}]\n${chunk.text}\n\`\`\``;
+              const outPath = join(srcMemoryDir, `src__${slug}.md`);
+              writeFileSync(outPath, `# ${chunk.name} (${relPath}:${chunk.startLine})\n\n${content}\n`, 'utf8');
+              srcCount++;
+            }
+            spinner.text = `Chunked ${srcCount} chunks from ${files.indexOf(file) + 1}/${files.length} files...`;
+          }
+
+          // Re-index now that source chunks are written
+          await store.embeddings.buildIndex(['architecture']);
+        }
+
+        spinner.succeed(chalk.green(
+          `Indexed ${knowledgeCount} knowledge entries + ${srcCount} source chunks`,
+        ));
         console.log(chalk.gray('Run `ai memory search "<query>"` to test retrieval.'));
       } catch (err) {
         spinner.fail(chalk.red('Build failed: ' + String(err)));
@@ -66,6 +119,40 @@ export function registerMemory(program: Command): void {
         }
       } catch (err) {
         spinner.fail(chalk.red('Search failed: ' + String(err)));
+        process.exit(1);
+      }
+    });
+
+  // ── ai memory deps ───────────────────────────────────────────────────────
+  memory
+    .command('deps')
+    .description('Build dependency graph and save to .ai-memory/architecture/')
+    .action(() => {
+      const cwd = process.cwd();
+      const spinner = ora('Analysing imports...').start();
+
+      try {
+        const graph = buildDepGraph(cwd);
+        const report = formatDepReport(graph);
+
+        const store = new KnowledgeStore(cwd);
+        store.writeEntry('architecture', 'Dependency Graph', report);
+
+        spinner.succeed(chalk.green(
+          `Dependency graph: ${graph.nodes.size} modules, ${graph.cycles.length} cycles, ${graph.hotspots.length} hotspots`,
+        ));
+
+        if (graph.cycles.length > 0) {
+          console.log(chalk.yellow('\nCircular dependencies found:'));
+          graph.cycles.slice(0, 5).forEach((c) => console.log(chalk.yellow('  ' + c.join(' → '))));
+        }
+
+        console.log(chalk.bold('\nTop hotspots:'));
+        graph.hotspots.slice(0, 5).forEach((h) =>
+          console.log(`  ${chalk.cyan(h.file)} — fan-in: ${h.fanIn}, fan-out: ${h.fanOut}`),
+        );
+      } catch (err) {
+        spinner.fail(chalk.red('Dep graph failed: ' + String(err)));
         process.exit(1);
       }
     });

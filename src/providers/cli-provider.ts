@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import type { ProviderName, RuntimePolicy } from '../core/runtime-policy.js';
 import { limitChars } from '../core/runtime-policy.js';
 import { SdkProvider } from './sdk-provider.js';
+export type { ProviderRunInput, AgentProvider } from './types.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -21,18 +22,8 @@ export const AGENT_TOOLS: Record<string, string[]> = {
 
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
 
-export interface ProviderRunInput {
-  agentName: string;
-  cwd: string;
-  systemPrompt: string;
-  userMessage: string;
-  policy: RuntimePolicy;
-}
-
-export interface AgentProvider {
-  readonly name: ProviderName;
-  run(input: ProviderRunInput, onChunk?: (agentName: string, text: string) => void): Promise<string>;
-}
+// ProviderRunInput and AgentProvider are defined in ./types.ts
+import type { ProviderRunInput, AgentProvider } from './types.js';
 
 function runProcess(
   command: string,

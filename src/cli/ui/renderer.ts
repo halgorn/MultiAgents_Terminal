@@ -72,6 +72,10 @@ export class Renderer {
     console.error(chalk.red('\n✗ Error: ') + (err instanceof Error ? err.message : String(err)));
   }
 
+  showCost(summary: string): void {
+    console.log(chalk.dim('\n' + summary));
+  }
+
   showResult(result: TaskResult): void {
     for (const [, spinner] of this.spinners) spinner.stop();
     this.spinners.clear();

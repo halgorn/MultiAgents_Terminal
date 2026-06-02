@@ -95,6 +95,7 @@ export function registerAudit(program: Command): void {
       try {
         const report = await orch.runAuditPipeline(target, n);
         renderAuditReport(report, Date.now() - start);
+        console.log(chalk.dim(orch.costs.summary()));
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
       } catch (err) {
         renderer.showError(err);

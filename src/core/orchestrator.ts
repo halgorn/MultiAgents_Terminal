@@ -23,6 +23,7 @@ import type { ReviewReport } from '../schemas/review.js';
 import type { QAResult } from '../schemas/qa.js';
 import type { AuditReport } from '../schemas/audit.js';
 import type { InvestigatorDomain } from '../prompts/investigator.js';
+import { CostTracker } from './cost-tracker.js';
 
 export interface OrchestratorEvents {
   'state:change': { taskId: string; state: TaskState };
@@ -35,6 +36,7 @@ export interface OrchestratorEvents {
 export class Orchestrator extends EventEmitter {
   private readonly knowledge: KnowledgeStore;
   private readonly policy: RuntimePolicy;
+  readonly costs = new CostTracker();
 
   constructor(private readonly cwd: string, policyInput: RuntimePolicyInput = {}) {
     super();
@@ -42,7 +44,20 @@ export class Orchestrator extends EventEmitter {
     this.policy = createRuntimePolicy(policyInput);
   }
 
+  // TOKEN_PATTERN: matches " tokens:IN:OUT:CACHE_READ:CACHE_WRITE "
+  private static readonly TOKEN_RE = /tokens:(\d+):(\d+):(\d+):(\d+)/;
+
   private onChunk = (agentName: string, text: string): void => {
+    const match = Orchestrator.TOKEN_RE.exec(text);
+    if (match) {
+      this.costs.record(agentName, this.policy.claudeModel, {
+        inputTokens: parseInt(match[1]!),
+        outputTokens: parseInt(match[2]!),
+        cacheReadTokens: parseInt(match[3]!),
+        cacheWriteTokens: parseInt(match[4]!),
+      }, 0);
+      return; // don't emit token accounting lines to renderer
+    }
     this.emit('agent:output', { agentName, text });
   };
 
