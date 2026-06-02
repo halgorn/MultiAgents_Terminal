@@ -3,6 +3,7 @@ dist/
 package-lock.json
 .worktrees/
 .ai-memory/
+.ai-runtime/
 evidence/
 history/
 tasks/

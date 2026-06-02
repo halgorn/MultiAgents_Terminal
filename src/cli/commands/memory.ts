@@ -6,6 +6,7 @@ import { join, relative } from 'path';
 import { KnowledgeStore } from '../../infra/knowledge.js';
 import { chunkFile } from '../../infra/chunker.js';
 import { buildDepGraph, formatDepReport } from '../../infra/dep-graph.js';
+import { buildRepoIndex, writeRepoIndex } from '../../infra/repo-index.js';
 
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs']);
 const IGNORE_DIRS = new Set(['node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage', '.next', '__pycache__']);
@@ -158,6 +159,32 @@ export function registerMemory(program: Command): void {
     });
 
   // ── ai memory list ────────────────────────────────────────────────────────
+  memory
+    .command('index')
+    .description('Build deterministic repository intelligence index')
+    .action(async () => {
+      const cwd = process.cwd();
+      const spinner = ora('Building repository index...').start();
+
+      try {
+        const index = await buildRepoIndex(cwd);
+        const path = writeRepoIndex(cwd, index);
+
+        spinner.succeed(chalk.green(
+          `Repo index: ${index.stats.files} files, ${index.stats.symbols} symbols, ${index.stats.imports} imports, ${index.stats.chunks} chunks`,
+        ));
+        console.log(chalk.gray(`Saved: ${path}`));
+
+        const untested = index.files.filter((file) =>
+          !file.isTest && !index.tests.some((link) => link.source === file.path),
+        ).length;
+        console.log(chalk.gray(`Probable untested source files: ${untested}`));
+      } catch (err) {
+        spinner.fail(chalk.red('Repo index failed: ' + String(err)));
+        process.exit(1);
+      }
+    });
+
   memory
     .command('list')
     .description('List all entries in .ai-memory/')

@@ -23,13 +23,14 @@ high-severity findings were reported, not because the runtime failed.
 | Large repo dry-run | Done | `ai audit --dry-run` reports collection stats without agents. |
 | Audit report persistence | Done | Reports are written to `.ai-runtime/reports/audit-*.json`. |
 | Scale tests | Done | Synthetic 2,100-file fixture validates collection behavior. |
+| Repository intelligence index | Done | `ai memory index` writes `.ai-runtime/repo-index.json` with files, symbols, imports, chunks, and probable test links. |
 
 ## Remaining P0
 
 1. Validate a full `-n 5` audit on `Manus_Private`.
-2. Fix or document Semgrep availability/configuration per environment.
-3. Add mocked provider integration tests for planner/investigator/developer/reviewer.
-4. Split fix, analyze, and review flows out of `orchestrator.ts`.
+2. Add mocked provider integration tests for planner/investigator/developer/reviewer.
+3. Split fix, analyze, and review flows out of `orchestrator.ts`.
+4. Add Graph Agent and Tests Agent on top of `.ai-runtime/repo-index.json`.
 
 ## Test Commands
 
