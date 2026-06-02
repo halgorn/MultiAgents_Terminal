@@ -4,6 +4,7 @@ import { join } from 'path';
 import { spawn } from 'child_process';
 import type { ProviderName, RuntimePolicy } from '../core/runtime-policy.js';
 import { limitChars } from '../core/runtime-policy.js';
+import { SdkProvider } from './sdk-provider.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -156,5 +157,9 @@ export class CodexCliProvider implements AgentProvider {
 }
 
 export function createProvider(name: ProviderName): AgentProvider {
-  return name === 'codex' ? new CodexCliProvider() : new ClaudeCliProvider();
+  if (name === 'codex') return new CodexCliProvider();
+  // SDK provider when key is set: enables prompt caching + real streaming
+  // Falls back to CLI provider when no key (uses claude CLI session auth)
+  if (process.env['ANTHROPIC_API_KEY']) return new SdkProvider();
+  return new ClaudeCliProvider();
 }

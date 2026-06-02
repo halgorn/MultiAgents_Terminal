@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { EmbeddingStore } from './embeddings.js';
+import { BM25Index, hybridScore } from './bm25.js';
 
 type KnowledgeCategory = 'architecture' | 'bugs' | 'features' | 'decisions' | 'patterns';
 
@@ -109,17 +110,37 @@ export class KnowledgeStore {
     return parts.join('\n\n');
   }
 
-  // Semantic retrieval — uses embeddings when index exists, falls back to keyword
+  // Hybrid retrieval — BM25 + semantic embeddings when index exists, falls back to keyword
   async buildContextSemantic(query: string, topK = 5): Promise<string> {
+    // Build BM25 index over all entries (fast, in-memory)
+    const allEntries = this.readEntries(query);
+    const bm25 = new BM25Index();
+    for (const e of allEntries) bm25.add(`${e.category}/${e.filename}`, e.text);
+    const bm25Results = bm25.score(query).slice(0, topK * 2);
+
     if (!this.embeddings.hasIndex()) {
-      return this.buildContext(query);
+      // BM25 only
+      return bm25Results
+        .slice(0, topK)
+        .map(({ id }) => {
+          const e = allEntries.find((x) => `${x.category}/${x.filename}` === id);
+          return e ? `## ${id}\n\n${e.text}` : '';
+        })
+        .filter(Boolean)
+        .join('\n\n');
     }
 
-    const results = await this.embeddings.query(query, topK);
-    if (results.length === 0) return this.buildContext(query);
+    // Hybrid: BM25 + vector cosine
+    const vectorResults = await this.embeddings.query(query, topK * 2);
+    const vecScores = vectorResults.map((r) => ({ id: `${r.category}/${r.filename}`, score: r.score }));
+    const hybrid = hybridScore(bm25Results, vecScores, 0.5).slice(0, topK);
 
-    return results
-      .map((r) => `## ${r.category}/${r.filename} (score: ${r.score.toFixed(3)})\n\n${r.text}`)
+    return hybrid
+      .map(({ id }) => {
+        const e = allEntries.find((x) => `${x.category}/${x.filename}` === id);
+        return e ? `## ${id}\n\n${e.text}` : '';
+      })
+      .filter(Boolean)
       .join('\n\n');
   }
 }
