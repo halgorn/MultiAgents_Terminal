@@ -9,6 +9,9 @@
   "scripts": {
     "build": "tsc",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "test:unit": "npm run test",
+    "test:scale": "npm run build && node --test \"dist/core/pipelines/audit-pipeline.test.js\"",
+    "smoke:manus": "npm run dev -- --cwd /home/bruno/Documents/GitHub/Manus_Private audit . -n 1",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js"
   },

@@ -1,93 +1,52 @@
-# AI Engineering Runtime — Roadmap
+# AI Engineering Runtime - Readiness Plan
 
-## Estado atual (score: 4.8/10)
+## Current Status
 
-| Dimensão | Score | Principal gap |
-|---|---|---|
-| Architecture | 6/10 | orchestrator.ts god file (619 linhas) |
-| Maintainability | 5/10 | 1 test file, silent catch blocks |
-| Security | 7/10 | Melhor do grupo |
-| Observability | 3/10 | Sem métricas, sem CostTracker |
-| Scalability | 4/10 | Rate limit com 2 agentes simultâneos |
-| Agent efficiency | 4/10 | Sem prompt caching, sem chunking estrutural |
+The runtime is usable for large-repository audits, but not yet production-complete.
+The `Manus_Private` smoke test scanned 1,396 eligible source files from a much
+larger tree without a token/context failure. The process exited non-zero because
+high-severity findings were reported, not because the runtime failed.
 
----
+## Implemented
 
-## P0 — Crítico
+| Capability | Status | Notes |
+|---|---:|---|
+| Worktree-isolated agents | Done | Agents run in temporary Git worktrees with best-effort cleanup. |
+| Runtime budgets | Done | Low, normal, and deep policies cap agents, output, and file reads. |
+| Tree-sitter chunking | Done | TypeScript/TSX parser with safe line fallback for other files. |
+| BM25 retrieval | Done | Exact-term retrieval for symbols, paths, and error text. |
+| Hybrid memory search | Done | BM25 plus embeddings when an index exists. |
+| SDK provider | Done | Uses Anthropic SDK when `ANTHROPIC_API_KEY` is set. |
+| Prompt caching | Done | SDK provider caches stable system prompts. |
+| Cost tracker | Partial | Accurate with SDK usage; CLI providers now report usage unavailable. |
+| Audit pipeline split | Partial | Audit has its own pipeline; other flows still live in orchestrator. |
+| Large repo dry-run | Done | `ai audit --dry-run` reports collection stats without agents. |
+| Audit report persistence | Done | Reports are written to `.ai-runtime/reports/audit-*.json`. |
+| Scale tests | Done | Synthetic 2,100-file fixture validates collection behavior. |
 
-### P0.1 — SDK Provider (habilita tudo)
-**Problema:** CLI subprocess não suporta `cache_control` — system prompts re-enviados inteiros a cada chamada.  
-**Impacto:** ~80% redução em tokens de system prompt via prompt caching.  
-**Arquivo:** `src/providers/sdk-provider.ts` (novo) + atualizar `cli-provider.ts`  
-**Status:** ⬜ pendente
+## Remaining P0
 
-### P0.2 — Tree-sitter chunking
-**Problema:** agentes leem arquivos de 200-600 linhas para encontrar uma função de 20 linhas.  
-**Impacto:** 70-85% menos tokens por contexto.  
-**Arquivo:** `src/infra/chunker.ts` (novo)  
-**Status:** ⬜ pendente
+1. Validate a full `-n 5` audit on `Manus_Private`.
+2. Fix or document Semgrep availability/configuration per environment.
+3. Add mocked provider integration tests for planner/investigator/developer/reviewer.
+4. Split fix, analyze, and review flows out of `orchestrator.ts`.
 
-### P0.3 — Hybrid Search (BM25 + vetores)
-**Problema:** `all-MiniLM` falha em matches de nomes de símbolos exatos.  
-**Impacto:** recall 40% → 80%+ em queries de código.  
-**Arquivo:** `src/infra/knowledge.ts` + `src/infra/embeddings.ts`  
-**Status:** ⬜ pendente
+## Test Commands
 
----
-
-## P1 — Importante
-
-### P1.1 — Voyage Code embeddings
-Substituir `all-MiniLM-L6-v2` por modelo treinado em código.  
-**Status:** ⬜ pendente
-
-### P1.2 — Dependency Graph (ts-morph)
-Mapear imports entre módulos automaticamente.  
-**Status:** ⬜ pendente
-
-### P1.3 — CostTracker
-Telemetria real de tokens e USD por tarefa.  
-**Status:** ⬜ pendente
-
-### P1.4 — Quebrar orchestrator.ts
-619 linhas, 4 pipelines → separar em `FixPipeline`, `AuditPipeline`, `ReviewPipeline`.  
-**Status:** ⬜ pendente
-
----
-
-## P2 — Otimização
-
-### P2.1 — Re-ranker nos resultados RAG
-### P2.2 — Indexar código-fonte no RAG (não só `.ai-memory/`)
-### P2.3 — Evidence Agent dedicado
-### P2.4 — Call Graph para Developer
-
----
-
-## Sequência de implementação
-
+```bash
+npm test
+npm run test:scale
+npm run smoke:manus
 ```
-P0.1 SDK Provider
-  → habilita prompt caching
-  → habilita streaming nativo
-  → elimina rate limit do CLI
 
-P0.2 Tree-sitter chunking
-  → depende de: nada
-  → habilita: P0.3, P1.2, P2.4
+`smoke:manus` calls real agents and may consume API/CLI budget.
 
-P0.3 Hybrid Search
-  → depende de: P0.2 (chunks menores = melhor indexação)
+## Readiness Criteria
 
-P1.1 Voyage Code
-  → depende de: P0.3
-
-P1.2 Dependency Graph
-  → depende de: P0.2 (Tree-sitter já instalado)
-
-P1.3 CostTracker
-  → depende de: P0.1 (SDK retorna usage real)
-
-P1.4 Refactor orchestrator
-  → depende de: nada (pode ser paralelo)
-```
+- `npm test` passes locally and in CI.
+- `npm run test:scale` covers at least 2,000 files.
+- `ai audit --dry-run` reports accurate file stats.
+- Real provider usage is visible when SDK credentials are configured.
+- CLI provider runs clearly state that token usage is unavailable.
+- Full audit completes without leaked worktrees.
+- All edited source files remain below 500 lines.

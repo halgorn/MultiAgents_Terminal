@@ -1,6 +1,11 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
+import { mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { Orchestrator } from '../../core/orchestrator.js';
+import { AuditPipeline } from '../../core/pipelines/audit-pipeline.js';
+import { createRuntimePolicy } from '../../core/runtime-policy.js';
+import { CostTracker } from '../../core/cost-tracker.js';
 import { Renderer } from '../ui/renderer.js';
 import type { AuditFinding } from '../../schemas/audit.js';
 
@@ -75,15 +80,59 @@ function renderAuditReport(report: {
   console.log(chalk.bold('═'.repeat(60)));
 }
 
+function saveAuditReport(report: {
+  findings: AuditFinding[];
+  criticalCount: number;
+  highCount: number;
+  totalFiles: number;
+  summary: string;
+  topPriorities: string[];
+}, durationMs: number): string {
+  const dir = join(process.cwd(), '.ai-runtime', 'reports');
+  mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = join(dir, `audit-${stamp}.json`);
+  writeFileSync(file, JSON.stringify({ ...report, durationMs, createdAt: new Date().toISOString() }, null, 2), 'utf8');
+  return file;
+}
+
+function renderDryRun(stats: ReturnType<AuditPipeline['collectAuditStats']>): void {
+  console.log('\n' + chalk.bold.cyan('Audit dry run'));
+  console.log(chalk.gray('No agents were started and no API tokens were used.'));
+  console.log(`  total files seen: ${stats.totalFiles}`);
+  console.log(`  audit source files: ${stats.auditFiles.length}`);
+  console.log(`  ignored directories: ${stats.ignoredDirs}`);
+  console.log(`  ignored/non-source files: ${stats.ignoredFiles}`);
+  console.log(`  oversized source files: ${stats.oversizedFiles}`);
+
+  const exts = Object.entries(stats.byExtension).sort((a, b) => b[1] - a[1]);
+  if (exts.length > 0) {
+    console.log('\n' + chalk.bold('Extensions:'));
+    exts.forEach(([ext, count]) => console.log(`  ${ext}: ${count}`));
+  }
+
+  if (stats.auditFiles.length > 0) {
+    console.log('\n' + chalk.bold('Sample:'));
+    stats.auditFiles.slice(0, 10).forEach((file) => console.log(`  ${file}`));
+  }
+}
+
 export function registerAudit(program: Command): void {
   program
     .command('audit [target]')
     .description('Deep parallel audit: N scanners cover all files, synthesizer unifies findings')
     .option('-n, --scanners <n>', 'number of parallel scanner agents', '5')
-    .action(async (target: string = '.', options: { scanners: string }) => {
+    .option('--dry-run', 'collect audit file stats without starting agents')
+    .action(async (target: string = '.', options: { scanners: string; dryRun?: boolean }) => {
       const n = Math.max(1, Math.min(10, parseInt(options.scanners, 10) || 5));
       const renderer = new Renderer();
       const orch = new Orchestrator(process.cwd());
+
+      if (options.dryRun) {
+        const pipeline = new AuditPipeline(process.cwd(), createRuntimePolicy(), new CostTracker(), () => {}, () => {});
+        renderDryRun(pipeline.collectAuditStats(target));
+        return;
+      }
 
       orch.on('agent:start', ({ agentName }) => renderer.agentStart(agentName));
       orch.on('agent:output', ({ agentName, text }) => renderer.agentChunk(agentName, text));
@@ -94,7 +143,9 @@ export function registerAudit(program: Command): void {
 
       try {
         const report = await orch.runAuditPipeline(target, n);
-        renderAuditReport(report, Date.now() - start);
+        const durationMs = Date.now() - start;
+        renderAuditReport(report, durationMs);
+        console.log(chalk.gray(`report: ${saveAuditReport(report, durationMs)}`));
         console.log(chalk.dim(orch.costs.summary()));
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
       } catch (err) {

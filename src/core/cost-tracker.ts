@@ -33,8 +33,10 @@ function calcCost(model: string, usage: TokenUsage): number {
 
 export class CostTracker {
   private entries: AgentCost[] = [];
+  private unavailableAgents = new Set<string>();
 
   record(agentName: string, model: string, usage: TokenUsage, durationMs: number): void {
+    this.unavailableAgents.delete(agentName);
     this.entries.push({
       agentName,
       model,
@@ -42,6 +44,16 @@ export class CostTracker {
       costUsd: calcCost(model, usage),
       durationMs,
     });
+  }
+
+  recordUnavailable(agentName: string): void {
+    if (!this.entries.some((entry) => entry.agentName === agentName)) {
+      this.unavailableAgents.add(agentName);
+    }
+  }
+
+  usageAvailable(): boolean {
+    return this.entries.length > 0 || this.unavailableAgents.size === 0;
   }
 
   totalUsd(): number {
@@ -74,9 +86,10 @@ export class CostTracker {
       ? `  cache saved: ~$${((total.cacheReadTokens * 0.72) / 1_000_000).toFixed(4)}`
       : '';
     return [
-      `cost: $${usd.toFixed(4)}`,
+      this.usageAvailable() ? `cost: $${usd.toFixed(4)}` : 'cost: unavailable',
       `tokens: ${total.inputTokens}in ${total.outputTokens}out`,
       `cache: ${total.cacheReadTokens}read ${total.cacheWriteTokens}write`,
+      this.unavailableAgents.size > 0 ? `usage unavailable: ${[...this.unavailableAgents].sort().join(', ')}` : '',
       saved,
     ].filter(Boolean).join(' | ');
   }

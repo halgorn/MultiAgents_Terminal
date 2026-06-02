@@ -27,6 +27,15 @@ const IGNORE_PATTERNS = [
 ];
 const MAX_FILE_SIZE = 200 * 1024;
 
+export interface AuditFileStats {
+  totalFiles: number;
+  auditFiles: string[];
+  ignoredDirs: number;
+  ignoredFiles: number;
+  oversizedFiles: number;
+  byExtension: Record<string, number>;
+}
+
 export class AuditPipeline {
   constructor(
     private readonly cwd: string,
@@ -41,7 +50,8 @@ export class AuditPipeline {
     const worktrees: Array<[string, string]> = [];
 
     try {
-      const allFiles = this.collectSourceFiles(target);
+      const stats = this.collectAuditStats(target);
+      const allFiles = stats.auditFiles;
       if (allFiles.length === 0) {
         return { findings: [], criticalCount: 0, highCount: 0, totalFiles: 0, summary: 'No source files found.', topPriorities: [] };
       }
@@ -100,7 +110,7 @@ export class AuditPipeline {
       );
 
       this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
-      return synthRun.output;
+      return { ...synthRun.output, totalFiles: allFiles.length };
 
     } finally {
       for (const [agentName, taskId_] of worktrees) {
@@ -115,34 +125,64 @@ export class AuditPipeline {
     return results;
   }
 
-  collectSourceFiles(_filter: string): string[] {
-    const results: string[] = [];
+  collectSourceFiles(target: string): string[] {
+    return this.collectAuditStats(target).auditFiles;
+  }
+
+  collectAuditStats(target: string): AuditFileStats {
+    const stats: AuditFileStats = {
+      totalFiles: 0,
+      auditFiles: [],
+      ignoredDirs: 0,
+      ignoredFiles: 0,
+      oversizedFiles: 0,
+      byExtension: {},
+    };
+
+    const root = pathJoin(this.cwd, target || '.');
+    const rootRel = target && target !== '.' ? target.replace(/^[./]+/, '') : '';
 
     const walk = (dir: string, rel: string) => {
       let entries: string[];
       try { entries = readdirSync(dir); } catch { return; }
 
       for (const entry of entries) {
-        if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) continue;
         const fullPath = pathJoin(dir, entry);
         const relPath = rel ? `${rel}/${entry}` : entry;
         try {
           const st = statSync(fullPath);
+          if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) {
+            if (st.isDirectory()) stats.ignoredDirs++;
+            else stats.ignoredFiles++;
+            continue;
+          }
           if (st.isDirectory()) {
             walk(fullPath, relPath);
-          } else if (
-            SOURCE_EXTS.some((ext) => entry.endsWith(ext)) &&
-            !IGNORE_PATTERNS.some((p) => p.test(relPath)) &&
-            st.size < MAX_FILE_SIZE
-          ) {
-            results.push(relPath);
+            continue;
+          }
+
+          stats.totalFiles++;
+          const ext = SOURCE_EXTS.find((candidate) => entry.endsWith(candidate));
+          if (!ext) {
+            stats.ignoredFiles++;
+            continue;
+          }
+          stats.byExtension[ext] = (stats.byExtension[ext] ?? 0) + 1;
+
+          if (IGNORE_PATTERNS.some((p) => p.test(relPath))) {
+            stats.ignoredFiles++;
+          } else if (st.size >= MAX_FILE_SIZE) {
+            stats.oversizedFiles++;
+          } else {
+            stats.auditFiles.push(rootRel ? `${rootRel}/${relPath}` : relPath);
           }
         } catch { /* skip unreadable */ }
       }
     };
 
-    walk(this.cwd, '');
-    return results.sort();
+    walk(root, '');
+    stats.auditFiles.sort();
+    return stats;
   }
 
   prioritizeFiles(files: string[], max: number): string[] {

@@ -8,6 +8,7 @@ import { SdkProvider } from './sdk-provider.js';
 export type { ProviderRunInput, AgentProvider } from './types.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
+const USAGE_UNAVAILABLE = '\0usage-unavailable\0';
 
 // Minimal tool sets per agent role — principle of least privilege
 export const AGENT_TOOLS: Record<string, string[]> = {
@@ -98,6 +99,7 @@ export class ClaudeCliProvider implements AgentProvider {
 
     // Use a large cap for raw so the outer JSON envelope isn't truncated
     const raw = await runProcess('claude', args, input.cwd, input.agentName, 200_000, onChunk);
+    onChunk?.(input.agentName, USAGE_UNAVAILABLE);
     try {
       const event = JSON.parse(raw) as { result?: string; is_error?: boolean };
       if (event.is_error) {
@@ -140,6 +142,7 @@ export class CodexCliProvider implements AgentProvider {
 
     try {
       await runProcess('codex', args, input.cwd, input.agentName, input.policy.maxOutputChars, onChunk);
+      onChunk?.(input.agentName, USAGE_UNAVAILABLE);
       return limitChars(readFileSync(outputFile, 'utf8'), input.policy.maxOutputChars);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

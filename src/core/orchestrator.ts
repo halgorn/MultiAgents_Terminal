@@ -44,6 +44,7 @@ export class Orchestrator extends EventEmitter {
 
   // TOKEN_PATTERN: matches " tokens:IN:OUT:CACHE_READ:CACHE_WRITE "
   private static readonly TOKEN_RE = /tokens:(\d+):(\d+):(\d+):(\d+)/;
+  private static readonly USAGE_UNAVAILABLE_RE = /usage-unavailable/;
 
   private onChunk = (agentName: string, text: string): void => {
     const match = Orchestrator.TOKEN_RE.exec(text);
@@ -55,6 +56,10 @@ export class Orchestrator extends EventEmitter {
         cacheWriteTokens: parseInt(match[4]!),
       }, 0);
       return; // don't emit token accounting lines to renderer
+    }
+    if (Orchestrator.USAGE_UNAVAILABLE_RE.test(text)) {
+      this.costs.recordUnavailable(agentName);
+      return;
     }
     this.emit('agent:output', { agentName, text });
   };

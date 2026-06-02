@@ -20,6 +20,7 @@ interface SemgrepRawResult {
     };
   }>;
   errors?: Array<{ message: string }>;
+  paths?: { scanned?: string[] };
 }
 
 function mapSeverity(raw: string): AuditFinding['severity'] {
@@ -40,6 +41,27 @@ function mapCategory(checkId: string, meta?: string): AuditFinding['category'] {
   if (/type|null|undefined/.test(id)) return 'types';
   if (/arch|coupling|depend|import/.test(id)) return 'architecture';
   return 'maintainability';
+}
+
+export function parseSemgrepOutput(stdout: string): SemgrepResult {
+  let raw: SemgrepRawResult;
+  try {
+    raw = JSON.parse(stdout) as SemgrepRawResult;
+  } catch {
+    return { findings: [], filesScanned: 0, available: true, error: 'failed to parse semgrep output' };
+  }
+
+  const findings: AuditFinding[] = (raw.results ?? []).map((r) => ({
+    file: r.path,
+    line: r.start.line,
+    severity: mapSeverity(r.extra.severity),
+    category: mapCategory(r.check_id, r.extra.metadata?.category),
+    finding: `[${r.check_id}] ${r.extra.message}`,
+    recommendation: `Review ${r.path}:${r.start.line} — fix or suppress with \`# nosemgrep\``,
+  }));
+
+  const scanned = raw.paths?.scanned?.length ?? new Set(findings.map((f) => f.file)).size;
+  return { findings, filesScanned: scanned, available: true };
 }
 
 export function runSemgrep(cwd: string): SemgrepResult {
@@ -77,22 +99,5 @@ export function runSemgrep(cwd: string): SemgrepResult {
     };
   }
 
-  let raw: SemgrepRawResult;
-  try {
-    raw = JSON.parse(result.stdout) as SemgrepRawResult;
-  } catch {
-    return { findings: [], filesScanned: 0, available: true, error: 'failed to parse semgrep output' };
-  }
-
-  const findings: AuditFinding[] = (raw.results ?? []).map((r) => ({
-    file: r.path,
-    line: r.start.line,
-    severity: mapSeverity(r.extra.severity),
-    category: mapCategory(r.check_id, r.extra.metadata?.category),
-    finding: `[${r.check_id}] ${r.extra.message}`,
-    recommendation: `Review ${r.path}:${r.start.line} — fix or suppress with \`# nosemgrep\``,
-  }));
-
-  const filesScanned = new Set(findings.map((f) => f.file)).size;
-  return { findings, filesScanned, available: true };
+  return parseSemgrepOutput(result.stdout);
 }

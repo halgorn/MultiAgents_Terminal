@@ -10,8 +10,8 @@ test('low budget is economical by default', () => {
   assert.equal(policy.maxAgents, 3);
   assert.equal(policy.maxFileLines, 500);
   assert.equal(policy.plannerProvider, 'claude');
-  assert.equal(policy.investigatorProvider, 'codex');
-  assert.equal(policy.developerProvider, 'codex');
+  assert.equal(policy.investigatorProvider, 'claude');
+  assert.equal(policy.developerProvider, 'claude');
   assert.equal(policy.reviewerProvider, 'claude');
 });
 

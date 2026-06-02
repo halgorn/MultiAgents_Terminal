@@ -5,6 +5,8 @@ let _Parser: typeof import('tree-sitter') | null = null;
 let _ts: { typescript: unknown; tsx: unknown } | null = null;
 
 async function getParser(ext: string): Promise<import('tree-sitter') | null> {
+  if (!['.ts', '.tsx'].includes(ext)) return null;
+
   try {
     if (!_Parser) {
       const TreeSitter = await import('tree-sitter');
@@ -20,10 +22,8 @@ async function getParser(ext: string): Promise<import('tree-sitter') | null> {
       parse(src: string): { rootNode: TSNode };
     })();
 
-    if (['.ts', '.tsx'].includes(ext)) {
-      parser.setLanguage(ext === '.tsx' ? _ts.tsx : _ts.typescript);
-      return parser as unknown as import('tree-sitter');
-    }
+    parser.setLanguage(ext === '.tsx' ? _ts.tsx : _ts.typescript);
+    return parser as unknown as import('tree-sitter');
   } catch {
     // tree-sitter not available for this extension
   }
