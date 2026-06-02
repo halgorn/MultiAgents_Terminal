@@ -43,10 +43,35 @@ function mapCategory(checkId: string, meta?: string): AuditFinding['category'] {
   return 'maintainability';
 }
 
+function extractJsonObject(text: string): string | null {
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\' && inString) { escaped = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) return text.slice(start, i + 1);
+    }
+  }
+
+  return null;
+}
+
 export function parseSemgrepOutput(stdout: string): SemgrepResult {
   let raw: SemgrepRawResult;
   try {
-    raw = JSON.parse(stdout) as SemgrepRawResult;
+    raw = JSON.parse(extractJsonObject(stdout) ?? stdout) as SemgrepRawResult;
   } catch {
     return { findings: [], filesScanned: 0, available: true, error: 'failed to parse semgrep output' };
   }
@@ -77,6 +102,7 @@ export function runSemgrep(cwd: string): SemgrepResult {
       'scan',
       '--config', 'auto',
       '--json',
+      '--quiet',
       '--no-rewrite-rule-ids',
       '--timeout', '60',
       '--max-memory', '512',

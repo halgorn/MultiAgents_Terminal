@@ -18,7 +18,10 @@ export const AuditFindingSchema = z.object({
 });
 
 export const ScanReportSchema = z.object({
-  filesScanned: z.array(z.string()),
+  filesScanned: z.preprocess(
+    (value) => (Array.isArray(value) ? value : []),
+    z.array(z.string()),
+  ),
   findings: z.array(AuditFindingSchema).default([]),
   summary: z.string(),
 });

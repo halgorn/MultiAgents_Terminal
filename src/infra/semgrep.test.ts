@@ -32,3 +32,13 @@ test('parseSemgrepOutput reports invalid JSON clearly', () => {
   assert.equal(result.findings.length, 0);
   assert.equal(result.error, 'failed to parse semgrep output');
 });
+
+test('parseSemgrepOutput accepts Semgrep status text around JSON', () => {
+  const result = parseSemgrepOutput(`Scan Status
+{"paths":{"scanned":["a.py"]},"results":[]}
+Scan Summary`);
+
+  assert.equal(result.available, true);
+  assert.equal(result.filesScanned, 1);
+  assert.equal(result.findings.length, 0);
+});
