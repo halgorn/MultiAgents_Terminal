@@ -4,7 +4,7 @@ import { join as pathJoin } from 'path';
 import { createWorktree, removeWorktree } from '../../infra/worktree.js';
 import { ScannerAgent } from '../../agents/scanner.js';
 import { SynthesizerAgent } from '../../agents/synthesizer.js';
-import type { AuditReport } from '../../schemas/audit.js';
+import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
 
@@ -27,6 +27,8 @@ const IGNORE_PATTERNS = [
 ];
 const MAX_FILE_SIZE = 200 * 1024;
 const MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS = 30;
+const MAX_FINDINGS_PER_SCANNER = 15;
+const MAX_FINDING_TEXT = 360;
 
 function severityRank(severity: string): number {
   switch (severity) {
@@ -45,6 +47,55 @@ export interface AuditFileStats {
   ignoredFiles: number;
   oversizedFiles: number;
   byExtension: Record<string, number>;
+}
+
+function compactText(text: string, max = MAX_FINDING_TEXT): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max)}...`;
+}
+
+function compactFinding(finding: AuditFinding): AuditFinding {
+  return {
+    ...finding,
+    finding: compactText(finding.finding),
+    recommendation: compactText(finding.recommendation),
+  };
+}
+
+export function compactScanReport(report: ScanReport, maxFindings = MAX_FINDINGS_PER_SCANNER): ScanReport {
+  const findings = report.findings
+    .map(compactFinding)
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+    .slice(0, maxFindings);
+  return {
+    filesScanned: report.filesScanned.slice(0, 80),
+    findings,
+    summary: compactText(report.summary, 700),
+  };
+}
+
+export function fallbackAuditReport(scanReports: ScanReport[], totalFiles: number): AuditReport {
+  const seen = new Set<string>();
+  const findings = scanReports
+    .flatMap((report) => report.findings)
+    .map(compactFinding)
+    .filter((finding) => {
+      const key = `${finding.file}:${finding.line ?? ''}:${finding.finding}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+
+  return {
+    findings,
+    criticalCount: findings.filter((f) => f.severity === 'critical').length,
+    highCount: findings.filter((f) => f.severity === 'high').length,
+    totalFiles,
+    summary: `Local fallback merged ${findings.length} findings from ${scanReports.length} scanner reports.`,
+    topPriorities: findings.slice(0, 5).map((f) => `${f.severity}: ${f.file}${f.line ? `:${f.line}` : ''} — ${f.finding}`),
+  };
 }
 
 export class AuditPipeline {
@@ -74,7 +125,7 @@ export class AuditPipeline {
       const semgrepFindings = semgrepResult.findings
         .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
         .slice(0, MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS);
-      const semgrepReport = {
+      const semgrepReport: ScanReport = {
         filesScanned: semgrepResult.available ? allFiles.slice(0, semgrepResult.filesScanned) : [],
         findings: semgrepFindings,
         summary: semgrepResult.available
@@ -101,14 +152,25 @@ export class AuditPipeline {
           worktrees.push([`scanner-${domain}`, taskId]);
           this.emit('agent:start', { agentName: `scanner-${domain}` });
 
-          const run = await new ScannerAgent(domain, i, n).run(
-            { domain, worktreePath: wt, scannerIndex: i, totalScanners: n },
-            this.policy,
-            this.onChunk,
-          );
-
-          this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: run.durationMs });
-          return run.output;
+          const start = Date.now();
+          try {
+            const run = await new ScannerAgent(domain, i, n).run(
+              { domain, worktreePath: wt, scannerIndex: i, totalScanners: n },
+              this.policy,
+              this.onChunk,
+            );
+            this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: run.durationMs });
+            return compactScanReport(run.output);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.emit('agent:output', { agentName: `scanner-${domain}`, text: `Scanner failed; continuing with partial audit: ${message}\n` });
+            this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: Date.now() - start });
+            return {
+              filesScanned: [],
+              findings: [],
+              summary: `Scanner ${domain} failed: ${compactText(message, 500)}`,
+            };
+          }
         }),
       );
 
@@ -117,14 +179,22 @@ export class AuditPipeline {
       worktrees.push(['synthesizer', taskId]);
       this.emit('agent:start', { agentName: 'synthesizer' });
 
-      const synthRun = await new SynthesizerAgent().run(
-        { scanReports: [semgrepReport, ...aiScannerRuns], totalFiles: allFiles.length, worktreePath: synthWT },
-        this.policy,
-        this.onChunk,
-      );
-
-      this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
-      return { ...synthRun.output, totalFiles: allFiles.length };
+      const reports = [compactScanReport(semgrepReport, MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS), ...aiScannerRuns];
+      const synthStart = Date.now();
+      try {
+        const synthRun = await new SynthesizerAgent().run(
+          { scanReports: reports, totalFiles: allFiles.length, worktreePath: synthWT },
+          this.policy,
+          this.onChunk,
+        );
+        this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
+        return { ...synthRun.output, totalFiles: allFiles.length };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.emit('agent:output', { agentName: 'synthesizer', text: `Synthesizer failed; using local fallback: ${message}\n` });
+        this.emit('agent:done', { agentName: 'synthesizer', durationMs: Date.now() - synthStart });
+        return fallbackAuditReport(reports, allFiles.length);
+      }
 
     } finally {
       for (const [agentName, taskId_] of worktrees) {

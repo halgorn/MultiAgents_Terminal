@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { AuditPipeline } from './audit-pipeline.js';
+import { AuditPipeline, compactScanReport, fallbackAuditReport } from './audit-pipeline.js';
 import { createRuntimePolicy } from '../runtime-policy.js';
 import { CostTracker } from '../cost-tracker.js';
 
@@ -77,4 +77,69 @@ test('collectAuditStats scales across thousands of files without including ignor
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('compactScanReport limits findings and text size', () => {
+  const report = compactScanReport({
+    filesScanned: Array.from({ length: 100 }, (_, i) => `file-${i}.ts`),
+    summary: 'summary '.repeat(200),
+    findings: Array.from({ length: 20 }, (_, i) => ({
+      file: `file-${i}.ts`,
+      line: i + 1,
+      severity: i % 2 === 0 ? 'critical' : 'low',
+      category: 'security',
+      finding: 'finding '.repeat(100),
+      recommendation: 'recommendation '.repeat(100),
+    })),
+  }, 5);
+
+  assert.equal(report.findings.length, 5);
+  assert.equal(report.filesScanned.length, 80);
+  assert.ok(report.summary.length <= 703);
+  assert.ok(report.findings.every((finding) => finding.finding.length <= 363));
+});
+
+test('fallbackAuditReport deduplicates and ranks findings locally', () => {
+  const report = fallbackAuditReport([
+    {
+      filesScanned: ['a.ts'],
+      summary: 'first',
+      findings: [{
+        file: 'a.ts',
+        line: 1,
+        severity: 'low',
+        category: 'testing',
+        finding: 'duplicate',
+        recommendation: 'fix',
+      }],
+    },
+    {
+      filesScanned: ['a.ts', 'b.ts'],
+      summary: 'second',
+      findings: [
+        {
+          file: 'a.ts',
+          line: 1,
+          severity: 'low',
+          category: 'testing',
+          finding: 'duplicate',
+          recommendation: 'fix',
+        },
+        {
+          file: 'b.ts',
+          line: 2,
+          severity: 'critical',
+          category: 'security',
+          finding: 'critical issue',
+          recommendation: 'fix now',
+        },
+      ],
+    },
+  ], 42);
+
+  assert.equal(report.totalFiles, 42);
+  assert.equal(report.findings.length, 2);
+  assert.equal(report.findings[0]?.severity, 'critical');
+  assert.equal(report.criticalCount, 1);
+  assert.equal(report.highCount, 0);
 });
