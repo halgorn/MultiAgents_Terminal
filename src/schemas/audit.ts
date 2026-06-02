@@ -17,7 +17,7 @@ export const AuditFindingSchema = z.object({
     (KNOWN_CATEGORIES as readonly string[]).includes(v) ? v : 'maintainability',
   ),
   finding: z.string(),
-  recommendation: z.string(),
+  recommendation: z.string().default('Review the finding and add a focused remediation.'),
 });
 
 export const ScanReportSchema = z.object({

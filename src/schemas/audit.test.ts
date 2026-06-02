@@ -28,3 +28,19 @@ test('ScanReportSchema normalizes non-positive finding line to null', () => {
 
   assert.equal(parsed.findings[0]?.line, null);
 });
+
+test('ScanReportSchema defaults missing recommendations from LLM output', () => {
+  const parsed = ScanReportSchema.parse({
+    filesScanned: [],
+    summary: 'One finding.',
+    findings: [{
+      file: 'src/app.ts',
+      line: 1,
+      severity: 'low',
+      category: 'testing',
+      finding: 'Missing direct test.',
+    }],
+  });
+
+  assert.equal(parsed.findings[0]?.recommendation, 'Review the finding and add a focused remediation.');
+});
