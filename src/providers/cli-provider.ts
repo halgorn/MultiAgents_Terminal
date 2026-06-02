@@ -9,6 +9,7 @@ export type { ProviderRunInput, AgentProvider } from './types.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
 const USAGE_UNAVAILABLE = '\0usage-unavailable\0';
+const STRUCTURED_RESULT_MAX_CHARS = 200_000;
 
 // Minimal tool sets per agent role — principle of least privilege
 export const AGENT_TOOLS: Record<string, string[]> = {
@@ -111,7 +112,7 @@ export class ClaudeCliProvider implements AgentProvider {
       }
       // Truncate only the result content, not the JSON envelope
       if (typeof event.result === 'string') {
-        return limitChars(event.result, input.policy.maxOutputChars);
+        return limitChars(event.result, Math.max(input.policy.maxOutputChars, STRUCTURED_RESULT_MAX_CHARS));
       }
     } catch (err) {
       if (err instanceof Error && err.message.startsWith(`[${input.agentName}]`)) throw err;

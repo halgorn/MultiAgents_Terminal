@@ -113,6 +113,8 @@ ${cfg.grepPatterns.map((p) => `- \`${p}\``).join('\n')}
 - Do NOT report false positives — confirm each finding before including it
 - If a pattern match is benign (e.g., in a comment or test), skip it
 - Focus on REAL issues with concrete file+line evidence
+- Return at most 15 findings. Prioritize critical/high severity and summarize repeated instances into one finding.
+- Keep each finding and recommendation concise, ideally under 280 characters each.
 
 ## Output
 Your final response must be ONLY a valid JSON object — no prose, no markdown fences:
