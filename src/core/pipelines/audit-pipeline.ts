@@ -26,6 +26,17 @@ const IGNORE_PATTERNS = [
   /\.pb\.[jt]sx?$/,
 ];
 const MAX_FILE_SIZE = 200 * 1024;
+const MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS = 30;
+
+function severityRank(severity: string): number {
+  switch (severity) {
+    case 'critical': return 5;
+    case 'high': return 4;
+    case 'medium': return 3;
+    case 'low': return 2;
+    default: return 1;
+  }
+}
 
 export interface AuditFileStats {
   totalFiles: number;
@@ -60,11 +71,14 @@ export class AuditPipeline {
       const { runSemgrep } = await import('../../infra/semgrep.js');
       this.emit('agent:output', { agentName: 'audit', text: '\nRunning Semgrep pre-scan (no API tokens)...\n' });
       const semgrepResult = runSemgrep(this.cwd);
+      const semgrepFindings = semgrepResult.findings
+        .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+        .slice(0, MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS);
       const semgrepReport = {
         filesScanned: semgrepResult.available ? allFiles.slice(0, semgrepResult.filesScanned) : [],
-        findings: semgrepResult.findings,
+        findings: semgrepFindings,
         summary: semgrepResult.available
-          ? `Semgrep found ${semgrepResult.findings.length} issues across ${semgrepResult.filesScanned} files.`
+          ? `Semgrep found ${semgrepResult.findings.length} issues across ${semgrepResult.filesScanned} files; top ${semgrepFindings.length} included for synthesis.`
           : `Semgrep unavailable: ${semgrepResult.error}`,
       };
       if (semgrepResult.available) {

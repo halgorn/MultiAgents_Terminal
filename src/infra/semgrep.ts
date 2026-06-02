@@ -70,6 +70,12 @@ function extractJsonObject(text: string): string | null {
   return null;
 }
 
+function compact(text: string, max = 320): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max)}...`;
+}
+
 export function parseSemgrepOutput(stdout: string): SemgrepResult {
   let raw: SemgrepRawResult;
   try {
@@ -83,7 +89,7 @@ export function parseSemgrepOutput(stdout: string): SemgrepResult {
     line: r.start.line,
     severity: mapSeverity(r.extra.severity),
     category: mapCategory(r.check_id, r.extra.metadata?.category),
-    finding: `[${r.check_id}] ${r.extra.message}`,
+    finding: compact(`[${r.check_id}] ${r.extra.message}`),
     recommendation: `Review ${r.path}:${r.start.line} — fix or suppress with \`# nosemgrep\``,
   }));
 
