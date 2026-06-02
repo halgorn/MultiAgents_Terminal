@@ -8,6 +8,7 @@ export interface PlannerInput {
   taskId: string;
   bugDescription: string;
   codebaseSummary: string;
+  repoContext?: string;
   worktreePath: string;
 }
 
@@ -32,6 +33,9 @@ ${input.bugDescription}
 
 Prior context from .ai-memory:
 ${input.codebaseSummary || '(none)'}
+
+Deterministic repository index context:
+${input.repoContext || '(repo index not built; run `ai memory index` for lower-hallucination planning)'}
 
 Use Glob and Grep to explore the project structure.
 When reading files, read at most 500 lines from any single file; use focused offset/limit reads.

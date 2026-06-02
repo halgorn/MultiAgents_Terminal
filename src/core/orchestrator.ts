@@ -22,6 +22,7 @@ import type { AuditReport } from '../schemas/audit.js';
 import type { InvestigatorDomain } from '../prompts/investigator.js';
 import { CostTracker } from './cost-tracker.js';
 import { AuditPipeline } from './pipelines/audit-pipeline.js';
+import { formatRepoQuery, loadRepoIndex, queryRepoIndex } from '../infra/repo-query.js';
 
 export interface OrchestratorEvents {
   'state:change': { taskId: string; state: TaskState };
@@ -73,6 +74,16 @@ export class Orchestrator extends EventEmitter {
     this.emit('state:change', { taskId: task.id, state: to });
   }
 
+  private buildRepoContext(target: string): string {
+    const index = loadRepoIndex(this.cwd);
+    if (!index) return '';
+    const result = queryRepoIndex(index, target, 8);
+    return [
+      `Repository index: ${index.stats.files} files, ${index.stats.symbols} symbols, ${index.stats.imports} imports, ${index.stats.chunks} chunks.`,
+      formatRepoQuery(result),
+    ].join('\n\n');
+  }
+
   async runFixPipeline(target: string): Promise<TaskResult> {
     const req: TaskRequest = {
       id: randomUUID(),
@@ -101,12 +112,13 @@ export class Orchestrator extends EventEmitter {
       const codebaseSummary = this.knowledge.embeddings.hasIndex()
         ? await this.knowledge.buildContextSemantic(target)
         : this.knowledge.buildContext(target);
+      const repoContext = this.buildRepoContext(target);
       this.emit('agent:start', { agentName: 'planner' });
       const plannerWT = createWorktree(this.cwd, 'planner', task.id);
       worktrees.push(['planner', task.id]);
 
       const planRun = await new PlannerAgent(this.policy.plannerProvider).run(
-        { taskId: task.id, bugDescription: target, codebaseSummary, worktreePath: plannerWT },
+        { taskId: task.id, bugDescription: target, codebaseSummary, repoContext, worktreePath: plannerWT },
         this.policy,
         this.onChunk,
       );
@@ -247,12 +259,13 @@ export class Orchestrator extends EventEmitter {
       const codebaseSummary = this.knowledge.embeddings.hasIndex()
         ? await this.knowledge.buildContextSemantic(target)
         : this.knowledge.buildContext(target);
+      const repoContext = this.buildRepoContext(target);
       const plannerWT = createWorktree(this.cwd, 'planner', task.id);
       worktrees.push(['planner', task.id]);
 
       this.emit('agent:start', { agentName: 'planner' });
       const planRun = await new PlannerAgent(this.policy.plannerProvider).run(
-        { taskId: task.id, bugDescription: target, codebaseSummary, worktreePath: plannerWT },
+        { taskId: task.id, bugDescription: target, codebaseSummary, repoContext, worktreePath: plannerWT },
         this.policy,
         this.onChunk,
       );

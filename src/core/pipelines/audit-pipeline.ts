@@ -5,6 +5,8 @@ import { createWorktree, removeWorktree } from '../../infra/worktree.js';
 import { ScannerAgent } from '../../agents/scanner.js';
 import { SynthesizerAgent } from '../../agents/synthesizer.js';
 import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.js';
+import { validateAuditFindings } from '../../infra/evidence-gate.js';
+import { loadRepoIndex } from '../../infra/repo-query.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
 
@@ -98,6 +100,14 @@ export function fallbackAuditReport(scanReports: ScanReport[], totalFiles: numbe
   };
 }
 
+function recount(report: AuditReport): AuditReport {
+  return {
+    ...report,
+    criticalCount: report.findings.filter((f) => f.severity === 'critical').length,
+    highCount: report.findings.filter((f) => f.severity === 'high').length,
+  };
+}
+
 export class AuditPipeline {
   constructor(
     private readonly cwd: string,
@@ -188,12 +198,12 @@ export class AuditPipeline {
           this.onChunk,
         );
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
-        return { ...synthRun.output, totalFiles: allFiles.length };
+        return this.applyEvidenceGate({ ...synthRun.output, totalFiles: allFiles.length });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.emit('agent:output', { agentName: 'synthesizer', text: `Synthesizer failed; using local fallback: ${message}\n` });
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: Date.now() - synthStart });
-        return fallbackAuditReport(reports, allFiles.length);
+        return this.applyEvidenceGate(fallbackAuditReport(reports, allFiles.length));
       }
 
     } finally {
@@ -207,6 +217,23 @@ export class AuditPipeline {
     const results: T[] = [];
     for (const task of tasks) results.push(await task());
     return results;
+  }
+
+  private applyEvidenceGate(report: AuditReport): AuditReport {
+    const result = validateAuditFindings(report.findings, loadRepoIndex(this.cwd));
+    if (result.rejected.length === 0) return recount(report);
+
+    this.emit('agent:output', {
+      agentName: 'evidence-gate',
+      text: `Rejected ${result.rejected.length} findings without deterministic file/line evidence.\n`,
+    });
+
+    return recount({
+      ...report,
+      findings: result.accepted,
+      summary: `${report.summary} Evidence gate rejected ${result.rejected.length} findings without deterministic file/line evidence.`,
+      topPriorities: result.accepted.slice(0, 5).map((f) => `${f.severity}: ${f.file}${f.line ? `:${f.line}` : ''} — ${f.finding}`),
+    });
   }
 
   collectSourceFiles(target: string): string[] {
