@@ -106,6 +106,9 @@ export abstract class BaseAgent<TInput, TOutput> {
         }
       }
     }
+    if (/not logged in|please run.*login|run \/login/i.test(text)) {
+      throw new Error(`Claude CLI is not authenticated. Run: claude /login`);
+    }
     try {
       return JSON.parse(cleaned) as T;
     } catch (err) {

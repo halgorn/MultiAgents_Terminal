@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
+import { join as pathJoin } from 'path';
 import type { TaskRequest, TaskRecord, TaskResult } from './task.js';
 import { assertTransition, type TaskState } from './state-machine.js';
 import { createTask, updateTaskState, saveTaskResult, logStateHistory } from '../infra/db/task-repo.js';
@@ -11,6 +12,8 @@ import { PlannerAgent } from '../agents/planner.js';
 import { InvestigatorAgent } from '../agents/investigator.js';
 import { DeveloperAgent } from '../agents/developer.js';
 import { ReviewerAgent } from '../agents/reviewer.js';
+import { ScannerAgent } from '../agents/scanner.js';
+import { SynthesizerAgent } from '../agents/synthesizer.js';
 import { runLocalQA } from '../infra/local-qa.js';
 import { createRuntimePolicy, type RuntimePolicy, type RuntimePolicyInput } from './runtime-policy.js';
 import type { EvidenceReport } from '../schemas/evidence.js';
@@ -18,6 +21,7 @@ import type { PlanReport } from '../schemas/plan.js';
 import type { PatchReport } from '../schemas/patch.js';
 import type { ReviewReport } from '../schemas/review.js';
 import type { QAResult } from '../schemas/qa.js';
+import type { AuditReport } from '../schemas/audit.js';
 import type { InvestigatorDomain } from '../prompts/investigator.js';
 
 export interface OrchestratorEvents {
@@ -169,6 +173,18 @@ export class Orchestrator extends EventEmitter {
       await this.transition(task, 'VERIFIED', 'qa');
       await this.transition(task, 'DONE', 'qa');
 
+      // Auto-save to .ai-memory/bugs/ so future runs benefit from this fix
+      if (evidence && patch) {
+        try {
+          this.knowledge.writeEntry('bugs', task.target.slice(0, 60), [
+            `## Root Cause\n${evidence.rootCause ?? evidence.summary}`,
+            `## Fix\n${patch.description}`,
+            `## Files Changed\n${patch.filesChanged.join(', ')}`,
+            `## Confidence\n${evidence.confidence}%`,
+          ].join('\n\n'));
+        } catch { /* best-effort — don't fail the task */ }
+      }
+
       const result: TaskResult = { taskId: task.id, state: 'DONE', plan, evidence, patch, review, qaResult, errors: [], durationMs: Date.now() - start };
       saveTaskResult(task.id, result);
       return result;
@@ -220,6 +236,19 @@ export class Orchestrator extends EventEmitter {
       );
       const plan = planRun.output;
       this.emit('agent:done', { agentName: 'planner', durationMs: planRun.durationMs });
+
+      // For general analysis/audit tasks, stop after the planner — it already provides
+      // the full structural analysis. Investigators are for specific bug reproduction.
+      const isBugSpecific = plan.riskLevel !== 'low' || plan.phases.some(
+        (p) => p.agentType === 'investigator',
+      );
+
+      if (!isBugSpecific) {
+        await this.transition(task, 'REPRODUCED', 'planner');
+        const result: TaskResult = { taskId: task.id, state: 'REPRODUCED', plan, errors, durationMs: Date.now() - start };
+        saveTaskResult(task.id, result);
+        return result;
+      }
 
       const domains = this.pickInvestigatorDomains(target, plan);
       const investigatorWTs = domains.map((d) => {
@@ -348,9 +377,10 @@ export class Orchestrator extends EventEmitter {
     const reproduced = reports.filter((r) => r.reproduced);
 
     if (reproduced.length === 0) {
-      // Best non-reproduced report to surface what was found
       const best = reports.reduce((a, b) => (a.confidence > b.confidence ? a : b));
-      return { ...best, reproduced: false };
+      // Accept high-confidence static analysis as reproduced when confidence >= 75 and has file evidence
+      const acceptAsStatic = best.confidence >= 75 && best.files.length >= 1;
+      return { ...best, reproduced: acceptAsStatic };
     }
 
     // Highest confidence reproduced report wins; merge files and logs from all
@@ -404,9 +434,186 @@ export class Orchestrator extends EventEmitter {
     return [domain];
   }
 
+  private async runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+    const results: T[] = new Array(tasks.length);
+    let index = 0;
+
+    const worker = async () => {
+      while (index < tasks.length) {
+        const i = index++;
+        results[i] = await tasks[i]!();
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+    return results;
+  }
+
   private cleanupWorktrees(pairs: Array<[string, string]>): void {
     for (const [agentName, taskId] of pairs) {
       try { removeWorktree(this.cwd, agentName, taskId); } catch { /* best-effort */ }
     }
+  }
+
+  // ── Audit Pipeline ─────────────────────────────────────────────────────────
+
+  async runAuditPipeline(target: string, numScanners = 5): Promise<AuditReport> {
+    const taskId = randomUUID();
+    const worktrees: Array<[string, string]> = [];
+
+    try {
+      // 1. Collect source files for metadata
+      const allFiles = this.collectSourceFiles(this.cwd, target);
+      if (allFiles.length === 0) {
+        return { findings: [], criticalCount: 0, highCount: 0, totalFiles: 0, summary: 'No source files found.', topPriorities: [] };
+      }
+
+      // 2. Pre-scan with Semgrep (zero API tokens — runs locally)
+      const { runSemgrep } = await import('../infra/semgrep.js');
+      this.emit('agent:output', { agentName: 'audit', text: '\nRunning Semgrep pre-scan (no API tokens)...\n' });
+      const semgrepResult = runSemgrep(this.cwd);
+      const semgrepReport = {
+        filesScanned: semgrepResult.available ? allFiles.slice(0, semgrepResult.filesScanned) : [],
+        findings: semgrepResult.findings,
+        summary: semgrepResult.available
+          ? `Semgrep found ${semgrepResult.findings.length} issues across ${semgrepResult.filesScanned} files.`
+          : `Semgrep unavailable: ${semgrepResult.error}`,
+      };
+      if (semgrepResult.available) {
+        this.emit('agent:output', { agentName: 'audit', text: `Semgrep: ${semgrepResult.findings.length} findings in ${semgrepResult.filesScanned} files\n` });
+      }
+
+      // 3. Domain-based AI scanners (grep-first, sequential to respect rate limits)
+      const { SCAN_DOMAINS } = await import('../prompts/scanner.js');
+      const domains = SCAN_DOMAINS.slice(0, numScanners);
+      const n = domains.length;
+
+      this.emit('agent:output', {
+        agentName: 'audit',
+        text: `Found ${allFiles.length} source files → ${n} AI scanners (sequential, grep-first)\n  ${domains.join(' | ')}\n`,
+      });
+
+      const aiScannerRuns = await this.runWithConcurrency(
+        domains.map((domain, i) => async () => {
+          const wt = createWorktree(this.cwd, `scanner-${domain}`, taskId);
+          worktrees.push([`scanner-${domain}`, taskId]);
+          this.emit('agent:start', { agentName: `scanner-${domain}` });
+
+          const run = await new ScannerAgent(domain, i, n).run(
+            { domain, worktreePath: wt, scannerIndex: i, totalScanners: n },
+            this.policy,
+            this.onChunk,
+          );
+
+          this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: run.durationMs });
+          return run.output;
+        }),
+        1,
+      );
+
+      // 4. Synthesize: semgrep + AI findings together
+      const synthWT = createWorktree(this.cwd, 'synthesizer', taskId);
+      worktrees.push(['synthesizer', taskId]);
+      this.emit('agent:start', { agentName: 'synthesizer' });
+
+      const synthRun = await new SynthesizerAgent().run(
+        { scanReports: [semgrepReport, ...aiScannerRuns], totalFiles: allFiles.length, worktreePath: synthWT },
+        this.policy,
+        this.onChunk,
+      );
+
+      this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
+      return synthRun.output;
+
+    } finally {
+      this.cleanupWorktrees(worktrees);
+    }
+  }
+
+  private collectSourceFiles(cwd: string, _filter: string): string[] {
+    const SOURCE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.swift', '.kt', '.cs', '.cpp', '.c', '.h'];
+    const IGNORE_DIRS = new Set([
+      'node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage',
+      '.next', '__pycache__', 'vendor', 'target', '.gradle', 'Pods',
+      '.cache', 'tmp', 'temp', 'logs', 'fixtures', 'testdata',
+    ]);
+    const IGNORE_PATTERNS = [
+      /\.min\.[jt]sx?$/,     // minified
+      /\.d\.ts$/,            // type declarations
+      /\.test\.[jt]sx?$/,    // test files (scan separately if needed)
+      /\.spec\.[jt]sx?$/,
+      /generated/i,
+      /\.pb\.[jt]sx?$/,      // protobuf generated
+    ];
+    const MAX_FILE_SIZE = 200 * 1024; // skip files > 200KB
+
+    const results: string[] = [];
+
+    const walk = (dir: string, rel: string) => {
+      let entries: string[];
+      try { entries = readdirSync(dir); } catch { return; }
+
+      for (const entry of entries) {
+        if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) continue;
+        const fullPath = pathJoin(dir, entry);
+        const relPath = rel ? `${rel}/${entry}` : entry;
+        try {
+          const st = statSync(fullPath);
+          if (st.isDirectory()) {
+            walk(fullPath, relPath);
+          } else if (
+            SOURCE_EXTS.some((ext) => entry.endsWith(ext)) &&
+            !IGNORE_PATTERNS.some((p) => p.test(relPath)) &&
+            st.size < MAX_FILE_SIZE
+          ) {
+            results.push(relPath);
+          }
+        } catch { /* skip unreadable */ }
+      }
+    };
+
+    walk(cwd, '');
+    return results.sort();
+  }
+
+  private prioritizeFiles(files: string[], max: number): string[] {
+    if (files.length <= max) return files;
+
+    // Score each file by importance (higher = more important to scan)
+    const scored = files.map((f) => {
+      let score = 0;
+
+      // Shallow paths are entry points / core modules
+      const depth = f.split('/').length;
+      score += Math.max(0, 6 - depth) * 3;
+
+      // Key filenames
+      const base = f.split('/').pop() ?? '';
+      if (/^(index|main|app|server|router|handler|controller|service|middleware|auth|api)\.[a-z]+$/.test(base)) score += 10;
+      if (/^(orchestrat|agent|provider|pipeline)\.[a-z]+$/.test(base)) score += 8;
+
+      // Larger files are more likely to have issues
+      try {
+        const size = statSync(pathJoin(this.cwd, f)).size;
+        score += Math.min(5, Math.floor(size / 5000));
+      } catch { /* skip */ }
+
+      // Penalize test/spec files (still audit them but lower priority)
+      if (/\.(test|spec)\.[a-z]+$/.test(f)) score -= 5;
+
+      return { f, score };
+    });
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, max)
+      .map((s) => s.f)
+      .sort(); // restore alphabetical order for readable output
+  }
+
+  private splitIntoChunks<T>(arr: T[], n: number): T[][] {
+    const chunks: T[][] = Array.from({ length: n }, () => []);
+    arr.forEach((item, i) => chunks[i % n]!.push(item));
+    return chunks.filter((c) => c.length > 0);
   }
 }

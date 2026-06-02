@@ -7,6 +7,19 @@ import { limitChars } from '../core/runtime-policy.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
 
+// Minimal tool sets per agent role — principle of least privilege
+export const AGENT_TOOLS: Record<string, string[]> = {
+  planner:              ['Read', 'Glob', 'Grep'],
+  'investigator-backend':   ['Read', 'Glob', 'Grep', 'Bash'],
+  'investigator-frontend':  ['Read', 'Glob', 'Grep', 'Bash'],
+  'investigator-bug-history': ['Read', 'Glob', 'Grep', 'Bash'],
+  developer:            ['Read', 'Edit', 'Write', 'Bash'],
+  reviewer:             ['Read', 'Glob', 'Grep'],
+  qa:                   ['Bash', 'Read'],
+};
+
+const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
+
 export interface ProviderRunInput {
   agentName: string;
   cwd: string;
@@ -82,24 +95,34 @@ export class ClaudeCliProvider implements AgentProvider {
   readonly name = 'claude' as const;
 
   async run(input: ProviderRunInput, onChunk?: (agentName: string, text: string) => void): Promise<string> {
+    const allowedTools = AGENT_TOOLS[input.agentName] ?? DEFAULT_TOOLS;
     const args = [
       '-p', input.userMessage,
-      '--bare',
-      '--no-session-persistence',
       '--output-format', 'json',
       '--model', input.policy.claudeModel,
-      '--system-prompt', input.systemPrompt,
       '--max-budget-usd', String(input.policy.claudeMaxBudgetUsd),
+      '--allowedTools', allowedTools.join(','),
     ];
 
-    const raw = await runProcess('claude', args, input.cwd, input.agentName, input.policy.maxOutputChars, onChunk);
+    // Use a large cap for raw so the outer JSON envelope isn't truncated
+    const raw = await runProcess('claude', args, input.cwd, input.agentName, 200_000, onChunk);
     try {
-      const event = JSON.parse(raw) as { result?: unknown };
-      if (typeof event.result === 'string') return event.result;
-    } catch {
-      // Fall through to raw text; parseJson will validate the final structure.
+      const event = JSON.parse(raw) as { result?: string; is_error?: boolean };
+      if (event.is_error) {
+        const msg = event.result ?? 'unknown';
+        if (typeof msg === 'string' && msg.includes('budget')) {
+          throw new Error(`[${input.agentName}] budget exceeded ($${input.policy.claudeMaxBudgetUsd}). Use --budget normal or --budget deep for larger tasks.`);
+        }
+        throw new Error(`[${input.agentName}] claude error: ${msg}`);
+      }
+      // Truncate only the result content, not the JSON envelope
+      if (typeof event.result === 'string') {
+        return limitChars(event.result, input.policy.maxOutputChars);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith(`[${input.agentName}]`)) throw err;
     }
-    return raw;
+    return limitChars(raw, input.policy.maxOutputChars);
   }
 }
 

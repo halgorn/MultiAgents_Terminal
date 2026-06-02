@@ -1,5 +1,6 @@
 import { join } from 'path';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import { EmbeddingStore } from './embeddings.js';
 
 type KnowledgeCategory = 'architecture' | 'bugs' | 'features' | 'decisions' | 'patterns';
 
@@ -35,9 +36,11 @@ function scoreText(text: string, queryWords: string[]): number {
 
 export class KnowledgeStore {
   private readonly root: string;
+  readonly embeddings: EmbeddingStore;
 
   constructor(cwd: string) {
     this.root = join(cwd, '.ai-memory');
+    this.embeddings = new EmbeddingStore(this.root);
     this.ensureDirs();
   }
 
@@ -104,5 +107,19 @@ export class KnowledgeStore {
     }
 
     return parts.join('\n\n');
+  }
+
+  // Semantic retrieval — uses embeddings when index exists, falls back to keyword
+  async buildContextSemantic(query: string, topK = 5): Promise<string> {
+    if (!this.embeddings.hasIndex()) {
+      return this.buildContext(query);
+    }
+
+    const results = await this.embeddings.query(query, topK);
+    if (results.length === 0) return this.buildContext(query);
+
+    return results
+      .map((r) => `## ${r.category}/${r.filename} (score: ${r.score.toFixed(3)})\n\n${r.text}`)
+      .join('\n\n');
   }
 }

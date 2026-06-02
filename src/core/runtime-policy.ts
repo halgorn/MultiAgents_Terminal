@@ -36,10 +36,10 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
   const deep = input.deep ?? budget === 'deep';
 
   const defaults = budget === 'deep'
-    ? { maxAgents: 7, maxOutputChars: 20000, claudeMaxBudgetUsd: 1 }
+    ? { maxAgents: 7, maxOutputChars: 20000, claudeMaxBudgetUsd: 5.0 }
     : budget === 'normal'
-      ? { maxAgents: 5, maxOutputChars: 14000, claudeMaxBudgetUsd: 0.35 }
-      : { maxAgents: 3, maxOutputChars: 10000, claudeMaxBudgetUsd: 0.12 };
+      ? { maxAgents: 5, maxOutputChars: 14000, claudeMaxBudgetUsd: 2.0 }
+      : { maxAgents: 3, maxOutputChars: 10000, claudeMaxBudgetUsd: 1.0 };
 
   return {
     budget,
@@ -50,8 +50,8 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
     claudeModel: 'claude-haiku-4-5',
     codexModel: input.codexModel ?? process.env['AI_RUNTIME_CODEX_MODEL'] ?? 'gpt-5-codex',
     plannerProvider: input.plannerProvider ?? 'claude',
-    investigatorProvider: input.investigatorProvider ?? 'codex',
-    developerProvider: input.developerProvider ?? 'codex',
+    investigatorProvider: input.investigatorProvider ?? 'claude',
+    developerProvider: input.developerProvider ?? 'claude',
     reviewerProvider: input.reviewerProvider ?? 'claude',
     claudeMaxBudgetUsd: defaults.claudeMaxBudgetUsd,
   };

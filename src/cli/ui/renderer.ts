@@ -80,11 +80,26 @@ export class Renderer {
 
     if (result.state === 'DONE') {
       console.log(chalk.bold.green('✓ DONE') + chalk.gray(` in ${result.durationMs}ms`));
+    } else if (result.state === 'REPRODUCED' && result.plan) {
+      console.log(chalk.bold.cyan('✓ ANALYSIS COMPLETE') + chalk.gray(` in ${result.durationMs}ms`));
     } else {
       console.log(chalk.bold.red(`✗ ${result.state}`) + chalk.gray(` after ${result.durationMs}ms`));
       if (result.errors.length > 0) {
         console.log(chalk.red('\nErrors:'));
         result.errors.forEach((e) => console.log(chalk.red(`  • ${e}`)));
+      }
+    }
+
+    if (result.plan && !result.evidence) {
+      console.log(chalk.bold('\nAnalysis:'));
+      console.log(`  ${result.plan.summary}`);
+      console.log(`  Risk: ${chalk.yellow(result.plan.riskLevel)}`);
+      if (result.plan.relevantModules.length > 0) {
+        console.log(`  Modules: ${result.plan.relevantModules.join(', ')}`);
+      }
+      if (result.plan.constraints.length > 0) {
+        console.log(chalk.bold('\nFindings:'));
+        result.plan.constraints.forEach((c) => console.log(`  • ${c}`));
       }
     }
 
