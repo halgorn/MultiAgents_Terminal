@@ -2,8 +2,8 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import type { TaskRequest, TaskRecord, TaskResult } from './task.js';
-import { assertTransition, type TaskState } from './state-machine.js';
-import { createTask, updateTaskState, saveTaskResult, logStateHistory } from '../infra/db/task-repo.js';
+import type { TaskState } from './state-machine.js';
+import { createTask, saveTaskResult } from '../infra/db/task-repo.js';
 import { saveEvidence } from '../infra/db/evidence-repo.js';
 import { createWorktree, removeWorktree } from '../infra/worktree.js';
 import { KnowledgeStore } from '../infra/knowledge.js';
@@ -22,7 +22,8 @@ import type { AuditReport } from '../schemas/audit.js';
 import type { InvestigatorDomain } from '../prompts/investigator.js';
 import { CostTracker } from './cost-tracker.js';
 import { AuditPipeline } from './pipelines/audit-pipeline.js';
-import { formatRepoQuery, loadRepoIndex, queryRepoIndex } from '../infra/repo-query.js';
+import { transition } from './pipeline-context.js';
+import { buildRepoContext } from './repo-context.js';
 
 export interface OrchestratorEvents {
   'state:change': { taskId: string; state: TaskState };
@@ -66,22 +67,11 @@ export class Orchestrator extends EventEmitter {
   };
 
   private async transition(task: TaskRecord, to: TaskState, agentName?: string): Promise<void> {
-    assertTransition(task.state, to);
-    const from = task.state;
-    task.state = to;
-    updateTaskState(task.id, to);
-    logStateHistory(task.id, from, to, agentName);
-    this.emit('state:change', { taskId: task.id, state: to });
+    await transition(task, to, this.emit.bind(this), agentName);
   }
 
   private buildRepoContext(target: string): string {
-    const index = loadRepoIndex(this.cwd);
-    if (!index) return '';
-    const result = queryRepoIndex(index, target, 8);
-    return [
-      `Repository index: ${index.stats.files} files, ${index.stats.symbols} symbols, ${index.stats.imports} imports, ${index.stats.chunks} chunks.`,
-      formatRepoQuery(result),
-    ].join('\n\n');
+    return buildRepoContext(this.cwd, target);
   }
 
   async runFixPipeline(target: string): Promise<TaskResult> {

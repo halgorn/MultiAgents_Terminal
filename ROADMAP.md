@@ -25,13 +25,15 @@ high-severity findings were reported, not because the runtime failed.
 | Scale tests | Done | Synthetic 2,100-file fixture validates collection behavior. |
 | Repository intelligence index | Done | `ai memory index` writes `.ai-runtime/repo-index.json` with files, symbols, imports, chunks, and probable test links. |
 | Deterministic repo queries | Done | `ai memory query <term>` returns files, symbols, imports, and probable tests from the repo index. |
+| Planner repo context | Done | Planner receives deterministic repo-index context when available. |
+| Evidence gate | Done | Audit findings are filtered against repo-index file/line facts when available. |
 
 ## Remaining P0
 
 1. Validate a full `-n 5` audit on `Manus_Private`.
 2. Add mocked provider integration tests for planner/investigator/developer/reviewer.
 3. Split fix, analyze, and review flows out of `orchestrator.ts`.
-4. Wire Graph Agent and Tests Agent prompts/tools to `.ai-runtime/repo-index.json`.
+4. Add dedicated Graph Agent and Tests Agent wrappers around `.ai-runtime/repo-index.json`.
 
 ## Test Commands
 
