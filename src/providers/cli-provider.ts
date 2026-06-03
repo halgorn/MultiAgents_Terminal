@@ -28,6 +28,23 @@ const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
 // ProviderRunInput and AgentProvider are defined in ./types.ts
 import type { ProviderRunInput, AgentProvider } from './types.js';
 
+export function safeProcessEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  const allowed = [
+    'PATH', 'HOME', 'USER', 'SHELL', 'TMPDIR', 'TEMP', 'TMP',
+    'LANG', 'LC_ALL', 'TERM', 'COLORTERM',
+    'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX',
+    'OPENROUTER_BASE_URL', 'AI_RUNTIME_CODEX_MODEL',
+  ];
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of allowed) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined) env[key] = value;
+  }
+  return env;
+}
+
 function runProcess(
   command: string,
   args: string[],
@@ -39,7 +56,7 @@ function runProcess(
   return new Promise((resolve, reject) => {
     const proc = spawn(command, args, {
       cwd,
-      env: process.env,
+      env: safeProcessEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -136,11 +153,13 @@ export class CodexCliProvider implements AgentProvider {
       '-s', 'workspace-write',
       '-a', 'never',
       '--ephemeral',
-      '--ignore-rules',
       '--color', 'never',
       '-o', outputFile,
       prompt,
     ];
+    if (process.env['AION_CODEX_IGNORE_RULES'] === '1') {
+      args.splice(args.indexOf('--color'), 0, '--ignore-rules');
+    }
 
     try {
       await runProcess('codex', args, input.cwd, input.agentName, input.policy.maxOutputChars, onChunk);

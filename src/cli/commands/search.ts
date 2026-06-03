@@ -1,46 +1,7 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { GraphAgent } from '../../agents/graph-agent.js';
-import type { RepoChunk, RepoIndex } from '../../infra/repo-index.js';
-
-function terms(query: string): string[] {
-  return query.toLowerCase().split(/[^a-z0-9_./-]+/).filter((term) => term.length > 1);
-}
-
-function scoreText(text: string, queryTerms: string[]): number {
-  const haystack = text.toLowerCase();
-  let score = 0;
-  for (const term of queryTerms) {
-    if (haystack.includes(term)) score += 4;
-    const parts = term.split(/[-_/]/).filter(Boolean);
-    score += parts.filter((part) => haystack.includes(part)).length;
-  }
-  return score;
-}
-
-function readSnippet(cwd: string, chunk: RepoChunk): string {
-  try {
-    const lines = readFileSync(join(cwd, chunk.file), 'utf8').split('\n');
-    return lines.slice(chunk.startLine - 1, Math.min(chunk.endLine, chunk.startLine + 18)).join('\n').trim();
-  } catch {
-    return '';
-  }
-}
-
-function searchChunks(cwd: string, index: RepoIndex, query: string, limit: number): Array<{ chunk: RepoChunk; score: number; snippet: string }> {
-  const queryTerms = terms(query);
-  return index.chunks
-    .map((chunk) => {
-      const snippet = readSnippet(cwd, chunk);
-      const text = `${chunk.file} ${chunk.name} ${chunk.type} ${snippet}`;
-      return { chunk, score: scoreText(text, queryTerms), snippet };
-    })
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.chunk.file.localeCompare(b.chunk.file))
-    .slice(0, limit);
-}
+import { ensureRepoVectorIndex, queryRepoVectors } from '../../infra/repo-vectors.js';
 
 export function registerSearch(program: Command): void {
   program
@@ -58,15 +19,16 @@ export function registerSearch(program: Command): void {
 
       console.log(chalk.bold.cyan(`\nSearch: ${query}\n`));
       if (options.semantic) {
-        const results = searchChunks(cwd, index, query, limit);
+        const vectors = ensureRepoVectorIndex(cwd, index, Boolean(options.rebuild));
+        const results = queryRepoVectors(vectors, query, limit);
         if (results.length === 0) {
-          console.log(chalk.yellow('No chunk matches.'));
+          console.log(chalk.yellow('No vector matches.'));
           return;
         }
         results.forEach((item, i) => {
-          console.log(`${chalk.cyan(`${i + 1}.`)} ${chalk.bold(item.chunk.file)}:${item.chunk.startLine}-${item.chunk.endLine} ${chalk.gray(`[${item.chunk.type} ${item.score}]`)}`);
-          console.log(chalk.dim(`   ${item.chunk.name}`));
-          if (item.snippet) console.log(chalk.gray(item.snippet.split('\n').slice(0, 4).map((line) => `   ${line}`).join('\n')));
+          console.log(`${chalk.cyan(`${i + 1}.`)} ${chalk.bold(item.file)}:${item.startLine}-${item.endLine} ${chalk.gray(`[${item.type} ${item.score.toFixed(3)}]`)}`);
+          console.log(chalk.dim(`   ${item.name}`));
+          if (item.text) console.log(chalk.gray(item.text.split('\n').slice(0, 4).map((line) => `   ${line}`).join('\n')));
           console.log();
         });
         return;

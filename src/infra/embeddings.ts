@@ -12,7 +12,7 @@ function hashToken(token: string): number {
   return hash >>> 0;
 }
 
-function embedText(text: string, maxChars: number): Float32Array {
+export function embedText(text: string, maxChars: number): Float32Array {
   const vector = new Float32Array(VECTOR_DIMENSIONS);
   const tokens = text
     .slice(0, maxChars)
@@ -35,7 +35,7 @@ function embedText(text: string, maxChars: number): Float32Array {
   return vector;
 }
 
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let dot = 0;
   let normA = 0;
   let normB = 0;

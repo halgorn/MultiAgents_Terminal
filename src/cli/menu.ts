@@ -132,11 +132,13 @@ function printDocumentation(): void {
   console.log('');
   console.log(chalk.bold('  Quick start'));
   console.log(`  ${chalk.cyan('aion menu')}                         open this menu`);
+  console.log(`  ${chalk.cyan('aion next')}                         recommended low-token flow`);
   console.log(`  ${chalk.cyan('aion audit . --preset security')}    security-focused audit`);
   console.log(`  ${chalk.cyan('aion audit . --max-files 20')}        cap AI file scope`);
   console.log(`  ${chalk.cyan('aion context --audit')}              compact AI-safe audit context`);
   console.log(`  ${chalk.cyan('aion search "audit reports"')}       search repo index`);
   console.log(`  ${chalk.cyan('aion tree --hotspots')}              tree view with latest findings`);
+  console.log(`  ${chalk.cyan('aion report latest')}                latest report paths`);
   console.log(`  ${chalk.cyan('aion scan secrets')}                 local secret scan`);
   console.log(`  ${chalk.cyan('aion scan env-audit')}               env var documentation check`);
   console.log(`  ${chalk.cyan('aion scan sbom --unpinned-only')}    supply-chain pinning check`);
@@ -168,6 +170,7 @@ function printDocumentation(): void {
 
 const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '🔍 Audit',           hint: 'multi-persona code analysis',        value: 'audit' },
+  { label: '➡️  Next',            hint: 'recommended low-token flow',         value: 'next' },
   { label: '🧾 Context',         hint: 'compact AI-safe context',            value: 'context' },
   { label: '🔎 Search',          hint: 'repo index search without tokens',    value: 'search' },
   { label: '🌲 Tree',            hint: 'tree + latest finding hotspots',      value: 'tree' },
@@ -243,6 +246,7 @@ export async function runMenu(cwd: string): Promise<void> {
     // Simple commands
     const cmdMap: Record<string, string[]> = {
       report:   ['--cwd', cwd, 'report'],
+      next:     ['--cwd', cwd, 'next'],
       context:  ['--cwd', cwd, 'context', '--audit'],
       search:   ['--cwd', cwd, 'search', 'audit reports'],
       tree:     ['--cwd', cwd, 'tree', '--hotspots'],

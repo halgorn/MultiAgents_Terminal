@@ -5,6 +5,7 @@ import { GraphAgent } from '../../agents/graph-agent.js';
 import { createRuntimePolicy } from '../../core/runtime-policy.js';
 import { CostTracker } from '../../core/cost-tracker.js';
 import type { RuntimePolicy } from '../../core/runtime-policy.js';
+import { safeProcessEnv } from '../../providers/cli-provider.js';
 
 const SYSTEM_PROMPT = `You are an expert code assistant with deep knowledge of this repository.
 Answer questions concisely based on the provided repository context.
@@ -43,7 +44,7 @@ async function askAI(
     const proc = spawn('claude', ['-p', question, '--system-prompt', systemPrompt], {
       cwd,
       stdio: ['ignore', 'pipe', 'ignore'],
-      env: process.env,
+      env: safeProcessEnv(),
     });
     proc.stdout.on('data', (chunk: Buffer) => onChunk(chunk.toString()));
     proc.on('close', () => resolve());

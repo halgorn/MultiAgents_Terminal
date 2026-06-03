@@ -71,6 +71,7 @@ export AI_RUNTIME_CODEX_MODEL="gpt-5-codex"
 ```bash
 aion --help
 aion menu
+aion next
 aion audit .
 aion analyze .
 aion "review this project and find risky code"
@@ -172,6 +173,7 @@ aion scan cognitive-load
 ```bash
 aion health
 aion report
+aion report latest
 aion report --md
 aion context --audit
 aion context "audit report generation" --budget 8000
@@ -230,6 +232,34 @@ For asking another AI to analyze the audit, use `ai-context.md` or generate a fr
 
 ```bash
 aion context --audit --budget 6000
+```
+
+## Low-Token Workflow
+
+Run:
+
+```bash
+aion next
+```
+
+This prints the recommended sequence for avoiding large token spend. The default flow is:
+
+```bash
+aion audit . --dry-run --max-files 20
+aion audit . --local-only
+aion audit . --preset security --scanners 2 --max-files 20
+aion context --audit --budget 6000
+aion report latest
+```
+
+`aion search --semantic` uses a local deterministic vector index under `.ai-runtime/repo-vectors.json`; it does not call an AI API.
+
+## Provider Safety
+
+CLI subprocesses receive a minimal environment instead of the full parent shell environment. Codex `--ignore-rules` is disabled by default. To explicitly opt in:
+
+```bash
+export AION_CODEX_IGNORE_RULES=1
 ```
 
 Override the task store path:

@@ -22,6 +22,7 @@ import { registerChat } from './cli/commands/chat.js';
 import { registerContext } from './cli/commands/context.js';
 import { registerSearch } from './cli/commands/search.js';
 import { registerTree } from './cli/commands/tree.js';
+import { registerNext } from './cli/commands/next.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -82,6 +83,7 @@ registerChat(program);
 registerContext(program);
 registerSearch(program);
 registerTree(program);
+registerNext(program);
 
 // Explicit menu command
 program
