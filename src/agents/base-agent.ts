@@ -39,7 +39,7 @@ export abstract class BaseAgent<TInput, TOutput> {
 
     const userMessage = this.applyLimits(this.buildUserMessage(input), policy);
 
-    const rawText = await createProvider(this.config.provider).run(
+    const rawText = await createProvider(this.config.provider, policy).run(
       {
         agentName: this.config.name,
         cwd: worktreePath,

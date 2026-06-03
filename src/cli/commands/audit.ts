@@ -58,22 +58,36 @@ function renderAuditReport(report: {
     });
   }
 
-  // Findings grouped by severity
-  const order = ['critical', 'high', 'medium', 'low', 'info'];
-  for (const sev of order) {
-    const group = report.findings.filter(f => f.severity === sev);
-    if (group.length === 0) continue;
-
-    const color = SEVERITY_COLOR[sev] ?? chalk.white;
-    const icon = SEVERITY_ICON[sev] ?? '';
-    console.log('\n' + color(` ${icon} ${sev.toUpperCase()} (${group.length}) `));
-
-    for (const f of group) {
-      const loc = f.line ? `${f.file}:${f.line}` : f.file;
-      console.log(chalk.bold(`  ${loc}`) + chalk.gray(` [${f.category}]`));
-      console.log(`    ${f.finding}`);
-      console.log(chalk.dim(`    → ${f.recommendation}`));
-      console.log();
+  // Findings: if sections exist, render by domain; otherwise by severity
+  const auditReport = report as import('../../schemas/audit.js').AuditReport;
+  if (auditReport.sections && auditReport.sections.length > 0) {
+    for (const section of auditReport.sections) {
+      if (section.findings.length === 0) continue;
+      console.log('\n' + chalk.bold.blue(`  ▸ ${section.domain.toUpperCase()} (${section.findings.length})`));
+      for (const f of section.findings) {
+        const loc = f.line ? `${f.file}:${f.line}` : f.file;
+        const color = SEVERITY_COLOR[f.severity] ?? chalk.white;
+        console.log(color(`  ${loc}`) + chalk.gray(` [${f.severity}]`));
+        console.log(`    ${f.finding}`);
+        console.log(chalk.dim(`    → ${f.recommendation}`));
+        console.log();
+      }
+    }
+  } else {
+    const order = ['critical', 'high', 'medium', 'low', 'info'];
+    for (const sev of order) {
+      const group = report.findings.filter(f => f.severity === sev);
+      if (group.length === 0) continue;
+      const color = SEVERITY_COLOR[sev] ?? chalk.white;
+      const icon = SEVERITY_ICON[sev] ?? '';
+      console.log('\n' + color(` ${icon} ${sev.toUpperCase()} (${group.length}) `));
+      for (const f of group) {
+        const loc = f.line ? `${f.file}:${f.line}` : f.file;
+        console.log(chalk.bold(`  ${loc}`) + chalk.gray(` [${f.category}]`));
+        console.log(`    ${f.finding}`);
+        console.log(chalk.dim(`    → ${f.recommendation}`));
+        console.log();
+      }
     }
   }
 
@@ -121,15 +135,34 @@ export function registerAudit(program: Command): void {
   program
     .command('audit [target]')
     .description('Deep parallel audit: N scanners cover all files, synthesizer unifies findings')
-    .option('-n, --scanners <n>', 'number of parallel scanner agents', '5')
+    .option('-n, --scanners <n>', 'number of scanner agents (auto-selected if omitted)')
+    .option('--budget <budget>', 'low | normal | deep (default: low)', 'low')
+    .option('--provider <provider>', 'claude | openrouter (default: claude)')
+    .option('--model <model>', 'model override for openrouter (e.g. moonshotai/kimi-k2)')
+    .option('--fix', 'auto-fix critical/high findings after audit')
+    .option('--fix-max <n>', 'max findings to auto-fix (default: 5)', '5')
+    .option('--fix-min-severity <s>', 'minimum severity to fix: critical|high|medium (default: high)', 'high')
     .option('--dry-run', 'collect audit file stats without starting agents')
-    .action(async (target: string = '.', options: { scanners: string; dryRun?: boolean }) => {
-      const n = Math.max(1, Math.min(10, parseInt(options.scanners, 10) || 5));
+    .action(async (target: string = '.', options: { scanners?: string; budget: string; provider?: string; model?: string; fix?: boolean; fixMax: string; fixMinSeverity: string; dryRun?: boolean }) => {
+      const explicitN = options.scanners ? Math.max(1, Math.min(10, parseInt(options.scanners, 10) || 5)) : undefined;
+      const budget = (['low', 'normal', 'deep'].includes(options.budget) ? options.budget : 'low') as 'low' | 'normal' | 'deep';
+      const providerName = options.provider === 'openrouter' ? 'openrouter' as const : undefined;
+      const policyInput = {
+        budget,
+        ...(options.model ? { openrouterModel: options.model } : {}),
+        ...(providerName ? {
+          plannerProvider: providerName,
+          investigatorProvider: providerName,
+          developerProvider: providerName,
+          reviewerProvider: providerName,
+        } : {}),
+      };
+      const policy = createRuntimePolicy(policyInput);
       const renderer = new Renderer();
-      const orch = new Orchestrator(process.cwd());
+      const orch = new Orchestrator(process.cwd(), policyInput);
 
       if (options.dryRun) {
-        const pipeline = new AuditPipeline(process.cwd(), createRuntimePolicy(), new CostTracker(), () => {}, () => {});
+        const pipeline = new AuditPipeline(process.cwd(), policy, new CostTracker(), () => {}, () => {});
         renderDryRun(pipeline.collectAuditStats(target));
         return;
       }
@@ -139,14 +172,25 @@ export function registerAudit(program: Command): void {
       orch.on('agent:done', ({ agentName, durationMs }) => renderer.agentDone(agentName, durationMs));
 
       const start = Date.now();
-      console.log(chalk.bold.cyan(`\nStarting audit with ${n} parallel scanners...\n`));
+      const nLabel = explicitN ? `${explicitN} scanners` : `auto scanners (${budget} budget)`;
+      console.log(chalk.bold.cyan(`\nStarting audit with ${nLabel}...\n`));
 
       try {
-        const report = await orch.runAuditPipeline(target, n);
+        const report = await orch.runAuditPipeline(target, explicitN);
         const durationMs = Date.now() - start;
         renderAuditReport(report, durationMs);
         console.log(chalk.gray(`report: ${saveAuditReport(report, durationMs)}`));
         console.log(chalk.dim(orch.costs.summary()));
+
+        if (options.fix && (report.criticalCount > 0 || report.highCount > 0)) {
+          const maxFixes = Math.max(1, Math.min(20, parseInt(options.fixMax, 10) || 5));
+          const minSev = (['critical', 'high', 'medium'].includes(options.fixMinSeverity)
+            ? options.fixMinSeverity : 'high') as 'critical' | 'high' | 'medium';
+          console.log(chalk.bold.yellow(`\nAuto-fixing up to ${maxFixes} ${minSev}+ findings...\n`));
+          const fixReport = await orch.runAuditFixPipeline(report, { maxFixes, minSeverity: minSev });
+          console.log(chalk.bold(`Fix summary: ${fixReport.succeeded} fixed, ${fixReport.failed} failed, ${fixReport.skipped} skipped`));
+        }
+
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
       } catch (err) {
         renderer.showError(err);

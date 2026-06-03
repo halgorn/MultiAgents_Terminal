@@ -5,11 +5,13 @@ import type { EvidenceReport } from '../schemas/evidence.js';
 import type { PlanReport } from '../schemas/plan.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
+import type { LangProfile } from '../infra/lang-detect.js';
 
 export interface DeveloperInput {
   evidence: EvidenceReport;
   plan: PlanReport;
   worktreePath: string;
+  langProfile?: LangProfile;
 }
 
 export class DeveloperAgent extends BaseAgent<DeveloperInput, PatchReport> {
@@ -26,6 +28,9 @@ export class DeveloperAgent extends BaseAgent<DeveloperInput, PatchReport> {
   }
 
   protected buildUserMessage(input: DeveloperInput): string {
+    const lang = input.langProfile;
+    const buildCmd = lang?.buildCommand ?? 'npm run build';
+    const testCmd = lang?.testCommand ?? 'npm test';
     return `Root cause:
 ${input.evidence.rootCause ?? input.evidence.summary}
 
@@ -37,10 +42,14 @@ Confidence: ${input.evidence.confidence}%
 Constraints from plan:
 ${input.plan.constraints.join('\n') || 'none'}
 
+Language: ${lang?.lang ?? 'unknown'}
+Build: ${buildCmd}
+Test: ${testCmd}
+
 Use Read to understand the affected files, reading at most 500 lines from any single file.
 Then Edit/Write to apply the fix.
 After making changes, run: git diff HEAD to capture the diff.
-Then output the patch JSON.`;
+Output patch JSON with buildCommand: "${buildCmd}" and testCommand: "${testCmd}".`;
   }
 
   protected parseOutput(text: string): PatchReport {

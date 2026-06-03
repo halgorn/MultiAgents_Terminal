@@ -3,6 +3,8 @@ import { z } from 'zod';
 const KNOWN_CATEGORIES = [
   'security', 'architecture', 'performance', 'testing',
   'error-handling', 'types', 'maintainability', 'token-usage',
+  'bugs', 'redundancy', 'infrastructure', 'observability',
+  'resilience', 'data', 'dependencies', 'compliance', 'multitenancy',
 ] as const;
 
 export const AuditFindingSchema = z.object({
@@ -29,6 +31,12 @@ export const ScanReportSchema = z.object({
   summary: z.string(),
 });
 
+export const DomainSectionSchema = z.object({
+  domain: z.string(),
+  findings: z.array(AuditFindingSchema),
+  summary: z.string(),
+});
+
 export const AuditReportSchema = z.object({
   findings: z.array(AuditFindingSchema),
   criticalCount: z.number().int(),
@@ -36,8 +44,10 @@ export const AuditReportSchema = z.object({
   totalFiles: z.number().int(),
   summary: z.string(),
   topPriorities: z.array(z.string()),
+  sections: z.array(DomainSectionSchema).optional(),
 });
 
 export type AuditFinding = z.infer<typeof AuditFindingSchema>;
 export type ScanReport = z.infer<typeof ScanReportSchema>;
 export type AuditReport = z.infer<typeof AuditReportSchema>;
+export type DomainSection = z.infer<typeof DomainSectionSchema>;

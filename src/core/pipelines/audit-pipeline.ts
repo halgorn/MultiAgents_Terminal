@@ -7,6 +7,11 @@ import { SynthesizerAgent } from '../../agents/synthesizer.js';
 import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.js';
 import { validateAuditFindings } from '../../infra/evidence-gate.js';
 import { loadRepoIndex } from '../../infra/repo-query.js';
+import { GraphAgent } from '../../agents/graph-agent.js';
+import { buildDepGraph } from '../../infra/dep-graph.js';
+import { buildPythonDepGraph } from '../../infra/dep-graph-python.js';
+import { detectLang } from '../../infra/lang-detect.js';
+import type { ScannerContext } from '../../prompts/scanner.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
 
@@ -29,8 +34,9 @@ const IGNORE_PATTERNS = [
 ];
 const MAX_FILE_SIZE = 200 * 1024;
 const MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS = 30;
-const MAX_FINDINGS_PER_SCANNER = 15;
-const MAX_FINDING_TEXT = 360;
+const MAX_FINDINGS_PER_SCANNER = 10;
+const MAX_FINDINGS_FOR_SYNTHESIS = 8;
+const MAX_FINDING_TEXT = 220;
 
 function severityRank(severity: string): number {
   switch (severity) {
@@ -117,7 +123,43 @@ export class AuditPipeline {
     private readonly onChunk: OnChunk,
   ) {}
 
-  async run(target: string, numScanners = 5): Promise<AuditReport> {
+  private async buildScannerContext(): Promise<ScannerContext> {
+    const ctx: ScannerContext = {};
+    try {
+      const graph = new GraphAgent(this.cwd);
+      ctx.repoSummary = await graph.queryWithContext('architecture structure modules', 15, 3000);
+    } catch { /* best-effort */ }
+    try {
+      const lang = detectLang(this.cwd);
+      const dep = lang.lang === 'python'
+        ? buildPythonDepGraph(this.cwd)
+        : buildDepGraph(this.cwd);
+      const lines: string[] = [];
+      if (dep.cycles.length > 0) {
+        lines.push(`Cycles (${dep.cycles.length}): ${dep.cycles.slice(0, 5).map((c) => c.join(' → ')).join('; ')}`);
+      }
+      const hotspots = dep.hotspots.slice(0, 10);
+      if (hotspots.length > 0) {
+        lines.push(`Hotspots: ${hotspots.map((h) => `${h.file} (in:${h.fanIn} out:${h.fanOut})`).join(', ')}`);
+        ctx.hotspotFiles = hotspots.map((h) => h.file);
+      }
+      if (lines.length > 0) ctx.depGraph = lines.join('\n');
+    } catch { /* best-effort */ }
+    return ctx;
+  }
+
+  autoSelectScanners(totalFiles: number): number {
+    const budget = this.policy.budget;
+    if (budget === 'deep') return 7;
+    if (budget === 'normal') return totalFiles > 500 ? 5 : 4;
+    // low: scale with repo size
+    if (totalFiles > 1000) return 5;
+    if (totalFiles > 300) return 4;
+    if (totalFiles > 100) return 3;
+    return 2;
+  }
+
+  async run(target: string, numScanners?: number): Promise<AuditReport> {
     const taskId = randomUUID();
     const worktrees: Array<[string, string]> = [];
 
@@ -127,6 +169,8 @@ export class AuditPipeline {
       if (allFiles.length === 0) {
         return { findings: [], criticalCount: 0, highCount: 0, totalFiles: 0, summary: 'No source files found.', topPriorities: [] };
       }
+
+      const resolvedScanners = numScanners ?? this.autoSelectScanners(allFiles.length);
 
       // Semgrep pre-scan (zero API tokens)
       const { runSemgrep } = await import('../../infra/semgrep.js');
@@ -148,13 +192,15 @@ export class AuditPipeline {
 
       // Domain-based AI scanners (sequential to respect rate limits)
       const { SCAN_DOMAINS } = await import('../../prompts/scanner.js');
-      const domains = SCAN_DOMAINS.slice(0, numScanners);
+      const domains = SCAN_DOMAINS.slice(0, resolvedScanners);
       const n = domains.length;
 
       this.emit('agent:output', {
         agentName: 'audit',
         text: `Found ${allFiles.length} source files → ${n} AI scanners (sequential, grep-first)\n  ${domains.join(' | ')}\n`,
       });
+
+      const scannerCtx = await this.buildScannerContext();
 
       const aiScannerRuns = await this.runSequential(
         domains.map((domain, i) => async () => {
@@ -164,8 +210,8 @@ export class AuditPipeline {
 
           const start = Date.now();
           try {
-            const run = await new ScannerAgent(domain, i, n).run(
-              { domain, worktreePath: wt, scannerIndex: i, totalScanners: n },
+            const run = await new ScannerAgent(domain, i, n, scannerCtx).run(
+              { domain, worktreePath: wt, scannerIndex: i, totalScanners: n, context: scannerCtx },
               this.policy,
               this.onChunk,
             );
@@ -189,7 +235,10 @@ export class AuditPipeline {
       worktrees.push(['synthesizer', taskId]);
       this.emit('agent:start', { agentName: 'synthesizer' });
 
-      const reports = [compactScanReport(semgrepReport, MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS), ...aiScannerRuns];
+      const reports = [
+        compactScanReport(semgrepReport, MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS),
+        ...aiScannerRuns.map((r) => compactScanReport(r, MAX_FINDINGS_FOR_SYNTHESIS)),
+      ];
       const synthStart = Date.now();
       try {
         const synthRun = await new SynthesizerAgent().run(
@@ -213,9 +262,14 @@ export class AuditPipeline {
     }
   }
 
-  private async runSequential<T>(tasks: Array<() => Promise<T>>): Promise<T[]> {
+  private async runSequential<T>(tasks: Array<() => Promise<T>>, timeoutMs = 6 * 60 * 1000): Promise<T[]> {
     const results: T[] = [];
-    for (const task of tasks) results.push(await task());
+    for (const task of tasks) {
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Scanner timed out after ${timeoutMs / 1000}s`)), timeoutMs),
+      );
+      results.push(await Promise.race([task(), timeout]));
+    }
     return results;
   }
 

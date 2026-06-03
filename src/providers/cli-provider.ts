@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import type { ProviderName, RuntimePolicy } from '../core/runtime-policy.js';
 import { limitChars } from '../core/runtime-policy.js';
 import { SdkProvider } from './sdk-provider.js';
+import { OpenRouterProvider } from './openrouter-provider.js';
 export type { ProviderRunInput, AgentProvider } from './types.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -151,8 +152,12 @@ export class CodexCliProvider implements AgentProvider {
   }
 }
 
-export function createProvider(name: ProviderName): AgentProvider {
+export function createProvider(name: ProviderName, policy?: { openrouterModel?: string }): AgentProvider {
   if (name === 'codex') return new CodexCliProvider();
+  if (name === 'openrouter') {
+    const model = policy?.openrouterModel ?? process.env['OPENROUTER_MODEL'] ?? 'moonshotai/kimi-k2';
+    return new OpenRouterProvider(model);
+  }
   // SDK provider when key is set: enables prompt caching + real streaming
   // Falls back to CLI provider when no key (uses claude CLI session auth)
   if (process.env['ANTHROPIC_API_KEY']) return new SdkProvider();

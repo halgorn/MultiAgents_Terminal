@@ -4,6 +4,7 @@ import { classify } from './classifier.js';
 import { Orchestrator } from '../core/orchestrator.js';
 import { Renderer } from './ui/renderer.js';
 import { KnowledgeStore } from '../infra/knowledge.js';
+import { GraphAgent } from '../agents/graph-agent.js';
 
 export async function runNaturalLanguage(input: string, cwd: string): Promise<void> {
   const { intent, target } = classify(input);
@@ -33,6 +34,17 @@ export async function runNaturalLanguage(input: string, cwd: string): Promise<vo
       console.log(`${chalk.cyan((r.score * 100).toFixed(1) + '%')}  ${chalk.bold(r.category + '/' + r.filename)}`);
       console.log(chalk.gray('  ' + r.text.split('\n')[0]?.slice(0, 100)));
     }
+    return;
+  }
+
+  if (intent === 'graph-index') {
+    console.log(chalk.gray('→ building repository graph index...'));
+    const graph = new GraphAgent(cwd);
+    const { default: ora } = await import('ora');
+    const spinner = ora('Indexing repository...').start();
+    const index = await graph.buildIndex();
+    spinner.succeed(chalk.green(`Indexed ${index.stats.files} files, ${index.stats.symbols} symbols, ${index.stats.chunks} chunks`));
+    if (index.stats.testLinks > 0) console.log(chalk.gray(`  ${index.stats.testLinks} test links mapped`));
     return;
   }
 
@@ -70,12 +82,15 @@ async function runWithRenderer(
   orch.on('agent:done', ({ agentName, durationMs }) => renderer.agentDone(agentName, durationMs));
   orch.on('error', ({ message }) => renderer.showError(message));
 
-  let result;
-  if (intent === 'fix') result = await orch.runFixPipeline(target);
-  else if (intent === 'review') result = await orch.runReviewPipeline(target);
-  else result = await orch.runAnalyzePipeline(target);
-
-  renderer.showResult(result);
+  try {
+    let result;
+    if (intent === 'fix') result = await orch.runFixPipeline(target);
+    else if (intent === 'review') result = await orch.runReviewPipeline(target);
+    else result = await orch.runAnalyzePipeline(target);
+    renderer.showResult(result);
+  } finally {
+    orch.removeAllListeners();
+  }
 }
 
 export async function runInteractive(cwd: string): Promise<void> {

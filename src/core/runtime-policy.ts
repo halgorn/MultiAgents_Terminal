@@ -1,5 +1,6 @@
 export type BudgetName = 'low' | 'normal' | 'deep';
-export type ProviderName = 'claude' | 'codex';
+export type ProviderName = 'claude' | 'codex' | 'openrouter';
+export type ClaudeModel = 'claude-haiku-4-5-20251001' | 'claude-sonnet-4-6' | 'claude-opus-4-8';
 
 export interface RuntimePolicy {
   budget: BudgetName;
@@ -7,8 +8,9 @@ export interface RuntimePolicy {
   maxAgents: number;
   maxFileLines: number;
   maxOutputChars: number;
-  claudeModel: 'claude-haiku-4-5';
+  claudeModel: ClaudeModel;
   codexModel: string;
+  openrouterModel: string;
   plannerProvider: ProviderName;
   investigatorProvider: ProviderName;
   developerProvider: ProviderName;
@@ -27,6 +29,7 @@ export interface RuntimePolicyInput {
   developerProvider?: ProviderName;
   reviewerProvider?: ProviderName;
   codexModel?: string;
+  openrouterModel?: string;
 }
 
 const DEFAULT_MAX_FILE_LINES = 500;
@@ -36,10 +39,10 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
   const deep = input.deep ?? budget === 'deep';
 
   const defaults = budget === 'deep'
-    ? { maxAgents: 7, maxOutputChars: 20000, claudeMaxBudgetUsd: 5.0 }
+    ? { maxAgents: 7, maxOutputChars: 20000, claudeMaxBudgetUsd: 5.0, claudeModel: 'claude-opus-4-8' as ClaudeModel }
     : budget === 'normal'
-      ? { maxAgents: 5, maxOutputChars: 14000, claudeMaxBudgetUsd: 2.0 }
-      : { maxAgents: 3, maxOutputChars: 10000, claudeMaxBudgetUsd: 1.0 };
+      ? { maxAgents: 5, maxOutputChars: 14000, claudeMaxBudgetUsd: 2.0, claudeModel: 'claude-sonnet-4-6' as ClaudeModel }
+      : { maxAgents: 3, maxOutputChars: 10000, claudeMaxBudgetUsd: 1.0, claudeModel: 'claude-haiku-4-5-20251001' as ClaudeModel };
 
   return {
     budget,
@@ -47,8 +50,9 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
     maxAgents: input.maxAgents ?? defaults.maxAgents,
     maxFileLines: input.maxFileLines ?? DEFAULT_MAX_FILE_LINES,
     maxOutputChars: input.maxOutputChars ?? defaults.maxOutputChars,
-    claudeModel: 'claude-haiku-4-5',
+    claudeModel: defaults.claudeModel,
     codexModel: input.codexModel ?? process.env['AI_RUNTIME_CODEX_MODEL'] ?? 'gpt-5-codex',
+    openrouterModel: input.openrouterModel ?? process.env['OPENROUTER_MODEL'] ?? 'moonshotai/kimi-k2',
     plannerProvider: input.plannerProvider ?? 'claude',
     investigatorProvider: input.investigatorProvider ?? 'claude',
     developerProvider: input.developerProvider ?? 'claude',

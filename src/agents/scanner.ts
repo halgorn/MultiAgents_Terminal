@@ -1,5 +1,5 @@
 import { BaseAgent } from './base-agent.js';
-import { buildScannerPrompt, type ScanDomain } from '../prompts/scanner.js';
+import { buildScannerPrompt, type ScanDomain, type ScannerContext } from '../prompts/scanner.js';
 import { ScanReportSchema, type ScanReport } from '../schemas/audit.js';
 import type { TaskState } from '../core/state-machine.js';
 
@@ -8,14 +8,15 @@ export interface ScannerInput {
   worktreePath: string;
   scannerIndex: number;
   totalScanners: number;
+  context?: ScannerContext;
 }
 
 export class ScannerAgent extends BaseAgent<ScannerInput, ScanReport> {
-  constructor(domain: ScanDomain, index: number, total: number) {
+  constructor(domain: ScanDomain, index: number, total: number, ctx?: ScannerContext) {
     super({
       name: `scanner-${domain}`,
       provider: 'claude',
-      systemPrompt: buildScannerPrompt(domain, index, total),
+      systemPrompt: buildScannerPrompt(domain, index, total, ctx),
     });
   }
 

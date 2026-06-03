@@ -15,13 +15,13 @@ export interface AgentCost {
 
 // Pricing per million tokens (public rates as of 2025)
 const PRICING: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
-  'claude-haiku-4-5':  { input: 0.80,  output: 4.00,  cacheRead: 0.08,  cacheWrite: 1.00 },
-  'claude-sonnet-4-6': { input: 3.00,  output: 15.00, cacheRead: 0.30,  cacheWrite: 3.75 },
-  'claude-opus-4-8':   { input: 15.00, output: 75.00, cacheRead: 1.50,  cacheWrite: 18.75 },
+  'claude-haiku-4-5-20251001': { input: 0.80,  output: 4.00,  cacheRead: 0.08,  cacheWrite: 1.00 },
+  'claude-sonnet-4-6':         { input: 3.00,  output: 15.00, cacheRead: 0.30,  cacheWrite: 3.75 },
+  'claude-opus-4-8':           { input: 15.00, output: 75.00, cacheRead: 1.50,  cacheWrite: 18.75 },
 };
 
 function calcCost(model: string, usage: TokenUsage): number {
-  const rates = PRICING[model] ?? PRICING['claude-haiku-4-5']!;
+  const rates = PRICING[model] ?? PRICING['claude-haiku-4-5-20251001']!;
   const M = 1_000_000;
   return (
     (usage.inputTokens * rates.input) / M +

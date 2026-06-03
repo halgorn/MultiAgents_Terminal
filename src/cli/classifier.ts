@@ -1,4 +1,4 @@
-export type Intent = 'fix' | 'analyze' | 'audit' | 'review' | 'memory-build' | 'memory-search' | 'unknown';
+export type Intent = 'fix' | 'analyze' | 'audit' | 'review' | 'memory-build' | 'memory-search' | 'graph-index' | 'unknown';
 
 interface Classification {
   intent: Intent;
@@ -40,6 +40,12 @@ const MEMORY_SEARCH_WORDS = [
   'procurar na memoria', 'encontrar na memória',
 ];
 
+const GRAPH_INDEX_WORDS = [
+  'graph', 'grafo', 'index repo', 'indexar repositório', 'indexar repositorio',
+  'repo index', 'build graph', 'construir grafo', 'estrutura do projeto',
+  'mapa do projeto', 'dependências', 'dependencias', 'dep graph',
+];
+
 function score(text: string, words: string[]): number {
   const lower = text.toLowerCase();
   return words.reduce((n, w) => n + (lower.includes(w) ? 1 : 0), 0);
@@ -53,6 +59,7 @@ export function classify(input: string): Classification {
     review: score(input, REVIEW_WORDS),
     'memory-build': score(input, MEMORY_BUILD_WORDS),
     'memory-search': score(input, MEMORY_SEARCH_WORDS),
+    'graph-index': score(input, GRAPH_INDEX_WORDS),
     unknown: 0,
   };
 

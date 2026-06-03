@@ -5,10 +5,38 @@ import type { QAResult } from '../schemas/qa.js';
 import type { RuntimePolicy } from '../core/runtime-policy.js';
 import { limitChars } from '../core/runtime-policy.js';
 
-function runShell(cwd: string, command: string, maxOutputChars: number): { ok: boolean; output: string } {
-  const result = spawnSync(command, {
+const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
+  'npm run build', 'npm test', 'npm run test', 'npm run lint',
+  'yarn build', 'yarn test', 'yarn lint',
+  'pnpm build', 'pnpm test', 'pnpm lint',
+  'make build', 'make test',
+  'python -m pytest', 'pytest', 'python -m unittest',
+  'go build ./...', 'go test ./...',
+  'cargo build', 'cargo test',
+]);
+
+const SHELL_METACHAR_RE = /[;&|`$><\\!]/;
+
+function sanitizeCommand(cmd: string, fallback: string): string {
+  const trimmed = (cmd ?? '').trim();
+  if (!trimmed) return fallback;
+  if (SHELL_METACHAR_RE.test(trimmed)) return fallback;
+  if (ALLOWED_COMMANDS.has(trimmed)) return trimmed;
+  // Allow npm run <script> and similar patterns not in the static set
+  if (/^(npm|yarn|pnpm)\s+run\s+[\w:-]+$/.test(trimmed)) return trimmed;
+  return fallback;
+}
+
+function parseCommand(command: string): { bin: string; args: string[] } {
+  const parts = command.trim().split(/\s+/);
+  return { bin: parts[0]!, args: parts.slice(1) };
+}
+
+function runCommand(cwd: string, command: string, maxOutputChars: number): { ok: boolean; output: string } {
+  const { bin, args } = parseCommand(command);
+  const result = spawnSync(bin, args, {
     cwd,
-    shell: true,
+    shell: false,
     encoding: 'utf8',
     timeout: 5 * 60 * 1000,
     maxBuffer: 1024 * 1024,
@@ -27,8 +55,11 @@ function runShell(cwd: string, command: string, maxOutputChars: number): { ok: b
 }
 
 export function runLocalQA(cwd: string, patch: PatchReport, evidence: EvidenceReport, policy: RuntimePolicy): QAResult {
-  const build = runShell(cwd, patch.buildCommand || 'npm run build', policy.maxOutputChars);
-  const tests = runShell(cwd, patch.testCommand || 'npm test', policy.maxOutputChars);
+  const buildCmd = sanitizeCommand(patch.buildCommand, 'npm run build');
+  const testCmd = sanitizeCommand(patch.testCommand, 'npm test');
+
+  const build = runCommand(cwd, buildCmd, policy.maxOutputChars);
+  const tests = runCommand(cwd, testCmd, policy.maxOutputChars);
   const reproductionNotes = limitChars(evidence.logs.slice(0, 5).join('\n'), 1500);
   const ok = build.ok && tests.ok;
 

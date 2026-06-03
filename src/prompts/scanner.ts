@@ -3,17 +3,74 @@ export type ScanDomain =
   | 'error-handling'
   | 'architecture'
   | 'testing'
-  | 'performance';
+  | 'performance'
+  | 'bugs'
+  | 'redundancy'
+  | 'infrastructure'
+  | 'observability'
+  | 'resilience'
+  | 'data'
+  | 'dependencies'
+  | 'compliance'
+  | 'multitenancy';
 
 export const SCAN_DOMAINS: ScanDomain[] = [
   'security',
+  'bugs',
+  'redundancy',
   'error-handling',
   'architecture',
   'testing',
   'performance',
+  'infrastructure',
+  'observability',
+  'resilience',
+  'data',
+  'dependencies',
+  'compliance',
+  'multitenancy',
 ];
 
-const DOMAIN_CONFIG: Record<ScanDomain, { title: string; grepPatterns: string[]; instructions: string }> = {
+export type { DomainConfig } from './scanner-domains-infra.js';
+import type { DomainConfig } from './scanner-domains-infra.js';
+import { INFRA_DOMAIN_CONFIG } from './scanner-domains-infra.js';
+
+const DOMAIN_CONFIG: Record<ScanDomain, DomainConfig> = {
+  ...INFRA_DOMAIN_CONFIG,
+  bugs: {
+    title: 'Bug Scanner',
+    grepPatterns: [
+      'null', 'undefined', 'NaN', 'parseInt(', 'parseFloat(',
+      '=== null', '!== null', '== null', '!= null',
+      'async ', 'await ', 'Promise.all', 'Promise.race',
+      'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
+      'push(', 'pop(', 'shift(', 'splice(',
+      'index', 'length', 'slice(', 'substr(',
+    ],
+    instructions: `Use Grep and Bash to find real logic bugs:
+1. Null/undefined dereference: grep for patterns like ".x" after nullable assignments, optional chaining missing
+2. Off-by-one errors: array index accesses near .length, slice/substr with boundary values
+3. Race conditions: concurrent state mutations, shared mutable state in async flows, unguarded Promise.all
+4. Type coercion bugs: == instead of ===, parseInt without radix, NaN comparisons
+5. Infinite loops or missing exit conditions: loops with external state, missing break
+6. State machine violations: transitions that skip required states, missing guards
+For each finding, Read the relevant section (offset/limit) to confirm it's a real bug, not a false positive.`,
+  },
+  redundancy: {
+    title: 'Redundancy Scanner',
+    grepPatterns: [
+      'function ', 'const ', 'class ', 'export ',
+      'import ', 'require(',
+      'if (', 'switch (', 'for (', 'while (',
+    ],
+    instructions: `Use Bash to find redundant and dead code:
+1. Duplicate function names across files: grep -rn "^function \\|^const .*= (" --include="*.ts" --include="*.py" . | awk -F'[: ]' '{print $NF}' | sort | uniq -d | head -20
+2. Exported symbols never imported elsewhere: grep -rn "^export " --include="*.ts" . | grep -v "index.ts" | head -30 — then cross-check with grep for each symbol name
+3. Dead imports: grep -rn "^import " --include="*.ts" . | head -40 — look for modules imported but symbols unused
+4. Similar logic blocks: find functions >20 lines with similar names (e.g., getUser/fetchUser/loadUser) — Read both to compare
+5. Config/constant duplication: grep -rn "const.*=.*['\"]" --include="*.ts" . | sort -t= -k2 | uniq -d -f1 | head -20
+Report only confirmed cases with file+line. Do not speculate.`,
+  },
   security: {
     title: 'Security Scanner',
     grepPatterns: [
@@ -90,12 +147,29 @@ Read only matching sections (offset/limit 30 lines) to confirm. Report file+line
   },
 };
 
-export function buildScannerPrompt(domain: ScanDomain, scannerIndex: number, totalScanners: number): string {
+function buildContextBlock(ctx: ScannerContext): string {
+  const parts: string[] = [];
+  if (ctx.repoSummary) parts.push(`## Repository Structure\n${ctx.repoSummary}`);
+  if (ctx.depGraph) parts.push(`## Dependency Graph\n${ctx.depGraph}`);
+  if (ctx.hotspotFiles && ctx.hotspotFiles.length > 0) {
+    parts.push(`## High-Coupling Files (read these first — most likely to contain issues)\n${ctx.hotspotFiles.map((f) => `- ${f}`).join('\n')}`);
+  }
+  return parts.length > 0 ? '\n' + parts.join('\n\n') + '\n' : '';
+}
+
+export interface ScannerContext {
+  repoSummary?: string;      // GraphAgent.queryWithContext() output
+  depGraph?: string;         // formatted dep-graph: cycles, hotspots
+  hotspotFiles?: string[];   // top files by coupling score — read these first
+}
+
+export function buildScannerPrompt(domain: ScanDomain, scannerIndex: number, totalScanners: number, ctx?: ScannerContext): string {
   const cfg = DOMAIN_CONFIG[domain];
+  const contextBlock = ctx ? buildContextBlock(ctx) : '';
   return `# ${cfg.title} (${scannerIndex + 1} of ${totalScanners})
 
 You are a specialized code auditor. Your ONLY job is to find **${domain}** issues.
-
+${contextBlock}
 ## Allowed Tools
 - Grep — search for patterns across the codebase
 - Bash — run analysis commands (read-only: find, wc, grep, awk, sort)
