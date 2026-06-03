@@ -126,4 +126,21 @@ Report file+line for each confirmed issue.`,
 5. Admin endpoints without tenant check: grep -rn "@admin\\|is_admin\\|role.*admin" --include="*.py" . | head -10 — verify tenant boundary in admin logic
 Report file+line for each gap confirmed by reading the section.`,
   },
+  'prompt-audit': {
+    title: 'Prompt Audit Scanner (AI/LLM)',
+    grepPatterns: [
+      'openai', 'anthropic', 'langchain', 'ChatCompletion', 'messages=',
+      'system_prompt', 'user_prompt', 'prompt =', 'f"""', 'f"',
+      'model=', 'gpt-', 'claude-', 'temperature=',
+    ],
+    instructions: `Use Grep and Read to find LLM/prompt quality issues:
+1. Prompt injection risks: grep -rn "f\\".*{.*request\\|f\\".*{.*user\\|format.*user_input" --include="*.py" --include="*.ts" . | head -20 — user input directly concatenated into prompts
+2. Hardcoded model names: grep -rn "gpt-4\\|gpt-3\\|claude-2\\|claude-instant" --include="*.py" --include="*.ts" . | head -20 — model names that will become stale
+3. Missing system prompt: grep -rn "messages=\\[{.*role.*user" --include="*.py" . | head -20 — calls with only user role, no system guidance
+4. Very long prompts (>2000 chars): grep -rn '"""' --include="*.py" . | head -20 — then Read those sections to check prompt length
+5. No error handling on LLM calls: grep -rn "\.chat\.completions\.create\\|client\.messages\.create" --include="*.py" --include="*.ts" . | head -20 — check if wrapped in try/except
+6. Duplicate prompts: grep -rn "system_prompt\\|SYSTEM_PROMPT" --include="*.py" --include="*.ts" . | head -20 — same prompt string in multiple files
+7. Tokens not limited: grep -rn "max_tokens\\|max_output_tokens" --include="*.py" --include="*.ts" . | head -10 — calls without token limits
+Report file+line for each confirmed issue.`,
+  },
 };

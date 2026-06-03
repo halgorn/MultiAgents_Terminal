@@ -10,6 +10,12 @@ import { registerReview } from './cli/commands/review.js';
 import { registerMemory } from './cli/commands/memory.js';
 import { registerAudit } from './cli/commands/audit.js';
 import { registerGraph } from './cli/commands/graph.js';
+import { registerChurn } from './cli/commands/churn.js';
+import { registerScan } from './cli/commands/scan.js';
+import { registerPatterns } from './cli/commands/patterns.js';
+import { registerHealth } from './cli/commands/health.js';
+import { registerReport } from './cli/commands/report.js';
+import { registerExplain } from './cli/commands/explain.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 
 runMigrations();
@@ -56,5 +62,11 @@ registerReview(program);
 registerMemory(program);
 registerAudit(program);
 registerGraph(program);
+registerChurn(program);
+registerScan(program);
+registerPatterns(program);
+registerHealth(program);
+registerReport(program);
+registerExplain(program);
 
 program.parse(process.argv);

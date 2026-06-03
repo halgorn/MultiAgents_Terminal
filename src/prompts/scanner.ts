@@ -12,7 +12,8 @@ export type ScanDomain =
   | 'data'
   | 'dependencies'
   | 'compliance'
-  | 'multitenancy';
+  | 'multitenancy'
+  | 'prompt-audit';
 
 export const SCAN_DOMAINS: ScanDomain[] = [
   'security',
@@ -29,6 +30,7 @@ export const SCAN_DOMAINS: ScanDomain[] = [
   'dependencies',
   'compliance',
   'multitenancy',
+  'prompt-audit',
 ];
 
 export type { DomainConfig } from './scanner-domains-infra.js';
