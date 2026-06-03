@@ -6,8 +6,13 @@ import { GraphAgent } from '../../agents/graph-agent.js';
 import { buildChurnReport } from '../../infra/git-analysis.js';
 import { detectPatterns } from '../../infra/pattern-detect.js';
 import { computeHealthScore } from '../../infra/health-score.js';
-import { measureCognitiveLoad } from '../../infra/code-metrics.js';
+import { measureCognitiveLoad, buildApiMap, auditEnvVars, scanCurrentSecrets } from '../../infra/code-metrics.js';
+import { buildSbom } from '../../infra/sbom.js';
 import type { AuditReport } from '../../schemas/audit.js';
+import type { HealthScore } from '../../infra/health-score.js';
+import type { ChurnReport } from '../../infra/git-analysis.js';
+import type { PatternReport } from '../../infra/pattern-detect.js';
+import type { CognitiveEntry } from '../../infra/code-metrics.js';
 
 function esc(s: string): string {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -186,13 +191,206 @@ tr:hover td{background:#161b22}.badge{display:inline-block;border-radius:4px;pad
 </html>`;
 }
 
+function renderMarkdown(data: {
+  projectName: string;
+  health: HealthScore;
+  audit: AuditReport | null;
+  churn: ChurnReport;
+  patterns: PatternReport;
+  cognitive: CognitiveEntry[];
+  generatedAt: string;
+  totalFiles: number;
+  totalSymbols: number;
+  cycles: number;
+  hotspots: Array<{ file: string; fanIn: number; fanOut: number }>;
+  apiEndpoints: ReturnType<typeof buildApiMap>;
+  envAudit: ReturnType<typeof auditEnvVars>;
+  secrets: ReturnType<typeof scanCurrentSecrets>;
+  sbom: ReturnType<typeof buildSbom>;
+}): string {
+  const { projectName, health, audit, churn, patterns, cognitive, hotspots, apiEndpoints, envAudit, secrets, sbom } = data;
+  const lines: string[] = [];
+
+  lines.push(`# ${projectName} — AI Analysis Context`);
+  lines.push(`> Generated: ${data.generatedAt} · Use this document to ask an AI for refactoring, architecture, and improvement recommendations.`);
+  lines.push('');
+
+  // Health
+  lines.push(`## Health Score: ${health.total}/100 (${health.grade})`);
+  lines.push('');
+  lines.push('| Dimension | Score | Detail |');
+  lines.push('|---|---|---|');
+  health.dimensions.forEach((d) => lines.push(`| ${d.name} | ${d.score}/100 | ${d.detail} |`));
+  lines.push('');
+  if (health.topRisks.length > 0) {
+    lines.push('**Top risks:**');
+    health.topRisks.forEach((r) => lines.push(`- ${r}`));
+    lines.push('');
+  }
+
+  // Project overview
+  lines.push('## Project Overview');
+  lines.push(`- **Files:** ${data.totalFiles} | **Symbols:** ${data.totalSymbols}`);
+  lines.push(`- **Dependency cycles:** ${data.cycles}`);
+  lines.push(`- **Git commits (90d):** ${churn.totalCommits}`);
+  lines.push('');
+
+  // Architecture patterns
+  lines.push('## Architecture Patterns');
+  lines.push('');
+  lines.push('### Detected');
+  patterns.detected.forEach((p) => {
+    lines.push(`- **${p.pattern}** [${p.category}] (${p.confidence} confidence): ${p.evidence.filter(Boolean).join(', ')}`);
+  });
+  lines.push('');
+
+  if (patterns.antiPatterns.length > 0) {
+    lines.push('### Anti-Patterns');
+    patterns.antiPatterns.forEach((a) => {
+      lines.push(`- **${a.name}** [${a.severity}]: ${a.description}`);
+      a.evidence.slice(0, 2).forEach((e) => lines.push(`  - \`${e}\``));
+    });
+    lines.push('');
+  }
+
+  if (patterns.recommendations.length > 0) {
+    lines.push('### Recommendations');
+    patterns.recommendations.forEach((r) => {
+      lines.push(`- **${r.pattern}** [${r.priority} priority]: ${r.reason}`);
+      r.fixes.forEach((f) => lines.push(`  - ${f}`));
+    });
+    lines.push('');
+  }
+
+  // Hotspots
+  if (hotspots.length > 0) {
+    lines.push('## Hotspot Files (Highest Coupling)');
+    lines.push('');
+    lines.push('| File | FanIn | FanOut | Risk |');
+    lines.push('|---|---|---|---|');
+    hotspots.slice(0, 10).forEach((h) => {
+      const risk = h.fanIn >= 30 ? 'CRITICAL' : h.fanIn >= 15 ? 'HIGH' : 'MEDIUM';
+      lines.push(`| \`${h.file}\` | ${h.fanIn} | ${h.fanOut} | ${risk} |`);
+    });
+    lines.push('');
+  }
+
+  // Audit findings
+  if (audit) {
+    lines.push('## Audit Findings');
+    lines.push(`**${audit.criticalCount} critical · ${audit.highCount} high · ${audit.findings.length} total**`);
+    lines.push('');
+    lines.push(audit.summary);
+    lines.push('');
+
+    const critical = audit.findings.filter((f) => f.severity === 'critical');
+    const high = audit.findings.filter((f) => f.severity === 'high');
+
+    if (critical.length > 0) {
+      lines.push('### Critical Findings');
+      critical.forEach((f) => {
+        lines.push(`- \`${f.file}${f.line ? ':' + f.line : ''}\` [${f.category}] ${f.finding}`);
+        lines.push(`  → ${f.recommendation}`);
+      });
+      lines.push('');
+    }
+
+    if (high.length > 0) {
+      lines.push('### High Findings');
+      high.slice(0, 15).forEach((f) => {
+        lines.push(`- \`${f.file}${f.line ? ':' + f.line : ''}\` [${f.category}] ${f.finding}`);
+        lines.push(`  → ${f.recommendation}`);
+      });
+      lines.push('');
+    }
+  }
+
+  // Churn
+  if (churn.churn.length > 0) {
+    lines.push('## Git Churn (90 days)');
+    lines.push('');
+    lines.push('| File | Commits | Authors | Risk |');
+    lines.push('|---|---|---|---|');
+    churn.churn.slice(0, 15).forEach((c) => lines.push(`| \`${c.file}\` | ${c.commits} | ${c.authors} | ${c.risk} |`));
+    lines.push('');
+
+    const intersection = churn.busFactor
+      .filter((b) => b.risk === 'critical')
+      .filter((b) => churn.churn.find((c) => c.file === b.file && (c.risk === 'critical' || c.risk === 'high')));
+    if (intersection.length > 0) {
+      lines.push('### High Risk: High Churn + Single Author');
+      intersection.forEach((b) => lines.push(`- \`${b.file}\` — ${b.primaryPercent}% commits by one author`));
+      lines.push('');
+    }
+  }
+
+  // API Map (no-auth endpoints)
+  const noAuthEndpoints = apiEndpoints.filter((e) => !e.hasAuth);
+  if (noAuthEndpoints.length > 0) {
+    lines.push('## Unprotected API Endpoints');
+    lines.push('');
+    noAuthEndpoints.forEach((e) => {
+      lines.push(`- \`${e.method} ${e.path}\` — \`${e.file}:${e.line}\``);
+    });
+    lines.push('');
+  }
+
+  // Undocumented env vars
+  if (envAudit.undocumented.length > 0) {
+    lines.push('## Undocumented Environment Variables');
+    lines.push(`${envAudit.undocumented.length} variables used in code but not in .env.example:`);
+    lines.push('');
+    envAudit.undocumented.slice(0, 20).forEach((v) => lines.push(`- \`${v}\``));
+    lines.push('');
+  }
+
+  // Secrets
+  if (secrets.length > 0) {
+    lines.push('## Hardcoded Secrets Detected');
+    secrets.forEach((s) => lines.push(`- \`${s.file}:${s.line}\` [${s.pattern}]`));
+    lines.push('');
+  }
+
+  // Cognitive load
+  if (cognitive.length > 0) {
+    lines.push('## High Cognitive Load Files');
+    lines.push('');
+    lines.push('| File | Score | Max Nesting | Long Functions | LOC |');
+    lines.push('|---|---|---|---|---|');
+    cognitive.slice(0, 10).forEach((c) => lines.push(`| \`${c.file}\` | ${c.score} | ${c.maxNesting} | ${c.longFunctions} | ${c.loc} |`));
+    lines.push('');
+  }
+
+  // SBOM unpinned
+  if (sbom.unpinned.length > 0) {
+    lines.push('## Unpinned Dependencies (Supply Chain Risk)');
+    sbom.unpinned.slice(0, 20).forEach((p) => lines.push(`- \`${p.lang}\` \`${p.name}\` ${p.version}`));
+    lines.push('');
+  }
+
+  // AI prompt footer
+  lines.push('---');
+  lines.push('## Suggested AI Prompts');
+  lines.push('');
+  lines.push('Copy this document and use with any of these prompts:');
+  lines.push('');
+  lines.push('- *"Based on this analysis, create a prioritized refactoring roadmap with effort estimates"*');
+  lines.push('- *"Propose a migration plan from the current architecture to Clean Architecture + Repository Pattern"*');
+  lines.push('- *"Which critical findings should be fixed first and why? Write the fixes."*');
+  lines.push('- *"Identify which hotspot files should be split and how"*');
+  lines.push('- *"What tests should be written first given the 7% test coverage and these hotspots?"*');
+
+  return lines.join('\n');
+}
+
 export function registerReport(program: Command): void {
   program
     .command('report')
-    .description('Generate full HTML project report: health, audit, patterns, churn, complexity')
+    .description('Generate full HTML + Markdown project report')
     .option('--no-open', 'generate without opening browser')
+    .option('--md', 'generate only Markdown (AI-ready context file)')
     .option('--days <n>', 'git lookback for churn analysis', '90')
-    .action(async (options: { open: boolean; days: string }) => {
+    .action(async (options: { open: boolean; md?: boolean; days: string }) => {
       const cwd = process.cwd();
       const days = parseInt(options.days, 10) || 90;
       const projectName = cwd.split('/').pop() ?? 'project';
@@ -215,9 +413,24 @@ export function registerReport(program: Command): void {
       const churn = buildChurnReport(cwd, hotspots.map((h) => h.file), days);
       const patterns = detectPatterns(cwd, hotspots);
       const cognitive = measureCognitiveLoad(cwd, 30);
+      const apiEndpoints = buildApiMap(cwd);
+      const envAudit = auditEnvVars(cwd);
+      const secrets = scanCurrentSecrets(cwd);
+      const sbom = buildSbom(cwd);
+
+      let cycles = 0;
+      try {
+        const { detectLang } = await import('../../infra/lang-detect.js');
+        const { buildDepGraph } = await import('../../infra/dep-graph.js');
+        const { buildPythonDepGraph } = await import('../../infra/dep-graph-python.js');
+        const lang = detectLang(cwd);
+        const dep = lang.lang === 'python' ? buildPythonDepGraph(cwd) : buildDepGraph(cwd);
+        cycles = dep.cycles.length;
+      } catch { /* best-effort */ }
+
       const health = computeHealthScore({
         totalFiles: index.stats.files, totalSymbols: index.stats.symbols,
-        cycles: 0, hotspots: hotspots.length,
+        cycles, hotspots: hotspots.length,
         testFileRatio: index.files.filter((f) => f.isTest).length / Math.max(index.files.length, 1),
         churn: churn.churn, busFactor: churn.busFactor, cognitiveLoad: cognitive,
         patterns, auditCriticals: audit?.criticalCount, auditHighs: audit?.highCount,
@@ -225,19 +438,33 @@ export function registerReport(program: Command): void {
 
       const outDir = join(cwd, '.ai-runtime');
       mkdirSync(outDir, { recursive: true });
-      const graphExists = existsSync(join(outDir, 'graph.html'));
-      const html = renderReport({ projectName, health, audit, churn, patterns, cognitive, graphExists, generatedAt: new Date().toLocaleString() });
-      const outFile = join(outDir, 'report.html');
-      writeFileSync(outFile, html, 'utf8');
+      const generatedAt = new Date().toLocaleString();
+      const mdData = { projectName, health, audit, churn, patterns, cognitive, generatedAt,
+        totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles,
+        hotspots, apiEndpoints, envAudit, secrets, sbom };
 
-      console.log(`Report: ${outFile}`);
+      // Always generate markdown
+      const md = renderMarkdown(mdData);
+      const mdFile = join(outDir, 'context.md');
+      writeFileSync(mdFile, md, 'utf8');
+      console.log(`Markdown: ${mdFile}`);
+
+      if (!options.md) {
+        const graphExists = existsSync(join(outDir, 'graph.html'));
+        const html = renderReport({ projectName, health, audit, churn, patterns, cognitive, graphExists, generatedAt });
+        const outFile = join(outDir, 'report.html');
+        writeFileSync(outFile, html, 'utf8');
+        console.log(`HTML:     ${outFile}`);
+
+        if (options.open !== false) {
+          const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+          const args = process.platform === 'win32' ? ['/c', 'start', '', outFile] : [outFile];
+          spawnSync(opener, args, { stdio: 'ignore', timeout: 5000 });
+        }
+      }
+
       console.log(`  Health: ${health.badge}`);
       if (audit) console.log(`  Findings: ${audit.criticalCount} critical, ${audit.highCount} high`);
-
-      if (options.open !== false) {
-        const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
-        const args = process.platform === 'win32' ? ['/c', 'start', '', outFile] : [outFile];
-        spawnSync(opener, args, { stdio: 'ignore', timeout: 5000 });
-      }
+      console.log(`  Size: ~${Math.round(md.length / 1000)}k chars (~${Math.round(md.length / 4)} tokens)`);
     });
 }
