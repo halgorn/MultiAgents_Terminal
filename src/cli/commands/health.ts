@@ -7,6 +7,7 @@ import { buildChurnReport } from '../../infra/git-analysis.js';
 import { measureCognitiveLoad } from '../../infra/code-metrics.js';
 import { detectPatterns } from '../../infra/pattern-detect.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
+import { appendTrend, loadTrend, renderTrendChart } from '../../infra/audit-trend.js';
 
 interface LatestAudit {
   criticalCount: number;
@@ -32,8 +33,9 @@ export function registerHealth(program: Command): void {
     .description('Composite health score (0-100) across security, architecture, tests, churn, and maintainability')
     .option('--threshold <n>', 'exit code 1 if score below threshold (for CI gate)', '0')
     .option('--days <n>', 'git lookback period for churn/bus-factor', '90')
+    .option('--trend', 'show historical score chart')
     .option('--json', 'output raw JSON')
-    .action(async (options: { threshold: string; days: string; json?: boolean }) => {
+    .action(async (options: { threshold: string; days: string; trend?: boolean; json?: boolean }) => {
       const cwd = process.cwd();
       const threshold = parseInt(options.threshold, 10) || 0;
       const days = parseInt(options.days, 10) || 90;
@@ -76,6 +78,23 @@ export function registerHealth(program: Command): void {
         patterns,
         auditCriticals: audit?.criticalCount,
         auditHighs: audit?.highCount,
+      });
+
+      // --trend: show chart and exit
+      if (options.trend) {
+        const trend = loadTrend(cwd);
+        console.log(chalk.bold.cyan('\nHealth Score History\n'));
+        renderTrendChart(trend.entries);
+        return;
+      }
+
+      // Append to trend history
+      appendTrend(cwd, {
+        timestamp: new Date().toISOString(),
+        score: score.total,
+        grade: score.grade,
+        dimensions: Object.fromEntries(score.dimensions.map((d) => [d.name, d.score])),
+        totalFiles: index.stats.files,
       });
 
       if (options.json) {
