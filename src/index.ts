@@ -17,6 +17,7 @@ import { registerHealth } from './cli/commands/health.js';
 import { registerReport } from './cli/commands/report.js';
 import { registerExplain } from './cli/commands/explain.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
+import { runMenu } from './cli/menu.js';
 
 runMigrations();
 
@@ -38,7 +39,12 @@ program
     }
 
     if (requestWords.length === 0) {
-      await runInteractive(process.cwd());
+      // TTY → interactive menu; pipe/CI → natural language REPL
+      if (process.stdin.isTTY) {
+        await runMenu(process.cwd());
+      } else {
+        await runInteractive(process.cwd());
+      }
     } else {
       await runNaturalLanguage(requestWords.join(' '), process.cwd());
     }
@@ -68,5 +74,11 @@ registerPatterns(program);
 registerHealth(program);
 registerReport(program);
 registerExplain(program);
+
+// Explicit menu command
+program
+  .command('menu')
+  .description('Interactive menu to select commands and personas')
+  .action(async () => { await runMenu(process.cwd()); });
 
 program.parse(process.argv);
