@@ -59,7 +59,7 @@ function architectureScore(cycles: number, hotspots: number, totalFiles: number,
   score -= Math.min(40, cycleRatio * 200);
   score -= Math.min(20, antiPatterns * 10);
   score -= Math.min(10, (hotspots / Math.max(totalFiles, 1)) * 100);
-  return clamp(score);
+  return Math.round(clamp(score));
 }
 
 function churnScore(churn: ChurnEntry[]): number {
