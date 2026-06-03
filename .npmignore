@@ -1,0 +1,14 @@
+src/
+node_modules/
+.worktrees/
+.ai-memory/
+.ai-runtime/
+evidence/
+history/
+tasks/
+.env
+.env.*
+*.test.ts
+*.js.map
+tsconfig.json
+ROADMAP.md
