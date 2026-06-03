@@ -211,13 +211,39 @@ export function registerAudit(program: Command): void {
         console.log(chalk.gray(`report: ${saveAuditReport(report, durationMs)}`));
         console.log(chalk.dim(orch.costs.summary()));
 
-        if (options.fix && (report.criticalCount > 0 || report.highCount > 0)) {
+        if (options.fix) {
           const maxFixes = Math.max(1, Math.min(20, parseInt(options.fixMax, 10) || 5));
           const minSev = (['critical', 'high', 'medium'].includes(options.fixMinSeverity)
             ? options.fixMinSeverity : 'high') as 'critical' | 'high' | 'medium';
-          console.log(chalk.bold.yellow(`\nAuto-fixing up to ${maxFixes} ${minSev}+ findings...\n`));
-          const fixReport = await orch.runAuditFixPipeline(report, { maxFixes, minSeverity: minSev });
-          console.log(chalk.bold(`Fix summary: ${fixReport.succeeded} fixed, ${fixReport.failed} failed, ${fixReport.skipped} skipped`));
+
+          const SEVERITY_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+          const eligible = report.findings
+            .filter((f) => f.file && f.line && ((SEVERITY_RANK[f.severity] ?? 0) >= (SEVERITY_RANK[minSev] ?? 0)))
+            .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0))
+            .slice(0, maxFixes);
+
+          if (options.dryRun) {
+            // Dry-run: show what would be fixed without running
+            console.log('\n' + chalk.bold.yellow(`Fix dry-run — ${eligible.length} finding(s) would be targeted (up to ${maxFixes}, severity ≥ ${minSev}):\n`));
+            if (eligible.length === 0) {
+              console.log(chalk.dim('  No eligible findings (need file+line and severity ≥ ' + minSev + ')'));
+            } else {
+              eligible.forEach((f, i) => {
+                const loc = f.line ? `${f.file}:${f.line}` : f.file;
+                const sev = SEVERITY_COLOR[f.severity]?.(f.severity) ?? chalk.white(f.severity);
+                console.log(`  ${i + 1}. ${sev}  ${chalk.bold(loc)}`);
+                console.log(`     ${f.finding}`);
+                console.log(chalk.dim(`     → ${f.recommendation}`));
+                console.log();
+              });
+            }
+            const skipped = report.findings.length - eligible.length;
+            if (skipped > 0) console.log(chalk.dim(`  ${skipped} finding(s) skipped (below threshold or missing file+line)`));
+          } else if (report.criticalCount > 0 || report.highCount > 0 || minSev === 'medium') {
+            console.log(chalk.bold.yellow(`\nAuto-fixing up to ${maxFixes} ${minSev}+ findings...\n`));
+            const fixReport = await orch.runAuditFixPipeline(report, { maxFixes, minSeverity: minSev });
+            console.log(chalk.bold(`Fix summary: ${fixReport.succeeded} fixed, ${fixReport.failed} failed, ${fixReport.skipped} skipped`));
+          }
         }
 
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
