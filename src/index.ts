@@ -39,12 +39,8 @@ program
     }
 
     if (requestWords.length === 0) {
-      // TTY → interactive menu; pipe/CI → natural language REPL
-      if (process.stdin.isTTY) {
-        await runMenu(process.cwd());
-      } else {
-        await runInteractive(process.cwd());
-      }
+      // No args → always try menu first; falls back to NL REPL if no TTY
+      await runMenu(process.cwd());
     } else {
       await runNaturalLanguage(requestWords.join(' '), process.cwd());
     }

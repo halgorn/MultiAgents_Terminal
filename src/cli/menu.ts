@@ -139,9 +139,31 @@ const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '  Quit',            value: 'quit' },
 ];
 
+function runMenuFallback(cwd: string): void {
+  const projectName = cwd.split('/').pop() ?? cwd;
+  console.log('');
+  console.log(chalk.bold.cyan(`  🤖 AI Runtime — ${projectName}`));
+  console.log(chalk.dim('  ─────────────────────────────────────'));
+  console.log(chalk.dim('  Run from an interactive terminal to get the menu.'));
+  console.log('');
+  console.log(chalk.bold('  Available commands:'));
+  console.log('');
+  console.log(`  ${chalk.cyan('aion menu')}                    interactive menu`);
+  console.log(`  ${chalk.cyan('aion audit . --preset ai')}     AI/LLM audit`);
+  console.log(`  ${chalk.cyan('aion audit --list-personas')}   show all personas`);
+  console.log(`  ${chalk.cyan('aion health')}                  composite health score`);
+  console.log(`  ${chalk.cyan('aion report --md')}             full markdown report`);
+  console.log(`  ${chalk.cyan('aion graph')}                   dependency graph`);
+  console.log(`  ${chalk.cyan('aion churn')}                   git churn analysis`);
+  console.log(`  ${chalk.cyan('aion scan api-map')}            API endpoint map`);
+  console.log(`  ${chalk.cyan('aion patterns')}                architecture patterns`);
+  console.log(`  ${chalk.cyan('aion onboard')}                 developer guide (AI)`);
+  console.log('');
+}
+
 export async function runMenu(cwd: string): Promise<void> {
   if (!process.stdin.isTTY) {
-    console.log(chalk.yellow('Interactive menu requires a TTY. Use specific commands directly.'));
+    runMenuFallback(cwd);
     return;
   }
 
