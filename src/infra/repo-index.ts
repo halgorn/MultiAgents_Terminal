@@ -196,14 +196,33 @@ function lineChunks(file: RepoFile, lines: string[]): RepoChunk[] {
 }
 
 function resolveImport(from: string, specifier: string, allFiles: Set<string>): string | undefined {
-  if (!specifier.startsWith('.') && !specifier.startsWith('/')) return undefined;
-  const base = join(dirname(from), specifier);
-  const candidates = [
-    base,
-    `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.py`,
-    join(base, 'index.ts'), join(base, 'index.tsx'), join(base, 'index.js'),
-  ];
-  return candidates.find((candidate) => allFiles.has(candidate));
+  // TypeScript ESM uses .js extensions for .ts files — strip and retry
+  const normalized = specifier.replace(/\.js$/, '');
+
+  if (normalized.startsWith('.') || normalized.startsWith('/')) {
+    const base = join(dirname(from), normalized);
+    const candidates = [
+      base,
+      `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.py`,
+      join(base, 'index.ts'), join(base, 'index.tsx'), join(base, 'index.js'),
+    ];
+    return candidates.find((c) => allFiles.has(c));
+  }
+
+  // Python absolute import: agents.foo → agents/foo.py or agents/foo/__init__.py
+  if (/^[A-Za-z_][\w.]*$/.test(normalized)) {
+    const asPath = normalized.replace(/\./g, '/');
+    const candidates = [
+      `${asPath}.py`,
+      `${asPath}/__init__.py`,
+      // also try from same directory as importer
+      join(dirname(from), `${asPath}.py`),
+      join(dirname(from), `${asPath}/__init__.py`),
+    ];
+    return candidates.find((c) => allFiles.has(c));
+  }
+
+  return undefined;
 }
 
 function mapTests(files: RepoFile[]): TestLink[] {

@@ -9,6 +9,7 @@ import { registerFix } from './cli/commands/fix.js';
 import { registerReview } from './cli/commands/review.js';
 import { registerMemory } from './cli/commands/memory.js';
 import { registerAudit } from './cli/commands/audit.js';
+import { registerGraph } from './cli/commands/graph.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 
 runMigrations();
@@ -54,5 +55,6 @@ registerFix(program);
 registerReview(program);
 registerMemory(program);
 registerAudit(program);
+registerGraph(program);
 
 program.parse(process.argv);
