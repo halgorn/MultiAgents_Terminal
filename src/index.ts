@@ -24,7 +24,7 @@ runMigrations();
 program
   .name('ai')
   .description('Multi-agent AI engineering runtime')
-  .version('0.1.0')
+  .version('0.2.0')
   .option('-C, --cwd <path>', 'working directory (defaults to current directory)')
   .argument('[request...]', 'natural language request (e.g. "corrija o bug de login")')
   .action(async (requestWords: string[]) => {

@@ -1,10 +1,11 @@
 {
-  "name": "ai-runtime",
-  "version": "0.1.0",
-  "description": "Multi-agent AI engineering runtime",
+  "name": "@walo/aion",
+  "version": "0.2.0",
+  "description": "Multi-agent AI engineering runtime — audit, fix, graph, analyze",
   "type": "module",
   "bin": {
-    "ai": "./dist/index.js"
+    "aion": "./dist/index.js",
+    "ai-runtime": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -13,8 +14,22 @@
     "test:scale": "npm run build && node --test \"dist/core/pipelines/audit-pipeline.test.js\"",
     "smoke:manus": "npm run dev -- --cwd /home/bruno/Documents/GitHub/Manus_Private audit . -n 1",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "install-global": "npm run build && npm link",
+    "uninstall-global": "npm unlink -g @walo/aion"
   },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai", "audit", "multi-agent", "code-analysis", "security", "cli"
+  ],
+  "author": "Bruno Inácio <contact@walo.us>",
+  "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
     "@xenova/transformers": "^2.17.2",
