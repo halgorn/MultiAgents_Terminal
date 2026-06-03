@@ -109,8 +109,14 @@ function fetchD3(cacheDir: string): string {
   return ''; // caller will use CDN fallback
 }
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+
+function safeJson(obj: unknown): string {
+  // Prevent </script> breakout by escaping < as <
+  return JSON.stringify(obj).replace(/</g, '\\u003c');
+}
+
 function renderHtml(data: GraphData, projectName: string, d3Src: string): string {
-  const json = JSON.stringify(data);
   const groups = [...new Set(data.nodes.map((n) => n.group))];
   const palette = [
     '#4f8ef7','#f76b4f','#4fcf8e','#f7c94f','#9b4ff7',
@@ -124,14 +130,19 @@ function renderHtml(data: GraphData, projectName: string, d3Src: string): string
     ? `<script>${d3Src}</script>`
     : `<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-eeLEj9/VSJI/iPEDEFEBYbNjOCvmIE7GBm/YAcAnCK1e7V5E3rF+ULh3OzIhFWQ" crossorigin="anonymous"></script>`;
 
+  // Escape group names and validate colors before HTML interpolation
   const legendItems = groups
-    .map((g) => `<div class="legend-item" data-group="${g}"><div class="legend-dot" style="background:${groupColors[g]}"></div><span>${g}</span></div>`)
+    .map((g) => {
+      const color = groupColors[g] ?? '#4f8ef7';
+      const safeColor = HEX_COLOR_RE.test(color) ? color : '#4f8ef7';
+      return `<div class="legend-item" data-group="${esc(g)}"><div class="legend-dot" style="background:${safeColor}"></div><span>${esc(g)}</span></div>`;
+    })
     .join('');
 
   // Browser-side JS: uses DOM API for tooltip — no innerHTML with untrusted data
   const browserJs = `
-const RAW = ${json};
-const groupColors = ${JSON.stringify(groupColors)};
+const RAW = ${safeJson(data)};
+const groupColors = ${safeJson(groupColors)};
 let showTests = true, hotspotMode = false, activeGroup = null;
 
 function esc(s) {
