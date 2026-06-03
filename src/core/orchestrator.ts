@@ -80,7 +80,7 @@ export class Orchestrator extends EventEmitter {
     return runAuditFixPipeline(this.pipelineContext, auditReport, options);
   }
 
-  async runAuditPipeline(target: string, numScanners?: number, explicitDomains?: ScanDomain[]): Promise<AuditReport> {
+  async runAuditPipeline(target: string, numScanners?: number, explicitDomains?: ScanDomain[], incremental = false): Promise<AuditReport> {
     const pipeline = new AuditPipeline(
       this.cwd,
       this.policy,
@@ -88,6 +88,6 @@ export class Orchestrator extends EventEmitter {
       (event, payload) => this.emit(event, payload),
       this.onChunk,
     );
-    return pipeline.run(target, numScanners, explicitDomains);
+    return pipeline.run(target, numScanners, explicitDomains, incremental);
   }
 }

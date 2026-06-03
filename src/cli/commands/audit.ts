@@ -146,7 +146,8 @@ export function registerAudit(program: Command): void {
     .option('--fix-max <n>', 'max findings to auto-fix (default: 5)', '5')
     .option('--fix-min-severity <s>', 'minimum severity to fix: critical|high|medium (default: high)', 'high')
     .option('--dry-run', 'collect audit file stats without starting agents')
-    .action(async (target: string = '.', options: { scanners?: string; budget: string; provider?: string; model?: string; preset?: string; domains?: string; listPersonas?: boolean; fix?: boolean; fixMax: string; fixMinSeverity: string; dryRun?: boolean }) => {
+    .option('--incremental', 'only scan files changed since last audit (reuse cache for unchanged)')
+    .action(async (target: string = '.', options: { scanners?: string; budget: string; provider?: string; model?: string; preset?: string; domains?: string; listPersonas?: boolean; fix?: boolean; fixMax: string; fixMinSeverity: string; dryRun?: boolean; incremental?: boolean }) => {
       if (options.listPersonas) {
         const { listPresets, BUILT_IN_PRESETS } = await import('../../infra/persona-presets.js');
         console.log(chalk.bold.cyan('\nPersonas (scanner domains):\n'));
@@ -199,7 +200,7 @@ export function registerAudit(program: Command): void {
       console.log(chalk.bold.cyan(`\nStarting audit with ${nLabel}...\n`));
 
       try {
-        const report = await orch.runAuditPipeline(target, explicitN, explicitDomains.length > 0 ? explicitDomains : undefined);
+        const report = await orch.runAuditPipeline(target, explicitN, explicitDomains.length > 0 ? explicitDomains : undefined, options.incremental);
         const durationMs = Date.now() - start;
         renderAuditReport(report, durationMs);
         console.log(chalk.gray(`report: ${saveAuditReport(report, durationMs)}`));

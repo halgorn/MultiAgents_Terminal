@@ -14,6 +14,8 @@ import { detectLang } from '../../infra/lang-detect.js';
 import type { ScannerContext } from '../../prompts/scanner.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
+import { loadAuditCache, saveAuditCache, filterChangedFiles, getCachedFindingsForFiles } from '../../infra/audit-cache.js';
+import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
 
 type OnChunk = (agentName: string, text: string) => void;
 type Emitter = (event: string, payload: unknown) => void;
@@ -159,7 +161,7 @@ export class AuditPipeline {
     return 2;
   }
 
-  async run(target: string, numScanners?: number, explicitDomains?: import('../../prompts/scanner.js').ScanDomain[]): Promise<AuditReport> {
+  async run(target: string, numScanners?: number, explicitDomains?: import('../../prompts/scanner.js').ScanDomain[], incremental = false): Promise<AuditReport> {
     const taskId = randomUUID();
     const worktrees: Array<[string, string]> = [];
 
@@ -168,6 +170,27 @@ export class AuditPipeline {
       const allFiles = stats.auditFiles;
       if (allFiles.length === 0) {
         return { findings: [], criticalCount: 0, highCount: 0, totalFiles: 0, summary: 'No source files found.', topPriorities: [] };
+      }
+
+      // Incremental: skip unchanged files, reuse cached findings
+      let filesToScan = allFiles;
+      let cachedFindings: AuditFinding[] = [];
+      if (incremental) {
+        const cache = loadAuditCache(this.cwd);
+        const { changed, unchanged } = filterChangedFiles(this.cwd, allFiles, cache);
+        if (cache && unchanged.length > 0) {
+          filesToScan = changed;
+          cachedFindings = getCachedFindingsForFiles(cache, unchanged) as AuditFinding[];
+          this.emit('agent:output', {
+            agentName: 'audit',
+            text: `Incremental mode: ${changed.length} changed files to scan, ${unchanged.length} unchanged (reusing cache)\n`,
+          });
+        }
+        if (filesToScan.length === 0) {
+          const report = this.applyEvidenceGate({ findings: cachedFindings, criticalCount: 0, highCount: 0, totalFiles: allFiles.length, summary: 'Incremental: no changed files. All findings from cache.', topPriorities: [] });
+          saveAuditCache(this.cwd, allFiles, report.findings);
+          return report;
+        }
       }
 
       const resolvedScanners = numScanners ?? this.autoSelectScanners(allFiles.length);
@@ -251,12 +274,20 @@ export class AuditPipeline {
           this.onChunk,
         );
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
-        return this.applyEvidenceGate({ ...synthRun.output, totalFiles: allFiles.length });
+        const gated = this.applyEvidenceGate({ ...synthRun.output, totalFiles: allFiles.length });
+        const deduped = this.deduplicateFindings([...cachedFindings, ...gated.findings]);
+        const finalReport = recount({ ...gated, findings: deduped });
+        saveAuditCache(this.cwd, allFiles, finalReport.findings);
+        return finalReport;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.emit('agent:output', { agentName: 'synthesizer', text: `Synthesizer failed; using local fallback: ${message}\n` });
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: Date.now() - synthStart });
-        return this.applyEvidenceGate(fallbackAuditReport(reports, allFiles.length));
+        const fallback = this.applyEvidenceGate(fallbackAuditReport(reports, allFiles.length));
+        const deduped = this.deduplicateFindings([...cachedFindings, ...fallback.findings]);
+        const finalReport = recount({ ...fallback, findings: deduped });
+        saveAuditCache(this.cwd, allFiles, finalReport.findings);
+        return finalReport;
       }
 
     } finally {
@@ -275,6 +306,29 @@ export class AuditPipeline {
       results.push(await Promise.race([task(), timeout]));
     }
     return results;
+  }
+
+  private deduplicateFindings(findings: AuditFinding[]): AuditFinding[] {
+    const seen = new Map<string, AuditFinding>();
+    for (const f of findings) {
+      // Key: file + line + category (not finding text — same issue found by multiple personas)
+      const key = `${f.file}:${f.line ?? ''}:${f.category}`;
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, f);
+      } else {
+        const keepNew = severityRank(f.severity) > severityRank(existing.severity);
+        const merged = keepNew ? f : existing;
+        const otherPersona = keepNew ? existing.persona : f.persona;
+        seen.set(key, {
+          ...merged,
+          persona: merged.persona && otherPersona
+            ? `${merged.persona}+${otherPersona}`
+            : merged.persona ?? otherPersona,
+        });
+      }
+    }
+    return [...seen.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
   }
 
   private applyEvidenceGate(report: AuditReport): AuditReport {
@@ -308,6 +362,7 @@ export class AuditPipeline {
       byExtension: {},
     };
 
+    const ignorePatterns = loadIgnorePatterns(this.cwd);
     const root = pathJoin(this.cwd, target || '.');
     const rootRel = target && target !== '.' ? target.replace(/^[./]+/, '') : '';
 
@@ -338,7 +393,7 @@ export class AuditPipeline {
           }
           stats.byExtension[ext] = (stats.byExtension[ext] ?? 0) + 1;
 
-          if (IGNORE_PATTERNS.some((p) => p.test(relPath))) {
+          if (IGNORE_PATTERNS.some((p) => p.test(relPath)) || isIgnored(relPath, ignorePatterns)) {
             stats.ignoredFiles++;
           } else if (st.size >= MAX_FILE_SIZE) {
             stats.oversizedFiles++;
