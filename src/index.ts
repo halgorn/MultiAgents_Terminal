@@ -17,6 +17,7 @@ import { registerHealth } from './cli/commands/health.js';
 import { registerReport } from './cli/commands/report.js';
 import { registerExplain } from './cli/commands/explain.js';
 import { registerInit } from './cli/commands/init.js';
+import { registerDiff } from './cli/commands/diff.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -72,6 +73,7 @@ registerHealth(program);
 registerReport(program);
 registerExplain(program);
 registerInit(program);
+registerDiff(program);
 
 // Explicit menu command
 program
