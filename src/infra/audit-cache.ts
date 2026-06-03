@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { readFileSync, writeFileSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -6,10 +7,11 @@ const CACHE_FILE = '.ai-runtime/audit-cache.json';
 interface CacheEntry {
   mtime: number;
   size: number;
+  hash?: string;
 }
 
 interface AuditCache {
-  version: 2;
+  version: 2 | 3;
   files: Record<string, CacheEntry>;
   lastAuditAt: string;
   lastFindings: Record<string, { severity: string; finding: string; recommendation: string; category: string; persona?: string }[]>;
@@ -19,10 +21,18 @@ export function loadAuditCache(cwd: string): AuditCache | null {
   try {
     const content = readFileSync(join(cwd, CACHE_FILE), 'utf8');
     const parsed = JSON.parse(content) as AuditCache;
-    if (parsed.version !== 2) return null;
+    if (parsed.version !== 2 && parsed.version !== 3) return null;
     return parsed;
   } catch {
     return null;
+  }
+}
+
+function hashFile(path: string): string | undefined {
+  try {
+    return createHash('sha1').update(readFileSync(path)).digest('hex');
+  } catch {
+    return undefined;
   }
 }
 
@@ -34,8 +44,9 @@ export function saveAuditCache(
   const entries: Record<string, CacheEntry> = {};
   for (const f of files) {
     try {
-      const st = statSync(join(cwd, f));
-      entries[f] = { mtime: st.mtimeMs, size: st.size };
+      const path = join(cwd, f);
+      const st = statSync(path);
+      entries[f] = { mtime: st.mtimeMs, size: st.size, hash: hashFile(path) };
     } catch { /* skip */ }
   }
 
@@ -52,7 +63,7 @@ export function saveAuditCache(
     });
   }
 
-  const cache: AuditCache = { version: 2, files: entries, lastAuditAt: new Date().toISOString(), lastFindings };
+  const cache: AuditCache = { version: 3, files: entries, lastAuditAt: new Date().toISOString(), lastFindings };
   mkdirSync(join(cwd, '.ai-runtime'), { recursive: true });
   writeFileSync(join(cwd, CACHE_FILE), JSON.stringify(cache, null, 2), 'utf8');
 }
@@ -71,8 +82,10 @@ export function filterChangedFiles(
     const cached = cache.files[f];
     if (!cached) { changed.push(f); continue; }
     try {
-      const st = statSync(join(cwd, f));
-      if (st.mtimeMs !== cached.mtime || st.size !== cached.size) {
+      const path = join(cwd, f);
+      const st = statSync(path);
+      const currentHash = cached.hash ? hashFile(path) : undefined;
+      if (cached.hash ? currentHash !== cached.hash : st.mtimeMs !== cached.mtime || st.size !== cached.size) {
         changed.push(f);
       } else {
         unchanged.push(f);

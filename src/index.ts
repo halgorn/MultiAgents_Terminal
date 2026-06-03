@@ -19,6 +19,9 @@ import { registerExplain } from './cli/commands/explain.js';
 import { registerInit } from './cli/commands/init.js';
 import { registerDiff } from './cli/commands/diff.js';
 import { registerChat } from './cli/commands/chat.js';
+import { registerContext } from './cli/commands/context.js';
+import { registerSearch } from './cli/commands/search.js';
+import { registerTree } from './cli/commands/tree.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -76,6 +79,9 @@ registerExplain(program);
 registerInit(program);
 registerDiff(program);
 registerChat(program);
+registerContext(program);
+registerSearch(program);
+registerTree(program);
 
 // Explicit menu command
 program

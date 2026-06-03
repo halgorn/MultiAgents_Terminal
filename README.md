@@ -102,12 +102,14 @@ The menu includes:
 ### Audit
 
 ```bash
+aion audit . --dry-run
 aion audit . --local-only
 aion audit .
 aion audit . --preset security
 aion audit . --preset ai --budget normal
 aion audit . --domains security,dependencies,compliance
 aion audit . --preset security --max-files 20
+aion audit . --ai-context-budget 6000
 ```
 
 Useful presets:
@@ -124,6 +126,7 @@ Useful presets:
 Cost controls:
 
 ```bash
+aion audit . --dry-run
 aion audit . --local-only
 aion audit . --preset security --scanners 2
 aion audit . --preset security --max-files 20
@@ -131,6 +134,17 @@ aion audit . --preset full --force-full --budget deep --scanner-timeout 240
 ```
 
 Local scans still inspect the whole repository. `--max-files` only limits the prioritized file list handed to AI scanners.
+
+Recommended low-cost audit flow:
+
+```bash
+aion audit . --dry-run --max-files 20
+aion audit . --local-only
+aion audit . --preset security --scanners 2 --max-files 20
+aion context --audit --budget 6000
+```
+
+This produces compact reports that are safe to send to another AI without pasting raw JSON or all source files.
 
 ### Analyze, Review, Fix
 
@@ -159,6 +173,11 @@ aion scan cognitive-load
 aion health
 aion report
 aion report --md
+aion context --audit
+aion context "audit report generation" --budget 8000
+aion search "audit report generation" --rebuild
+aion search "where reports are saved" --semantic --rebuild
+aion tree --hotspots --rebuild
 aion graph
 aion churn
 aion patterns
@@ -194,6 +213,8 @@ Each organized audit run contains:
 
 - `index.html`
 - `summary.md`
+- `digest.md`
+- `ai-context.md`
 - `action-plan.md`
 - `report.json`
 - `action-items.json`
@@ -202,6 +223,14 @@ Each organized audit run contains:
 - `findings-by-persona.json`
 - `findings-by-severity.json`
 - `findings-by-category.json`
+
+For human reading, open `digest.md` or `index.html`.
+
+For asking another AI to analyze the audit, use `ai-context.md` or generate a fresh compact file:
+
+```bash
+aion context --audit --budget 6000
+```
 
 Override the task store path:
 
