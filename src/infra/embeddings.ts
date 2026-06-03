@@ -1,16 +1,38 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-// Lazy-load to avoid startup cost when embeddings aren't used
-type ExtractorFn = (text: string, opts: Record<string, unknown>) => Promise<{ data: Float32Array }>;
-let _pipeline: ExtractorFn | null = null;
+const VECTOR_DIMENSIONS = 384;
 
-async function getPipeline(): Promise<ExtractorFn> {
-  if (_pipeline) return _pipeline;
-  const { pipeline } = await import('@xenova/transformers');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _pipeline = (await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true })) as any;
-  return _pipeline!;
+function hashToken(token: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < token.length; i++) {
+    hash ^= token.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function embedText(text: string, maxChars: number): Float32Array {
+  const vector = new Float32Array(VECTOR_DIMENSIONS);
+  const tokens = text
+    .slice(0, maxChars)
+    .toLowerCase()
+    .match(/[a-z0-9_./:-]{2,}/g) ?? [];
+
+  for (const token of tokens) {
+    const hash = hashToken(token);
+    const index = hash % VECTOR_DIMENSIONS;
+    const sign = hash & 1 ? 1 : -1;
+    vector[index] += sign;
+  }
+
+  let norm = 0;
+  for (const value of vector) norm += value * value;
+  if (norm === 0) return vector;
+
+  const scale = 1 / Math.sqrt(norm);
+  for (let i = 0; i < vector.length; i++) vector[i] *= scale;
+  return vector;
 }
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
@@ -70,9 +92,7 @@ export class EmbeddingStore {
       return new Float32Array(cached.vector);
     }
 
-    const embed = await getPipeline();
-    const output = await embed(text.slice(0, 2000), { pooling: 'mean', normalize: true });
-    const vector = Array.from(output.data);
+    const vector = Array.from(embedText(text, 2000));
     this.saveCache(category, filename, { vector, mtime, text: text.slice(0, 500) });
     return new Float32Array(vector);
   }
@@ -101,9 +121,7 @@ export class EmbeddingStore {
   }
 
   async query(queryText: string, topK = 5): Promise<EmbeddedEntry[]> {
-    const embed = await getPipeline();
-    const queryOutput = await embed(queryText.slice(0, 500), { pooling: 'mean', normalize: true });
-    const queryVec = new Float32Array(queryOutput.data);
+    const queryVec = embedText(queryText, 500);
 
     const results: EmbeddedEntry[] = [];
 

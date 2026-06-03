@@ -125,6 +125,42 @@ async function runExplainMenu(cwd: string): Promise<void> {
   run(['--cwd', cwd, mode, file]);
 }
 
+function printDocumentation(): void {
+  console.log('');
+  console.log(chalk.bold.cyan('  Aion Documentation'));
+  console.log(chalk.dim('  ─────────────────────────────────────'));
+  console.log('');
+  console.log(chalk.bold('  Quick start'));
+  console.log(`  ${chalk.cyan('aion menu')}                         open this menu`);
+  console.log(`  ${chalk.cyan('aion audit . --preset security')}    security-focused audit`);
+  console.log(`  ${chalk.cyan('aion scan secrets')}                 local secret scan`);
+  console.log(`  ${chalk.cyan('aion scan env-audit')}               env var documentation check`);
+  console.log(`  ${chalk.cyan('aion scan sbom --unpinned-only')}    supply-chain pinning check`);
+  console.log(`  ${chalk.cyan('aion report --md')}                  markdown report`);
+  console.log('');
+  console.log(chalk.bold('  AI providers'));
+  console.log(`  ${chalk.cyan('ANTHROPIC_API_KEY')}                 Claude SDK provider`);
+  console.log(`  ${chalk.cyan('claude /login')}                     Claude CLI fallback`);
+  console.log(`  ${chalk.cyan('OPENROUTER_API_KEY')}                OpenRouter provider`);
+  console.log(`  ${chalk.cyan('AI_RUNTIME_CODEX_MODEL')}            Codex model override`);
+  console.log('');
+  console.log(chalk.bold('  Audit presets'));
+  console.log('  security, ai, backend, devops, quality, saas, fintech, full');
+  console.log('');
+  console.log(chalk.bold('  Natural language examples'));
+  console.log(`  ${chalk.cyan('aion "audit this repo for dependency risks"')}`);
+  console.log(`  ${chalk.cyan('aion "review src/auth/middleware.ts"')}`);
+  console.log(`  ${chalk.cyan('aion "explain the payment flow"')}`);
+  console.log('');
+  console.log(chalk.bold('  Runtime files'));
+  console.log(`  ${chalk.cyan('.ai-runtime/')}                      reports and repo indexes`);
+  console.log(`  ${chalk.cyan('.ai-memory/')}                       optional knowledge base`);
+  console.log(`  ${chalk.cyan('AI_RUNTIME_DB_PATH')}                task store override`);
+  console.log('');
+  console.log(chalk.dim('  Full README: https://www.npmjs.com/package/@aionlabsai/aion'));
+  console.log('');
+}
+
 const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '🔍 Audit',           hint: 'multi-persona code analysis',        value: 'audit' },
   { label: '📊 Report',          hint: 'health + findings + context.md',     value: 'report' },
@@ -134,6 +170,7 @@ const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '🏗️  Patterns',        hint: 'architecture pattern detection',     value: 'patterns' },
   { label: '💊 Health',          hint: 'composite score 0-100',             value: 'health' },
   { label: '💬 Explain / Onboard', hint: 'AI explanation + onboarding',     value: 'explain' },
+  { label: '📚 Documentation',    hint: 'quick start, providers, scans',      value: 'docs' },
   { label: '─', value: 'sep', separator: true },
   { label: '❯ Natural language', hint: 'type a request in Portuguese or English', value: 'nl' },
   { label: '  Quit',            value: 'quit' },
@@ -158,6 +195,7 @@ function runMenuFallback(cwd: string): void {
   console.log(`  ${chalk.cyan('aion scan api-map')}            API endpoint map`);
   console.log(`  ${chalk.cyan('aion patterns')}                architecture patterns`);
   console.log(`  ${chalk.cyan('aion onboard')}                 developer guide (AI)`);
+  console.log(`  ${chalk.cyan('aion menu')}                    includes documentation`);
   console.log('');
 }
 
@@ -186,6 +224,7 @@ export async function runMenu(cwd: string): Promise<void> {
     if (action === 'audit')    { await runAuditMenu(cwd); continue; }
     if (action === 'scan')     { await runScanMenu(cwd); continue; }
     if (action === 'explain')  { await runExplainMenu(cwd); continue; }
+    if (action === 'docs')     { printDocumentation(); }
     if (action === 'sep')      continue;
     if (action === 'nl') {
       const { runInteractive } = await import('./interactive.js');

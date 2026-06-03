@@ -1,0 +1,228 @@
+# Aion
+
+Multi-agent AI engineering runtime for auditing, analyzing, reviewing, and fixing code from the terminal.
+
+## What It Does
+
+Aion is a terminal-first engineering assistant for working inside codebases. It combines quick local scans with multi-agent AI workflows for deeper analysis.
+
+Use it to:
+
+- Audit a repository across security, architecture, testing, reliability, data, dependencies, and AI prompt risks.
+- Analyze bugs or issue descriptions.
+- Review files, diffs, or risky changes.
+- Run zero-token local scans for secrets, env vars, SBOM, API maps, and cognitive load.
+- Generate dependency graphs, health reports, churn reports, and onboarding guides.
+- Use natural language from the terminal.
+
+## Install
+
+```bash
+npm install -g @aionlabsai/aion
+```
+
+Verify the install:
+
+```bash
+aion --version
+aion --help
+```
+
+The package also installs the `ai-runtime` command.
+
+## Requirements
+
+- Node.js 18 or newer
+- One configured AI provider for AI-powered commands
+- Git for churn and repository history features
+- Optional: Semgrep for deeper static analysis integration
+
+## Provider Setup
+
+### Claude SDK
+
+```bash
+export ANTHROPIC_API_KEY="your_key_here"
+```
+
+### Claude CLI
+
+Without `ANTHROPIC_API_KEY`, Aion can use an authenticated `claude` CLI session when available:
+
+```bash
+claude /login
+```
+
+### OpenRouter
+
+```bash
+export OPENROUTER_API_KEY="your_key_here"
+export OPENROUTER_MODEL="moonshotai/kimi-k2"
+```
+
+### Codex
+
+```bash
+export AI_RUNTIME_CODEX_MODEL="gpt-5-codex"
+```
+
+## Usage
+
+```bash
+aion --help
+aion menu
+aion audit .
+aion analyze .
+aion "review this project and find risky code"
+```
+
+## Interactive Menu
+
+Run:
+
+```bash
+aion menu
+```
+
+The menu includes:
+
+- Audit presets
+- Reports
+- Dependency graph
+- Churn analysis
+- Local scans
+- Pattern detection
+- Health score
+- Explain and onboarding commands
+- Built-in terminal documentation
+- Natural language mode
+
+## Common Commands
+
+### Audit
+
+```bash
+aion audit .
+aion audit . --preset security
+aion audit . --preset ai --budget normal
+aion audit . --domains security,dependencies,compliance
+```
+
+Useful presets:
+
+- `security`
+- `ai`
+- `backend`
+- `devops`
+- `quality`
+- `saas`
+- `fintech`
+- `full`
+
+### Analyze, Review, Fix
+
+```bash
+aion analyze "login fails after token refresh"
+aion review src/auth/middleware.ts
+aion fix "users can bypass tenant isolation"
+```
+
+### Local Scans
+
+These scans do not require model calls:
+
+```bash
+aion scan secrets
+aion scan env-audit
+aion scan sbom
+aion scan sbom --unpinned-only
+aion scan api-map
+aion scan cognitive-load
+```
+
+### Reports And Graphs
+
+```bash
+aion health
+aion report
+aion report --md
+aion graph
+aion churn
+aion patterns
+```
+
+### Explain And Onboard
+
+```bash
+aion explain src/index.ts
+aion impact src/index.ts
+aion onboard
+```
+
+### Natural Language
+
+```bash
+aion "audit this repository for dependency and secret risks"
+aion "explain the auth module"
+aion "find risky code in the payment flow"
+```
+
+## Runtime Files
+
+Aion writes local runtime data under project-local or user-local folders depending on the command:
+
+- `.ai-runtime/` for generated reports and repository indexes
+- `.ai-memory/` for optional memory/knowledge files
+- `~/.ai-runtime/` for task history unless `AI_RUNTIME_DB_PATH` is set
+
+Override the task store path:
+
+```bash
+export AI_RUNTIME_DB_PATH="/path/to/aion-store"
+```
+
+## Security Checks
+
+Recommended checks before publishing or releasing:
+
+```bash
+npm test
+npm audit --audit-level=moderate
+aion scan secrets
+aion scan env-audit
+aion scan sbom --unpinned-only
+```
+
+## Development
+
+```bash
+npm install
+npm test
+npm run build
+node dist/index.js --help
+```
+
+Install the local checkout globally:
+
+```bash
+npm link
+aion --version
+```
+
+## Publishing
+
+Update the version, validate, then publish:
+
+```bash
+npm version patch
+npm test
+npm audit --audit-level=moderate
+npm pack --dry-run
+npm publish --access public
+```
+
+Package:
+
+```bash
+npm install -g @aionlabsai/aion
+```

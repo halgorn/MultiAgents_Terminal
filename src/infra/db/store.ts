@@ -3,6 +3,14 @@ import { join } from 'path';
 import { homedir } from 'os';
 
 const STORE_DIR = process.env['AI_RUNTIME_DB_PATH'] ?? join(homedir(), '.ai-runtime');
+const SAFE_NAME_RE = /^[A-Za-z0-9._-]+$/;
+
+function safeName(value: string, label: string): string {
+  if (!SAFE_NAME_RE.test(value) || value === '.' || value === '..') {
+    throw new Error(`Invalid ${label}: only letters, numbers, dot, underscore, and dash are allowed`);
+  }
+  return value;
+}
 
 function ensureDir(dir: string): void {
   mkdirSync(dir, { recursive: true });
@@ -32,34 +40,34 @@ const tasksDir = (): string => {
 
 export function saveTask(task: unknown): void {
   const t = task as { id: string };
-  writeJson(join(tasksDir(), `${t.id}.json`), task);
+  writeJson(join(tasksDir(), `${safeName(t.id, 'task id')}.json`), task);
 }
 
 export function loadTask(id: string): unknown | null {
-  return readJson(join(tasksDir(), `${id}.json`));
+  return readJson(join(tasksDir(), `${safeName(id, 'task id')}.json`));
 }
 
 export function updateTaskFields(id: string, fields: Record<string, unknown>): void {
   const existing = loadTask(id);
   if (!existing) return;
-  writeJson(join(tasksDir(), `${id}.json`), { ...(existing as object), ...fields, updatedAt: new Date() });
+  writeJson(join(tasksDir(), `${safeName(id, 'task id')}.json`), { ...(existing as object), ...fields, updatedAt: new Date() });
 }
 
 // ── Evidence ─────────────────────────────────────────────────────────────────
 
 const evidenceDir = (taskId: string): string => {
-  const d = join(STORE_DIR, 'evidence', taskId);
+  const d = join(STORE_DIR, 'evidence', safeName(taskId, 'task id'));
   ensureDir(d);
   return d;
 };
 
 export function saveEvidenceEntry(taskId: string, agentName: string, report: unknown): void {
-  const filename = `${agentName}-${Date.now()}.json`;
+  const filename = `${safeName(agentName, 'agent name')}-${Date.now()}.json`;
   writeJson(join(evidenceDir(taskId), filename), { agentName, report });
 }
 
 export function loadEvidence(taskId: string): unknown[] {
-  const dir = join(STORE_DIR, 'evidence', taskId);
+  const dir = join(STORE_DIR, 'evidence', safeName(taskId, 'task id'));
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith('.json'))
@@ -81,7 +89,7 @@ export function appendHistory(entry: {
   toState: string;
   agentName?: string;
 }): void {
-  const file = join(historyDir(), `${entry.taskId}.jsonl`);
+  const file = join(historyDir(), `${safeName(entry.taskId, 'task id')}.jsonl`);
   const line = JSON.stringify({ ...entry, timestamp: Date.now() }) + '\n';
   try {
     appendFileSync(file, line, 'utf8');
