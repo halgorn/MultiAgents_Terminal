@@ -16,6 +16,7 @@ import { registerPatterns } from './cli/commands/patterns.js';
 import { registerHealth } from './cli/commands/health.js';
 import { registerReport } from './cli/commands/report.js';
 import { registerExplain } from './cli/commands/explain.js';
+import { registerInit } from './cli/commands/init.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -70,6 +71,7 @@ registerPatterns(program);
 registerHealth(program);
 registerReport(program);
 registerExplain(program);
+registerInit(program);
 
 // Explicit menu command
 program

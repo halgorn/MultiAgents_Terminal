@@ -160,12 +160,17 @@ export function registerAudit(program: Command): void {
         return;
       }
 
-      const explicitN = options.scanners ? Math.max(1, Math.min(15, parseInt(options.scanners, 10) || 5)) : undefined;
-      const budget = (['low', 'normal', 'deep'].includes(options.budget) ? options.budget : 'low') as 'low' | 'normal' | 'deep';
-      const providerName = options.provider === 'openrouter' ? 'openrouter' as const : undefined;
+      // Merge .aionrc.json config under CLI options
+      const { loadAionConfig, mergeConfig } = await import('../../infra/aion-config.js');
+      const aionConfig = loadAionConfig(process.cwd());
+      const mergedOptions = mergeConfig(options as Record<string, unknown>, aionConfig) as typeof options;
+
+      const explicitN = mergedOptions.scanners ? Math.max(1, Math.min(15, parseInt(String(mergedOptions.scanners), 10) || 5)) : undefined;
+      const budget = (['low', 'normal', 'deep'].includes(mergedOptions.budget) ? mergedOptions.budget : 'low') as 'low' | 'normal' | 'deep';
+      const providerName = mergedOptions.provider === 'openrouter' ? 'openrouter' as const : undefined;
       const policyInput = {
         budget,
-        ...(options.model ? { openrouterModel: options.model } : {}),
+        ...(mergedOptions.model ? { openrouterModel: mergedOptions.model } : {}),
         ...(providerName ? {
           plannerProvider: providerName,
           investigatorProvider: providerName,
@@ -190,7 +195,7 @@ export function registerAudit(program: Command): void {
       // Resolve persona domains
       const { resolveDomainsFromConfig } = await import('../../infra/persona-presets.js');
       const { domains: explicitDomains, source: domainSource } = resolveDomainsFromConfig(
-        process.cwd(), options.preset, options.domains, explicitN,
+        process.cwd(), mergedOptions.preset, mergedOptions.domains, explicitN,
       );
 
       const start = Date.now();
