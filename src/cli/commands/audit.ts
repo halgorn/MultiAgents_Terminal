@@ -139,12 +139,27 @@ export function registerAudit(program: Command): void {
     .option('--budget <budget>', 'low | normal | deep (default: low)', 'low')
     .option('--provider <provider>', 'claude | openrouter (default: claude)')
     .option('--model <model>', 'model override for openrouter (e.g. moonshotai/kimi-k2)')
+    .option('--preset <name>', 'persona preset: security, ai, backend, devops, quality, saas, fintech, full')
+    .option('--domains <list>', 'comma-separated scanner domains, e.g. security,compliance,data')
+    .option('--list-personas', 'show all available personas and presets then exit')
     .option('--fix', 'auto-fix critical/high findings after audit')
     .option('--fix-max <n>', 'max findings to auto-fix (default: 5)', '5')
     .option('--fix-min-severity <s>', 'minimum severity to fix: critical|high|medium (default: high)', 'high')
     .option('--dry-run', 'collect audit file stats without starting agents')
-    .action(async (target: string = '.', options: { scanners?: string; budget: string; provider?: string; model?: string; fix?: boolean; fixMax: string; fixMinSeverity: string; dryRun?: boolean }) => {
-      const explicitN = options.scanners ? Math.max(1, Math.min(10, parseInt(options.scanners, 10) || 5)) : undefined;
+    .action(async (target: string = '.', options: { scanners?: string; budget: string; provider?: string; model?: string; preset?: string; domains?: string; listPersonas?: boolean; fix?: boolean; fixMax: string; fixMinSeverity: string; dryRun?: boolean }) => {
+      if (options.listPersonas) {
+        const { listPresets, BUILT_IN_PRESETS } = await import('../../infra/persona-presets.js');
+        console.log(chalk.bold.cyan('\nPersonas (scanner domains):\n'));
+        const allDomains = [
+          'security','bugs','redundancy','error-handling','architecture','testing','performance',
+          'infrastructure','observability','resilience','data','dependencies','compliance','multitenancy','prompt-audit',
+        ];
+        allDomains.forEach((d) => console.log(`  ${chalk.cyan(d)}`));
+        listPresets();
+        return;
+      }
+
+      const explicitN = options.scanners ? Math.max(1, Math.min(15, parseInt(options.scanners, 10) || 5)) : undefined;
       const budget = (['low', 'normal', 'deep'].includes(options.budget) ? options.budget : 'low') as 'low' | 'normal' | 'deep';
       const providerName = options.provider === 'openrouter' ? 'openrouter' as const : undefined;
       const policyInput = {
@@ -171,12 +186,20 @@ export function registerAudit(program: Command): void {
       orch.on('agent:output', ({ agentName, text }) => renderer.agentChunk(agentName, text));
       orch.on('agent:done', ({ agentName, durationMs }) => renderer.agentDone(agentName, durationMs));
 
+      // Resolve persona domains
+      const { resolveDomainsFromConfig } = await import('../../infra/persona-presets.js');
+      const { domains: explicitDomains, source: domainSource } = resolveDomainsFromConfig(
+        process.cwd(), options.preset, options.domains, explicitN,
+      );
+
       const start = Date.now();
-      const nLabel = explicitN ? `${explicitN} scanners` : `auto scanners (${budget} budget)`;
+      const nLabel = explicitDomains.length > 0
+        ? `personas: ${explicitDomains.join(', ')} [${domainSource}]`
+        : explicitN ? `${explicitN} scanners` : `auto scanners (${budget} budget)`;
       console.log(chalk.bold.cyan(`\nStarting audit with ${nLabel}...\n`));
 
       try {
-        const report = await orch.runAuditPipeline(target, explicitN);
+        const report = await orch.runAuditPipeline(target, explicitN, explicitDomains.length > 0 ? explicitDomains : undefined);
         const durationMs = Date.now() - start;
         renderAuditReport(report, durationMs);
         console.log(chalk.gray(`report: ${saveAuditReport(report, durationMs)}`));

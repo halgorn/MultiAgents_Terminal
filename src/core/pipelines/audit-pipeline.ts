@@ -159,7 +159,7 @@ export class AuditPipeline {
     return 2;
   }
 
-  async run(target: string, numScanners?: number): Promise<AuditReport> {
+  async run(target: string, numScanners?: number, explicitDomains?: import('../../prompts/scanner.js').ScanDomain[]): Promise<AuditReport> {
     const taskId = randomUUID();
     const worktrees: Array<[string, string]> = [];
 
@@ -192,7 +192,9 @@ export class AuditPipeline {
 
       // Domain-based AI scanners (sequential to respect rate limits)
       const { SCAN_DOMAINS } = await import('../../prompts/scanner.js');
-      const domains = SCAN_DOMAINS.slice(0, resolvedScanners);
+      const domains = explicitDomains && explicitDomains.length > 0
+        ? explicitDomains
+        : SCAN_DOMAINS.slice(0, resolvedScanners);
       const n = domains.length;
 
       this.emit('agent:output', {
@@ -216,7 +218,9 @@ export class AuditPipeline {
               this.onChunk,
             );
             this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: run.durationMs });
-            return compactScanReport(run.output);
+            // Tag each finding with the persona that found it
+            const tagged = { ...run.output, findings: run.output.findings.map((f) => ({ ...f, persona: domain })) };
+            return compactScanReport(tagged);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             this.emit('agent:output', { agentName: `scanner-${domain}`, text: `Scanner failed; continuing with partial audit: ${message}\n` });

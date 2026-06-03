@@ -10,6 +10,7 @@ import { runFixPipeline } from './pipelines/fix-pipeline.js';
 import { runAnalyzePipeline } from './pipelines/analyze-pipeline.js';
 import { runReviewPipeline } from './pipelines/review-pipeline.js';
 import { runAuditFixPipeline, type AuditFixOptions, type AuditFixReport } from './pipelines/audit-fix-pipeline.js';
+import type { ScanDomain } from '../prompts/scanner.js';
 import type { PipelineContext } from './pipeline-context.js';
 
 export interface OrchestratorEvents {
@@ -79,7 +80,7 @@ export class Orchestrator extends EventEmitter {
     return runAuditFixPipeline(this.pipelineContext, auditReport, options);
   }
 
-  async runAuditPipeline(target: string, numScanners?: number): Promise<AuditReport> {
+  async runAuditPipeline(target: string, numScanners?: number, explicitDomains?: ScanDomain[]): Promise<AuditReport> {
     const pipeline = new AuditPipeline(
       this.cwd,
       this.policy,
@@ -87,6 +88,6 @@ export class Orchestrator extends EventEmitter {
       (event, payload) => this.emit(event, payload),
       this.onChunk,
     );
-    return pipeline.run(target, numScanners);
+    return pipeline.run(target, numScanners, explicitDomains);
   }
 }

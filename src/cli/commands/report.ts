@@ -289,7 +289,8 @@ function renderMarkdown(data: {
     if (critical.length > 0) {
       lines.push('### Critical Findings');
       critical.forEach((f) => {
-        lines.push(`- \`${f.file}${f.line ? ':' + f.line : ''}\` [${f.category}] ${f.finding}`);
+        const persona = f.persona ? ` (persona: ${f.persona})` : '';
+        lines.push(`- \`${f.file}${f.line ? ':' + f.line : ''}\` [${f.category}]${persona} ${f.finding}`);
         lines.push(`  → ${f.recommendation}`);
       });
       lines.push('');
@@ -298,7 +299,8 @@ function renderMarkdown(data: {
     if (high.length > 0) {
       lines.push('### High Findings');
       high.slice(0, 15).forEach((f) => {
-        lines.push(`- \`${f.file}${f.line ? ':' + f.line : ''}\` [${f.category}] ${f.finding}`);
+        const persona = f.persona ? ` (persona: ${f.persona})` : '';
+        lines.push(`- \`${f.file}${f.line ? ':' + f.line : ''}\` [${f.category}]${persona} ${f.finding}`);
         lines.push(`  → ${f.recommendation}`);
       });
       lines.push('');
