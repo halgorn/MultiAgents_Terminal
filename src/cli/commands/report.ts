@@ -22,6 +22,14 @@ function loadLatestAudit(cwd: string): AuditReport | null {
   const dir = join(cwd, '.ai-runtime', 'reports');
   if (!existsSync(dir)) return null;
   try {
+    const latest = join(dir, 'latest-audit.json');
+    if (existsSync(latest)) {
+      const pointer = JSON.parse(readFileSync(latest, 'utf8')) as { report?: string; runDir?: string };
+      const reportPath = pointer.report ?? (pointer.runDir ? join(pointer.runDir, 'report.json') : undefined);
+      if (reportPath && existsSync(reportPath)) {
+        return JSON.parse(readFileSync(reportPath, 'utf8')) as AuditReport;
+      }
+    }
     const files = readdirSync(dir).filter((f) => f.startsWith('audit-') && f.endsWith('.json')).sort().reverse();
     if (!files[0]) return null;
     return JSON.parse(readFileSync(join(dir, files[0]), 'utf8')) as AuditReport;

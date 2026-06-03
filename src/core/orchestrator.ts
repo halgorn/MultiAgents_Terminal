@@ -5,7 +5,7 @@ import { KnowledgeStore } from '../infra/knowledge.js';
 import { createRuntimePolicy, type RuntimePolicy, type RuntimePolicyInput } from './runtime-policy.js';
 import type { AuditReport } from '../schemas/audit.js';
 import { CostTracker } from './cost-tracker.js';
-import { AuditPipeline } from './pipelines/audit-pipeline.js';
+import { AuditPipeline, type AuditRunOptions } from './pipelines/audit-pipeline.js';
 import { runFixPipeline } from './pipelines/fix-pipeline.js';
 import { runAnalyzePipeline } from './pipelines/analyze-pipeline.js';
 import { runReviewPipeline } from './pipelines/review-pipeline.js';
@@ -80,7 +80,12 @@ export class Orchestrator extends EventEmitter {
     return runAuditFixPipeline(this.pipelineContext, auditReport, options);
   }
 
-  async runAuditPipeline(target: string, numScanners?: number, explicitDomains?: ScanDomain[], incremental = false): Promise<AuditReport> {
+  async runAuditPipeline(
+    target: string,
+    numScanners?: number,
+    explicitDomains?: ScanDomain[],
+    options: AuditRunOptions = {},
+  ): Promise<AuditReport> {
     const pipeline = new AuditPipeline(
       this.cwd,
       this.policy,
@@ -88,6 +93,6 @@ export class Orchestrator extends EventEmitter {
       (event, payload) => this.emit(event, payload),
       this.onChunk,
     );
-    return pipeline.run(target, numScanners, explicitDomains, incremental);
+    return pipeline.run(target, numScanners, explicitDomains, options);
   }
 }

@@ -151,6 +151,9 @@ Read only matching sections (offset/limit 30 lines) to confirm. Report file+line
 
 function buildContextBlock(ctx: ScannerContext): string {
   const parts: string[] = [];
+  if (ctx.targetFiles && ctx.targetFiles.length > 0) {
+    parts.push(`## Target Files For This Audit\nFocus your Read calls on these files first. Use Grep/Bash only to find evidence that points back to these files unless the user explicitly requested a broader run.\n${ctx.targetFiles.map((f) => `- ${f}`).join('\n')}`);
+  }
   if (ctx.repoSummary) parts.push(`## Repository Structure\n${ctx.repoSummary}`);
   if (ctx.depGraph) parts.push(`## Dependency Graph\n${ctx.depGraph}`);
   if (ctx.hotspotFiles && ctx.hotspotFiles.length > 0) {
@@ -163,6 +166,7 @@ export interface ScannerContext {
   repoSummary?: string;      // GraphAgent.queryWithContext() output
   depGraph?: string;         // formatted dep-graph: cycles, hotspots
   hotspotFiles?: string[];   // top files by coupling score — read these first
+  targetFiles?: string[];    // prioritized source files for AI scanners
 }
 
 export function buildScannerPrompt(domain: ScanDomain, scannerIndex: number, totalScanners: number, ctx?: ScannerContext): string {
@@ -186,6 +190,7 @@ ${cfg.grepPatterns.map((p) => `- \`${p}\``).join('\n')}
 
 ## Important
 - Do NOT read entire files — use offset/limit to read only relevant sections
+- If Target Files are provided, keep the audit scoped to those files unless a grep result proves a directly related issue elsewhere
 - Do NOT report false positives — confirm each finding before including it
 - If a pattern match is benign (e.g., in a comment or test), skip it
 - Focus on REAL issues with concrete file+line evidence

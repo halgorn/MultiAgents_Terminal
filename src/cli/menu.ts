@@ -30,7 +30,7 @@ const PRESETS: Array<MenuItem<string>> = [
   { label: '✨ Quality',    hint: 'bugs, architecture, testing, redundancy, error-handling', value: 'quality' },
   { label: '🏢 SaaS',       hint: 'multitenancy, compliance, security, resilience, observability', value: 'saas' },
   { label: '🏦 FinTech',    hint: 'compliance, security, data, multitenancy, error-handling', value: 'fintech' },
-  { label: '🌍 Full',       hint: 'all 15 personas (slow — ~30min)', value: 'full' },
+  { label: '🌍 Full',       hint: 'all 15 personas; CLI requires --force-full', value: 'full' },
   { label: '📝 Custom…',    hint: 'select individual personas with Space', value: 'custom' },
   { label: '← Back',       value: 'back' },
 ];
@@ -133,6 +133,7 @@ function printDocumentation(): void {
   console.log(chalk.bold('  Quick start'));
   console.log(`  ${chalk.cyan('aion menu')}                         open this menu`);
   console.log(`  ${chalk.cyan('aion audit . --preset security')}    security-focused audit`);
+  console.log(`  ${chalk.cyan('aion audit . --max-files 20')}        cap AI file scope`);
   console.log(`  ${chalk.cyan('aion scan secrets')}                 local secret scan`);
   console.log(`  ${chalk.cyan('aion scan env-audit')}               env var documentation check`);
   console.log(`  ${chalk.cyan('aion scan sbom --unpinned-only')}    supply-chain pinning check`);
@@ -154,6 +155,7 @@ function printDocumentation(): void {
   console.log('');
   console.log(chalk.bold('  Runtime files'));
   console.log(`  ${chalk.cyan('.ai-runtime/')}                      reports and repo indexes`);
+  console.log(`  ${chalk.cyan('.ai-runtime/reports/audits/')}       organized audit runs`);
   console.log(`  ${chalk.cyan('.ai-memory/')}                       optional knowledge base`);
   console.log(`  ${chalk.cyan('AI_RUNTIME_DB_PATH')}                task store override`);
   console.log('');

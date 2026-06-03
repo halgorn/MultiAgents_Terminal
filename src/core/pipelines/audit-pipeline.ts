@@ -59,6 +59,14 @@ export interface AuditFileStats {
   byExtension: Record<string, number>;
 }
 
+export interface AuditRunOptions {
+  incremental?: boolean;
+  localOnly?: boolean;
+  maxAiScanners?: number;
+  maxFilesForAi?: number;
+  scannerTimeoutMs?: number;
+}
+
 function compactText(text: string, max = MAX_FINDING_TEXT): string {
   const normalized = text.replace(/\s+/g, ' ').trim();
   if (normalized.length <= max) return normalized;
@@ -161,7 +169,12 @@ export class AuditPipeline {
     return 2;
   }
 
-  async run(target: string, numScanners?: number, explicitDomains?: import('../../prompts/scanner.js').ScanDomain[], incremental = false): Promise<AuditReport> {
+  async run(
+    target: string,
+    numScanners?: number,
+    explicitDomains?: import('../../prompts/scanner.js').ScanDomain[],
+    options: AuditRunOptions = {},
+  ): Promise<AuditReport> {
     const taskId = randomUUID();
     const worktrees: Array<[string, string]> = [];
 
@@ -175,7 +188,7 @@ export class AuditPipeline {
       // Incremental: skip unchanged files, reuse cached findings
       let filesToScan = allFiles;
       let cachedFindings: AuditFinding[] = [];
-      if (incremental) {
+      if (options.incremental) {
         const cache = loadAuditCache(this.cwd);
         const { changed, unchanged } = filterChangedFiles(this.cwd, allFiles, cache);
         if (cache && unchanged.length > 0) {
@@ -211,21 +224,49 @@ export class AuditPipeline {
       };
       if (semgrepResult.available) {
         this.emit('agent:output', { agentName: 'audit', text: `Semgrep: ${semgrepResult.findings.length} findings in ${semgrepResult.filesScanned} files\n` });
+      } else {
+        this.emit('agent:output', { agentName: 'audit', text: `Semgrep unavailable: ${semgrepResult.error ?? 'unknown error'}\n` });
+      }
+
+      if (options.localOnly) {
+        const report = this.applyEvidenceGate(fallbackAuditReport([semgrepReport], allFiles.length));
+        const finalReport = recount({
+          ...report,
+          summary: `${report.summary} Local-only mode: no AI scanners or synthesizer were started.`,
+        });
+        saveAuditCache(this.cwd, allFiles, finalReport.findings);
+        return finalReport;
       }
 
       // Domain-based AI scanners (sequential to respect rate limits)
       const { SCAN_DOMAINS } = await import('../../prompts/scanner.js');
-      const domains = explicitDomains && explicitDomains.length > 0
+      const selectedDomains = explicitDomains && explicitDomains.length > 0
         ? explicitDomains
         : SCAN_DOMAINS.slice(0, resolvedScanners);
+      const maxAiScanners = Math.max(1, options.maxAiScanners ?? this.policy.maxAgents);
+      const domains = selectedDomains.slice(0, maxAiScanners);
       const n = domains.length;
 
       this.emit('agent:output', {
         agentName: 'audit',
-        text: `Found ${allFiles.length} source files → ${n} AI scanners (sequential, grep-first)\n  ${domains.join(' | ')}\n`,
+        text: [
+          `Found ${allFiles.length} source files → ${n} AI scanners (sequential, grep-first)`,
+          selectedDomains.length > domains.length ? `Capped AI scanners from ${selectedDomains.length} to ${domains.length} by cost policy.` : '',
+          `  ${domains.join(' | ')}`,
+          '',
+        ].filter(Boolean).join('\n'),
       });
 
       const scannerCtx = await this.buildScannerContext();
+      const maxFilesForAi = Math.max(1, options.maxFilesForAi ?? (
+        this.policy.budget === 'deep' ? 120 : this.policy.budget === 'normal' ? 60 : 30
+      ));
+      const aiTargetFiles = this.prioritizeFiles(filesToScan, maxFilesForAi);
+      scannerCtx.targetFiles = aiTargetFiles;
+      this.emit('agent:output', {
+        agentName: 'audit',
+        text: `AI file scope: ${aiTargetFiles.length}/${filesToScan.length} prioritized source files. Use --max-files to change this.\n`,
+      });
 
       const aiScannerRuns = await this.runSequential(
         domains.map((domain, i) => async () => {
@@ -255,6 +296,7 @@ export class AuditPipeline {
             };
           }
         }),
+        options.scannerTimeoutMs,
       );
 
       // Synthesize
@@ -300,10 +342,15 @@ export class AuditPipeline {
   private async runSequential<T>(tasks: Array<() => Promise<T>>, timeoutMs = 6 * 60 * 1000): Promise<T[]> {
     const results: T[] = [];
     for (const task of tasks) {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Scanner timed out after ${timeoutMs / 1000}s`)), timeoutMs),
-      );
-      results.push(await Promise.race([task(), timeout]));
+      let timer: NodeJS.Timeout | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Scanner timed out after ${timeoutMs / 1000}s`)), timeoutMs);
+      });
+      try {
+        results.push(await Promise.race([task(), timeout]));
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     }
     return results;
   }

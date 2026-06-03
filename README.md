@@ -102,10 +102,12 @@ The menu includes:
 ### Audit
 
 ```bash
+aion audit . --local-only
 aion audit .
 aion audit . --preset security
 aion audit . --preset ai --budget normal
 aion audit . --domains security,dependencies,compliance
+aion audit . --preset security --max-files 20
 ```
 
 Useful presets:
@@ -117,7 +119,18 @@ Useful presets:
 - `quality`
 - `saas`
 - `fintech`
-- `full`
+- `full` requires `--force-full` because it can start every AI scanner and spend heavily.
+
+Cost controls:
+
+```bash
+aion audit . --local-only
+aion audit . --preset security --scanners 2
+aion audit . --preset security --max-files 20
+aion audit . --preset full --force-full --budget deep --scanner-timeout 240
+```
+
+Local scans still inspect the whole repository. `--max-files` only limits the prioritized file list handed to AI scanners.
 
 ### Analyze, Review, Fix
 
@@ -172,8 +185,23 @@ aion "find risky code in the payment flow"
 Aion writes local runtime data under project-local or user-local folders depending on the command:
 
 - `.ai-runtime/` for generated reports and repository indexes
+- `.ai-runtime/reports/latest-audit.json` points to the latest audit run
+- `.ai-runtime/reports/audits/<timestamp>/` stores organized audit output
 - `.ai-memory/` for optional memory/knowledge files
 - `~/.ai-runtime/` for task history unless `AI_RUNTIME_DB_PATH` is set
+
+Each organized audit run contains:
+
+- `index.html`
+- `summary.md`
+- `action-plan.md`
+- `report.json`
+- `action-items.json`
+- `files-hotspots.json`
+- `README.md`
+- `findings-by-persona.json`
+- `findings-by-severity.json`
+- `findings-by-category.json`
 
 Override the task store path:
 
