@@ -67,9 +67,13 @@ const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '🧾 Context',  hint: 'compact AI-safe context',          value: 'context' },
   { label: '🔧 Fix',      hint: 'AI-guided fix for a finding',      value: 'fix' },
   { label: '💭 Chat',     hint: 'interactive AI chat about the repo', value: 'chat' },
+  { label: '🔬 Analyze',  hint: 'investigate a bug or issue',        value: 'analyze' },
+  { label: '👁️  Review',   hint: 'review a file or diff for bugs',   value: 'review' },
   { label: 'Utilities', value: '', header: true },
   { label: '📊 Report',   hint: 'health + findings + context.md',   value: 'report' },
   { label: '🔎 Search',   hint: 'repo index search',                value: 'search' },
+  { label: '🧠 Memory',   hint: 'build/search repo knowledge index', value: 'memory' },
+  { label: '⚙️  Init',     hint: 'create .aionrc.json + .aionignore', value: 'init' },
   { label: '📚 Docs',     hint: 'quick start, providers, examples', value: 'docs' },
   { label: '', value: 'sep', separator: true },
   { label: '❯ Natural language', hint: 'type a request in Portuguese or English', value: 'nl' },
@@ -135,6 +139,40 @@ async function runSearchMenu(cwd: string): Promise<void> {
   run(['--cwd', cwd, 'search', query]);
 }
 
+async function runAnalyzeMenu(cwd: string): Promise<void> {
+  const target = await promptLine('Describe the bug or issue');
+  if (!target) return;
+  console.log(chalk.bold.cyan('\nRunning analysis…\n'));
+  run(['--cwd', cwd, 'analyze', target]);
+}
+
+async function runReviewMenu(cwd: string): Promise<void> {
+  const target = await promptLine('File path or diff to review');
+  if (!target) return;
+  console.log(chalk.bold.cyan(`\nReviewing ${target}…\n`));
+  run(['--cwd', cwd, 'review', target]);
+}
+
+async function runMemoryMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Memory action', [
+    { label: 'build',   hint: 'index source files into knowledge store', value: 'build' },
+    { label: 'search',  hint: 'semantic search over indexed knowledge',   value: 'search' },
+    { label: 'index',   hint: 'build repo index for fast file lookup',    value: 'index' },
+    { label: 'deps',    hint: 'show dependency report',                   value: 'deps' },
+    { label: '← Back', value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'search') {
+    const query = await promptLine('Search query');
+    if (!query) return;
+    console.log(chalk.bold.cyan('\nSearching…\n'));
+    run(['--cwd', cwd, 'memory', 'search', query]);
+    return;
+  }
+  console.log(chalk.bold.cyan(`\nRunning memory ${action}…\n`));
+  run(['--cwd', cwd, 'memory', action]);
+}
+
 async function runFixMenu(cwd: string): Promise<void> {
   const file = await promptLine('File to fix (relative path)');
   if (!file) return;
@@ -156,7 +194,7 @@ async function runExplainMenu(cwd: string): Promise<void> {
 
   if (mode === 'onboard') {
     console.log(chalk.bold.cyan('\nGenerating onboarding guide…\n'));
-    run(['--cwd', cwd, 'explain', '--onboard']);
+    run(['--cwd', cwd, 'onboard']);
     return;
   }
 
@@ -273,6 +311,7 @@ export async function runMenu(cwd: string): Promise<void> {
     health:   ['--cwd', cwd, 'health'],
     chat:     ['--cwd', cwd, 'chat'],
     diff:     ['--cwd', cwd, 'diff'],
+    init:     ['--cwd', cwd, 'init'],
   };
 
   while (true) {
@@ -288,6 +327,9 @@ export async function runMenu(cwd: string): Promise<void> {
     if (action === 'explain') { await runExplainMenu(cwd); continue; }
     if (action === 'search')  { await runSearchMenu(cwd); continue; }
     if (action === 'fix')     { await runFixMenu(cwd); continue; }
+    if (action === 'analyze') { await runAnalyzeMenu(cwd); continue; }
+    if (action === 'review')  { await runReviewMenu(cwd); continue; }
+    if (action === 'memory')  { await runMemoryMenu(cwd); continue; }
     if (action === 'docs')    { printDocumentation(); continue; }
     if (action === 'nl') {
       const { runInteractive } = await import('./interactive.js');
