@@ -7,6 +7,7 @@ export interface MenuItem<T = string> {
   value: T;
   icon?: string;
   separator?: boolean;
+  header?: boolean;
 }
 
 function clearLines(n: number): void {
@@ -32,6 +33,10 @@ function renderList<T>(
   items.forEach((item, i) => {
     if (item.separator) {
       lines.push(chalk.dim('  ─────────────────────────────────'));
+      return;
+    }
+    if (item.header) {
+      lines.push(chalk.dim(`  ── ${item.label.toUpperCase()} ${'─'.repeat(Math.max(0, 30 - item.label.length))}`));
       return;
     }
     const cursor = i === selected ? chalk.cyan('❯') : ' ';
@@ -104,15 +109,15 @@ export async function selectOne<T>(
       }
       if (key.name === 'up') {
         do { selected = (selected - 1 + items.length) % items.length; }
-        while (items[selected]?.separator);
+        while (items[selected]?.separator || items[selected]?.header);
       }
       if (key.name === 'down') {
         do { selected = (selected + 1) % items.length; }
-        while (items[selected]?.separator);
+        while (items[selected]?.separator || items[selected]?.header);
       }
       if (key.name === 'return') {
         const val = items[selected];
-        if (val && !val.separator) { cleanup(); resolve(val.value); return; }
+        if (val && !val.separator && !val.header) { cleanup(); resolve(val.value); return; }
       }
       clearLines(lineCount);
       lineCount = renderList(title, items, selected, subtitle);
