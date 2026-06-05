@@ -87,7 +87,10 @@ export async function selectOne<T>(
   items: MenuItem<T>[],
   subtitle?: string,
 ): Promise<T | null> {
-  if (!process.stdin.isTTY) return null;
+  if (!process.stdin.isTTY) {
+    process.stderr.write(`[aion] interactive menu requires a TTY — use CLI flags directly (e.g. aion audit . --preset security)\n`);
+    return null;
+  }
 
   const nonSep = items.filter((i) => !i.separator);
   let selected = 0;
@@ -141,7 +144,10 @@ export async function selectMany<T>(
   subtitle?: string,
   preSelected?: number[],
 ): Promise<T[] | null> {
-  if (!process.stdin.isTTY) return null;
+  if (!process.stdin.isTTY) {
+    process.stderr.write(`[aion] interactive menu requires a TTY — use CLI flags directly (e.g. aion audit . --domains security,bugs)\n`);
+    return null;
+  }
 
   let selected = 0;
   const toggled = new Set<number>(preSelected ?? []);

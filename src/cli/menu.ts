@@ -155,18 +155,20 @@ async function runReviewMenu(cwd: string): Promise<void> {
 
 async function runMemoryMenu(cwd: string): Promise<void> {
   const action = await selectOne('Memory action', [
-    { label: 'build',   hint: 'index source files into knowledge store', value: 'build' },
-    { label: 'search',  hint: 'semantic search over indexed knowledge',   value: 'search' },
-    { label: 'index',   hint: 'build repo index for fast file lookup',    value: 'index' },
-    { label: 'deps',    hint: 'show dependency report',                   value: 'deps' },
+    { label: 'build',   hint: 'index source files into knowledge store',      value: 'build' },
+    { label: 'index',   hint: 'build repo index for fast file/symbol lookup', value: 'index' },
+    { label: 'search',  hint: 'semantic search (requires memory build)',       value: 'search' },
+    { label: 'query',   hint: 'file + symbol lookup from repo index',          value: 'query' },
+    { label: 'deps',    hint: 'show dependency report',                        value: 'deps' },
     { label: '← Back', value: 'back' },
   ]);
   if (!action || action === 'back') return;
-  if (action === 'search') {
-    const query = await promptLine('Search query');
-    if (!query) return;
-    console.log(chalk.bold.cyan('\nSearching…\n'));
-    run(['--cwd', cwd, 'memory', 'search', query]);
+  if (action === 'search' || action === 'query') {
+    const prompt = action === 'query' ? 'Symbol or file to look up' : 'Search query';
+    const q = await promptLine(prompt);
+    if (!q) return;
+    console.log(chalk.bold.cyan(`\nRunning memory ${action}…\n`));
+    run(['--cwd', cwd, 'memory', action, q]);
     return;
   }
   console.log(chalk.bold.cyan(`\nRunning memory ${action}…\n`));

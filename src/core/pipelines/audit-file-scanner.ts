@@ -2,7 +2,7 @@ import { readdirSync, statSync } from 'fs';
 import { join as pathJoin } from 'path';
 import { spawnSync } from 'child_process';
 import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
-import { rankFilesByRisk } from '../../infra/code-metrics.js';
+import { rankFilesByRisk, buildCognitiveScores } from '../../infra/code-metrics.js';
 
 export const SOURCE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.swift', '.kt', '.cs', '.cpp', '.c', '.h'];
 export const IGNORE_DIRS = new Set([
@@ -101,6 +101,8 @@ export function prioritizeFiles(
   if (files.length <= max) return files;
 
   const churnCounts = fetchGitChurn(cwd);
+  const cognitiveScores = buildCognitiveScores(cwd, files);
+
   const depFanIn = new Map<string, number>();
   for (const h of extra?.hotspotFiles ?? []) {
     depFanIn.set(h, (depFanIn.get(h) ?? 0) + 5);
@@ -110,6 +112,7 @@ export function prioritizeFiles(
     churnCounts,
     depFanIn,
     semgrepFiles: extra?.semgrepFiles,
+    cognitiveScores,
   });
 
   return ranked.slice(0, max).map((r) => r.file).sort();

@@ -274,6 +274,19 @@ export function measureCognitiveLoad(cwd: string, limit = 30): CognitiveEntry[] 
   return results.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
+export function buildCognitiveScores(cwd: string, files: string[]): Map<string, number> {
+  const scores = new Map<string, number>();
+  for (const relFile of files) {
+    const full = join(cwd, relFile);
+    let content: string;
+    try { content = readFileSync(full, 'utf8'); } catch { continue; }
+    const m = measureFile(content);
+    const score = m.maxNesting * 3 + m.longFunctions * 5 + Math.floor(m.magicNumbers / 3) + Math.max(0, m.avgLineLength - 80) / 5;
+    scores.set(relFile, Math.round(score));
+  }
+  return scores;
+}
+
 // ── Secrets Scan (current files only) ────────────────────────────────────────
 
 const SECRET_PATTERNS: Array<{ name: string; re: RegExp }> = [
