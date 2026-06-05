@@ -36,10 +36,10 @@ export function registerPatterns(program: Command): void {
         const index = graph.getIndex();
         if (index) {
           const { detectLang } = await import('../../infra/lang-detect.js');
-          const { buildDepGraph } = await import('../../infra/dep-graph.js');
-          const { buildPythonDepGraph } = await import('../../infra/dep-graph-python.js');
+          const { buildDepGraphAuto } = await import('../../infra/dep-graph.js');
+          
           const lang = detectLang(cwd);
-          const dep = lang.lang === 'python' ? buildPythonDepGraph(cwd) : buildDepGraph(cwd);
+          const dep = buildDepGraphAuto(cwd, lang.lang);
           hotspots = dep.hotspots;
         }
       } catch { /* best-effort */ }

@@ -33,10 +33,10 @@ export function registerChurn(program: Command): void {
         if (index) {
           // Import dep-graph lazily
           const { detectLang } = await import('../../infra/lang-detect.js');
-          const { buildDepGraph } = await import('../../infra/dep-graph.js');
-          const { buildPythonDepGraph } = await import('../../infra/dep-graph-python.js');
+          const { buildDepGraphAuto } = await import('../../infra/dep-graph.js');
+          
           const lang = detectLang(cwd);
-          const dep = lang.lang === 'python' ? buildPythonDepGraph(cwd) : buildDepGraph(cwd);
+          const dep = buildDepGraphAuto(cwd, lang.lang);
           hotspotFiles = dep.hotspots.map((h) => h.file);
         }
       } catch { /* best-effort */ }

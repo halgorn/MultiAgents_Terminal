@@ -41,10 +41,10 @@ export async function buildProjectReportData(cwd: string, days: number) {
   let cycles = 0;
   try {
     const { detectLang } = await import('./lang-detect.js');
-    const { buildDepGraph } = await import('./dep-graph.js');
-    const { buildPythonDepGraph } = await import('./dep-graph-python.js');
+    const { buildDepGraphAuto } = await import('./dep-graph.js');
+    
     const lang = detectLang(cwd);
-    const dep = lang.lang === 'python' ? buildPythonDepGraph(cwd) : buildDepGraph(cwd);
+    const dep = buildDepGraphAuto(cwd, lang.lang);
     hotspots = dep.hotspots;
     cycles = dep.cycles.length;
   } catch { /* best-effort */ }

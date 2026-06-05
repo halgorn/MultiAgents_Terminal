@@ -52,10 +52,10 @@ export function registerHealth(program: Command): void {
       let cycles = 0, hotspots = 0, hotspotFiles: string[] = [];
       try {
         const { detectLang } = await import('../../infra/lang-detect.js');
-        const { buildDepGraph } = await import('../../infra/dep-graph.js');
-        const { buildPythonDepGraph } = await import('../../infra/dep-graph-python.js');
+        const { buildDepGraphAuto } = await import('../../infra/dep-graph.js');
+        
         const lang = detectLang(cwd);
-        const dep = lang.lang === 'python' ? buildPythonDepGraph(cwd) : buildDepGraph(cwd);
+        const dep = buildDepGraphAuto(cwd, lang.lang);
         cycles = dep.cycles.length;
         hotspots = dep.hotspots.length;
         hotspotFiles = dep.hotspots.map((h) => h.file);

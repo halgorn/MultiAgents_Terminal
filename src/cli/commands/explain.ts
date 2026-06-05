@@ -35,11 +35,11 @@ async function buildOnboardContext(cwd: string): Promise<string> {
   let depInfo = '';
   try {
     const { detectLang } = await import('../../infra/lang-detect.js');
-    const { buildDepGraph } = await import('../../infra/dep-graph.js');
-    const { buildPythonDepGraph } = await import('../../infra/dep-graph-python.js');
+    const { buildDepGraphAuto } = await import('../../infra/dep-graph.js');
+    
     const { detectPatterns } = await import('../../infra/pattern-detect.js');
     const lang = detectLang(cwd);
-    const dep = lang.lang === 'python' ? buildPythonDepGraph(cwd) : buildDepGraph(cwd);
+    const dep = buildDepGraphAuto(cwd, lang.lang);
     const patterns = detectPatterns(cwd, dep.hotspots);
     const hotspots = dep.hotspots.slice(0, 8);
     const cycles = dep.cycles.length;

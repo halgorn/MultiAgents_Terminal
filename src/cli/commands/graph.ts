@@ -4,8 +4,8 @@ import { join } from 'path';
 import { spawnSync } from 'child_process';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { detectLang } from '../../infra/lang-detect.js';
-import { buildDepGraph } from '../../infra/dep-graph.js';
-import { buildPythonDepGraph } from '../../infra/dep-graph-python.js';
+import { buildDepGraph, buildDepGraphAuto } from '../../infra/dep-graph.js';
+
 import type { DepGraph } from '../../infra/dep-graph.js';
 import type { RepoIndex } from '../../infra/repo-index.js';
 
@@ -323,7 +323,7 @@ export function registerGraph(program: Command): void {
       const lang = detectLang(cwd);
       let dep: DepGraph;
       try {
-        dep = lang.lang === 'python' ? buildPythonDepGraph(cwd) : buildDepGraph(cwd);
+        dep = buildDepGraphAuto(cwd, lang.lang);
         console.log(`  ${dep.nodes.size} modules, ${dep.cycles.length} cycles, ${dep.hotspots.length} hotspots`);
       } catch {
         dep = { nodes: new Map(), cycles: [], hotspots: [] };

@@ -10,8 +10,8 @@ import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.
 import { validateAuditFindings } from '../../infra/evidence-gate.js';
 import { loadRepoIndex } from '../../infra/repo-query.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
-import { buildDepGraph } from '../../infra/dep-graph.js';
-import { buildPythonDepGraph } from '../../infra/dep-graph-python.js';
+import { buildDepGraphAuto } from '../../infra/dep-graph.js';
+
 import { detectLang } from '../../infra/lang-detect.js';
 import type { ScannerContext } from '../../prompts/scanner.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
@@ -126,9 +126,7 @@ export class AuditPipeline {
     } catch { /* best-effort */ }
     try {
       const lang = detectLang(this.cwd);
-      const dep = lang.lang === 'python'
-        ? buildPythonDepGraph(this.cwd)
-        : buildDepGraph(this.cwd);
+      const dep = buildDepGraphAuto(this.cwd, lang.lang);
       const lines: string[] = [];
       if (dep.cycles.length > 0) {
         lines.push(`Cycles (${dep.cycles.length}): ${dep.cycles.slice(0, 5).map((c) => c.join(' → ')).join('; ')}`);
