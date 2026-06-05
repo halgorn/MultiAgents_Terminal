@@ -8,9 +8,9 @@ import { chunkFile } from '../../infra/chunker.js';
 import { buildDepGraph, formatDepReport } from '../../infra/dep-graph.js';
 import { buildRepoIndex, writeRepoIndex } from '../../infra/repo-index.js';
 import { formatRepoQuery, loadRepoIndex, queryRepoIndex } from '../../infra/repo-query.js';
+import { SOURCE_EXTS as SRC_EXTS, IGNORE_DIRS } from '../../core/pipelines/audit-file-scanner.js';
 
-const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs']);
-const IGNORE_DIRS = new Set(['node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage', '.next', '__pycache__']);
+const SOURCE_EXTS = new Set(SRC_EXTS);
 
 function collectSourceFiles(dir: string): string[] {
   const results: string[] = [];

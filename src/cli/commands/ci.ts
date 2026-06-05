@@ -5,6 +5,7 @@ import { createRuntimePolicy } from '../../core/runtime-policy.js';
 import { CostTracker } from '../../core/cost-tracker.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
 import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
+import { parseBudget } from '../cli-utils.js';
 
 const SEVERITY_LEVELS = ['critical', 'high', 'medium', 'low'] as const;
 type Severity = (typeof SEVERITY_LEVELS)[number];
@@ -19,10 +20,6 @@ interface CiOptions {
   localOnly?: boolean;
   format: string;
   dryRun?: boolean;
-}
-
-function parseBudget(v: string): 'low' | 'normal' | 'deep' {
-  return (['low', 'normal', 'deep'].includes(v) ? v : 'low') as 'low' | 'normal' | 'deep';
 }
 
 function parseFailOn(v: string): Severity {

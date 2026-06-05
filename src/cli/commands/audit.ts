@@ -8,6 +8,7 @@ import { Renderer } from '../ui/renderer.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
 import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
 import type { AuditFinding, AuditReport } from '../../schemas/audit.js';
+import { parseBudget, parsePositiveInt } from '../cli-utils.js';
 
 interface AuditOptions {
   scanners?: string;
@@ -86,14 +87,6 @@ async function renderDryRun(
   }
 }
 
-function parseBudget(value: string): 'low' | 'normal' | 'deep' {
-  return (['low', 'normal', 'deep'].includes(value) ? value : 'low') as 'low' | 'normal' | 'deep';
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
-  if (!value) return fallback;
-  return Math.max(1, Math.min(max, parseInt(String(value), 10) || fallback));
-}
 
 async function printPersonas(): Promise<void> {
   const { listPresets } = await import('../../infra/persona-presets.js');
