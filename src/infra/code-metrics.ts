@@ -2,6 +2,65 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative, extname } from 'path';
 import { spawnSync } from 'child_process';
 
+// ── Hot Zone Ranking ──────────────────────────────────────────────────────────
+
+export interface RankedFile {
+  file: string;
+  score: number;
+  reasons: string[];
+}
+
+export function rankFilesByRisk(
+  files: string[],
+  options: {
+    churnCounts?: Map<string, number>;
+    depFanIn?: Map<string, number>;
+    semgrepFiles?: Set<string>;
+    cognitiveScores?: Map<string, number>;
+  } = {},
+): RankedFile[] {
+  const { churnCounts, depFanIn, semgrepFiles, cognitiveScores } = options;
+
+  return files.map((file) => {
+    let score = 0;
+    const reasons: string[] = [];
+    const base = file.split('/').pop() ?? '';
+    const depth = file.split('/').length;
+
+    score += Math.max(0, 6 - depth) * 3;
+
+    if (/^(index|main|app|server|router|handler|controller|service|middleware|auth|api)\.[a-z]+$/.test(base)) {
+      score += 10; reasons.push('key-module');
+    }
+
+    if (churnCounts) {
+      const c = churnCounts.get(file) ?? 0;
+      if (c > 10) { score += 15; reasons.push(`churn:${c}`); }
+      else if (c > 5) { score += 8; reasons.push(`churn:${c}`); }
+      else if (c > 2) { score += 4; reasons.push(`churn:${c}`); }
+    }
+
+    if (depFanIn) {
+      const f = depFanIn.get(file) ?? 0;
+      if (f > 10) { score += 15; reasons.push(`dep-central:${f}`); }
+      else if (f > 5) { score += 8; reasons.push(`dep-central:${f}`); }
+      else if (f > 2) { score += 4; reasons.push(`dep-central:${f}`); }
+    }
+
+    if (semgrepFiles?.has(file)) { score += 12; reasons.push('semgrep-hit'); }
+
+    if (cognitiveScores) {
+      const cx = cognitiveScores.get(file) ?? 0;
+      if (cx > 30) { score += 10; reasons.push(`complexity:${cx}`); }
+      else if (cx > 15) { score += 5; reasons.push(`complexity:${cx}`); }
+    }
+
+    if (/\.(test|spec)\.[a-z]+$/.test(file)) score -= 5;
+
+    return { file, score, reasons };
+  }).sort((a, b) => b.score - a.score);
+}
+
 export interface ApiEndpoint {
   method: string;
   path: string;

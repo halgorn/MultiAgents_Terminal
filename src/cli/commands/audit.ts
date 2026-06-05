@@ -6,24 +6,8 @@ import { createRuntimePolicy } from '../../core/runtime-policy.js';
 import { CostTracker } from '../../core/cost-tracker.js';
 import { Renderer } from '../ui/renderer.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
-import { SEVERITY_RANK } from '../../infra/audit-model.js';
+import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
 import type { AuditFinding, AuditReport } from '../../schemas/audit.js';
-
-const SEVERITY_COLOR: Record<string, (s: string) => string> = {
-  critical: chalk.bgRed.white.bold,
-  high: chalk.red.bold,
-  medium: chalk.yellow,
-  low: chalk.gray,
-  info: chalk.dim,
-};
-
-const SEVERITY_ICON: Record<string, string> = {
-  critical: 'critical',
-  high: 'high',
-  medium: 'medium',
-  low: 'low',
-  info: 'info',
-};
 
 interface AuditOptions {
   scanners?: string;
@@ -46,36 +30,24 @@ interface AuditOptions {
 }
 
 function renderAuditReport(report: AuditReport, durationMs: number): void {
-  console.log('\n' + chalk.bold('═'.repeat(60)));
-  console.log(chalk.bold.cyan('  AUDIT REPORT') + chalk.gray(` — ${report.totalFiles} files — ${(durationMs / 1000).toFixed(1)}s`));
-  console.log(chalk.bold('═'.repeat(60)));
-  console.log('\n' + chalk.bold('Summary:'));
-  console.log('  ' + report.summary);
   const counts = [
     report.criticalCount > 0 ? chalk.bgRed.white.bold(` ${report.criticalCount} critical `) : null,
     report.highCount > 0 ? chalk.red.bold(`${report.highCount} high`) : null,
-    chalk.gray(`${report.findings.filter((f) => f.severity === 'medium').length} medium`),
-    chalk.gray(`${report.findings.filter((f) => f.severity === 'low').length} low`),
+    report.findings.filter((f) => f.severity === 'medium').length > 0
+      ? chalk.yellow(`${report.findings.filter((f) => f.severity === 'medium').length} medium`) : null,
+    report.findings.filter((f) => f.severity === 'low').length > 0
+      ? chalk.gray(`${report.findings.filter((f) => f.severity === 'low').length} low`) : null,
   ].filter(Boolean);
-  console.log('\n' + chalk.bold('Severity:') + '  ' + counts.join('  '));
+
+  console.log('\n' + chalk.bold.cyan('Audit complete') + chalk.gray(` — ${report.totalFiles} files, ${(durationMs / 1000).toFixed(1)}s`));
+  console.log(chalk.bold('Findings:') + '  ' + counts.join('  ') + chalk.dim(`  (${report.findings.length} total)`));
+  console.log('  ' + chalk.dim(report.summary));
+
   if (report.topPriorities.length > 0) {
-    console.log('\n' + chalk.bold('Top Priorities:'));
-    report.topPriorities.forEach((p, i) => console.log(chalk.cyan(`  ${i + 1}.`) + ' ' + p));
+    console.log(chalk.bold('\nTop Priorities:'));
+    report.topPriorities.slice(0, 3).forEach((p, i) => console.log(chalk.cyan(`  ${i + 1}.`) + ' ' + p));
+    if (report.topPriorities.length > 3) console.log(chalk.dim(`  ... ${report.topPriorities.length - 3} more in HTML`));
   }
-  for (const sev of ['critical', 'high', 'medium', 'low', 'info']) {
-    const group = report.findings.filter((f) => f.severity === sev);
-    if (group.length === 0) continue;
-    const color = SEVERITY_COLOR[sev] ?? chalk.white;
-    console.log('\n' + color(` ${SEVERITY_ICON[sev] ?? sev} (${group.length}) `));
-    for (const f of group) {
-      const loc = f.line ? `${f.file}:${f.line}` : f.file;
-      console.log(chalk.bold(`  ${loc}`) + chalk.gray(` [${f.category}]`));
-      console.log(`    ${f.finding}`);
-      console.log(chalk.dim(`    -> ${f.recommendation}`));
-      console.log();
-    }
-  }
-  console.log(chalk.bold('═'.repeat(60)));
 }
 
 function renderDryRun(pipeline: AuditPipeline, stats: ReturnType<AuditPipeline['collectAuditStats']>, maxFilesForAi: number): void {
@@ -216,12 +188,19 @@ export function registerAudit(program: Command): void {
         });
         const durationMs = Date.now() - start;
         renderAuditReport(report, durationMs);
-        const saved = saveAuditReport(process.cwd(), report, durationMs, parsePositiveInt(mergedOptions.aiContextBudget, 8000, 100000));
-        console.log(chalk.gray(`report: ${saved.runDir}`));
-        console.log(chalk.gray(`html: ${saved.html}`));
-        console.log(chalk.gray(`digest: ${saved.digest}`));
-        console.log(chalk.gray(`ai context: ${saved.aiContext}`));
-        console.log(chalk.gray(`action plan: ${saved.actionPlan}`));
+        const costSummary: CostSummary = {
+          totalUsd: orch.costs.totalUsd(),
+          model: policy.claudeModel,
+          perAgent: orch.costs.byAgent().map((e) => ({
+            name: e.agentName,
+            costUsd: e.costUsd,
+            inputTokens: e.usage.inputTokens,
+            outputTokens: e.usage.outputTokens,
+          })),
+        };
+        const saved = saveAuditReport(process.cwd(), report, durationMs, parsePositiveInt(mergedOptions.aiContextBudget, 8000, 100000), costSummary);
+        console.log(chalk.gray(`\nhtml: ${saved.html}`));
+        console.log(chalk.gray(`dashboard: ${saved.runDir.replace(/audits[\\/][^\\/]+$/, 'index.html')}`));
         console.log(chalk.dim(orch.costs.summary()));
         await maybeAutoFix(options, report, orch);
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);

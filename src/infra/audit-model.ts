@@ -1,4 +1,4 @@
-import type { AuditFinding } from '../schemas/audit.js';
+import type { AuditFinding, DomainSection } from '../schemas/audit.js';
 
 export const SEVERITY_RANK: Record<string, number> = {
   critical: 4,
@@ -7,6 +7,23 @@ export const SEVERITY_RANK: Record<string, number> = {
   low: 1,
   info: 0,
 };
+
+export interface CostSummary {
+  totalUsd: number;
+  model: string;
+  perAgent: Array<{ name: string; costUsd: number; inputTokens: number; outputTokens: number }>;
+}
+
+export interface AuditHistoryEntry {
+  stamp: string;
+  createdAt: string;
+  runRelDir: string;
+  criticalCount: number;
+  highCount: number;
+  totalFiles: number;
+  durationMs: number;
+  costUsd: number;
+}
 
 export interface FullSavedAuditReport {
   findings: AuditFinding[];
@@ -17,15 +34,15 @@ export interface FullSavedAuditReport {
   topPriorities: string[];
   durationMs: number;
   createdAt: string;
+  sections?: DomainSection[];
+  costSummary?: CostSummary;
 }
 
 export interface SavedAuditPaths {
   runDir: string;
   html: string;
-  summary: string;
   digest: string;
   aiContext: string;
-  actionPlan: string;
   report: string;
 }
 
@@ -127,32 +144,11 @@ export function buildFileHotspots(findings: AuditFinding[]): FileHotspot[] {
     .sort((a, b) => (SEVERITY_RANK[b.maxSeverity] ?? 0) - (SEVERITY_RANK[a.maxSeverity] ?? 0) || b.findings - a.findings);
 }
 
-export function renderActionPlan(report: FullSavedAuditReport): string {
-  const actions = buildActionItems(report.findings);
-  const lines = [
-    '# Audit Action Plan',
-    '',
-    `Generated: ${report.createdAt}`,
-    `Findings consolidated into ${actions.length} action item(s).`,
-    '',
-  ];
-  for (const item of actions) {
-    lines.push(`## ${item.id}. [${item.severity.toUpperCase()}] ${item.title}`, '');
-    lines.push(`Category: ${item.category}`, `Personas: ${item.personas.join(', ') || 'local'}`, '');
-    lines.push('Files:', ...item.files.map((f) => `- ${f.file}${f.lines.length ? ':' + f.lines.slice(0, 8).join(',') : ''}`), '');
-    lines.push('Recommendation:', item.recommendation, '', 'Evidence:');
-    for (const finding of item.findings.slice(0, 5)) lines.push(`- ${markdownLocation(finding)}: ${finding.finding}`);
-    if (item.findings.length > 5) lines.push(`- ... ${item.findings.length - 5} more related finding(s)`);
-    lines.push('');
-  }
-  if (actions.length === 0) lines.push('No remediation actions were produced by this audit.', '');
-  return lines.join('\n');
-}
 
 export function renderDigest(report: FullSavedAuditReport): string {
-  const actions = buildActionItems(report.findings).slice(0, 15);
+  const actions = buildActionItems(report.findings);
   const hotspots = buildFileHotspots(report.findings).slice(0, 12);
-  return [
+  const lines = [
     '# Audit Digest',
     '',
     `Generated: ${report.createdAt}`,
@@ -165,13 +161,24 @@ export function renderDigest(report: FullSavedAuditReport): string {
     '## Top Priorities',
     ...(report.topPriorities.length ? report.topPriorities.map((p, i) => `${i + 1}. ${p}`) : ['No top priorities.']),
     '',
-    '## Consolidated Fix List',
-    ...(actions.length ? actions.map((a) => `${a.id}. [${a.severity}] ${a.title} (${a.files.length} file(s))`) : ['No action items.']),
-    '',
     '## Hotspot Files',
     ...(hotspots.length ? hotspots.map((h) => `- ${h.file}: ${h.findings} finding(s), max ${h.maxSeverity}`) : ['No hotspots.']),
     '',
-  ].join('\n');
+    '## Action Plan',
+    `${actions.length} action item(s).`,
+    '',
+  ];
+  for (const item of actions) {
+    lines.push(`### ${item.id}. [${item.severity.toUpperCase()}] ${item.title}`, '');
+    lines.push(`Category: ${item.category} · Personas: ${item.personas.join(', ') || 'local'}`, '');
+    lines.push('Files:', ...item.files.map((f) => `- ${f.file}${f.lines.length ? ':' + f.lines.slice(0, 8).join(',') : ''}`), '');
+    lines.push('Recommendation:', item.recommendation, '');
+    for (const finding of item.findings.slice(0, 5)) lines.push(`- ${markdownLocation(finding)}: ${finding.finding}`);
+    if (item.findings.length > 5) lines.push(`- ... ${item.findings.length - 5} more`);
+    lines.push('');
+  }
+  if (actions.length === 0) lines.push('No remediation actions.', '');
+  return lines.join('\n');
 }
 
 export function renderAiContext(report: FullSavedAuditReport, budgetTokens = 8000): string {

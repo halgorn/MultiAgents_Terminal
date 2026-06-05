@@ -34,22 +34,31 @@ export abstract class BaseAgent<TInput, TOutput> {
   ): Promise<AgentRun<TOutput>> {
     const start = Date.now();
     const worktreePath = this.getWorktreePath(input);
-
     this.writeClaudeMd(worktreePath);
 
-    const userMessage = this.applyLimits(this.buildUserMessage(input), policy);
+    const attempt = async (charOverride?: number): Promise<string> => {
+      const userMessage = this.applyLimits(this.buildUserMessage(input), policy, charOverride);
+      return createProvider(this.config.provider, policy).run(
+        { agentName: this.config.name, cwd: worktreePath, systemPrompt: this.config.systemPrompt, userMessage, policy },
+        onChunk,
+      );
+    };
 
-    const rawText = await createProvider(this.config.provider, policy).run(
-      {
-        agentName: this.config.name,
-        cwd: worktreePath,
-        systemPrompt: this.config.systemPrompt,
-        userMessage,
-        policy,
-      },
-      onChunk,
-    );
-    const output = this.parseOutput(rawText);
+    let rawText: string;
+    try {
+      rawText = await attempt();
+    } catch (err) {
+      throw err;
+    }
+
+    let output: TOutput;
+    try {
+      output = this.parseOutput(rawText);
+    } catch {
+      // Retry once with 60% context if JSON parsing failed (likely context truncation)
+      rawText = await attempt(Math.floor(policy.maxOutputChars * 0.6));
+      output = this.parseOutput(rawText);
+    }
 
     return {
       agentName: this.config.name,
@@ -66,15 +75,21 @@ export abstract class BaseAgent<TInput, TOutput> {
     writeFileSync(join(claudeDir, 'CLAUDE.md'), this.config.systemPrompt, 'utf8');
   }
 
-  private applyLimits(message: string, policy: RuntimePolicy): string {
+  private applyLimits(message: string, policy: RuntimePolicy, charOverride?: number): string {
     const policyBlock = `Runtime policy:
 - Maximum read per file/context block: ${policy.maxFileLines} lines.
 - Maximum retained CLI output: ${policy.maxOutputChars} chars.
 - Budget: ${policy.budget}.
 
 `;
-    const limitedLines = limitLines(policyBlock + message, policy.maxFileLines * 8);
-    return limitChars(limitedLines, policy.maxOutputChars);
+    const full = policyBlock + message;
+    const limitedLines = limitLines(full, policy.maxFileLines * 8);
+    const charCap = charOverride ?? policy.maxOutputChars;
+    const limited = limitChars(limitedLines, charCap);
+    if (limited.length < full.length) {
+      return limited + '\n\n[CONTEXT TRUNCATED — respond using only what is visible above; output valid JSON from partial data]';
+    }
+    return limited;
   }
 
   protected parseJson<T>(text: string, label: string): T {

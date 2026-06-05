@@ -12,7 +12,7 @@ function esc(s: string): string {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-export function latestAuditPointer(cwd: string): { runDir?: string; html?: string; summary?: string; digest?: string; aiContext?: string; actionPlan?: string; report?: string; createdAt?: string } | null {
+export function latestAuditPointer(cwd: string): { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string } | null {
   try {
     const path = join(cwd, '.ai-runtime', 'reports', 'latest-audit.json');
     return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;

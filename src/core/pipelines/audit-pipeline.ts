@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
-import { readdirSync, statSync } from 'fs';
+import { mkdtempSync, readdirSync, rmSync, statSync } from 'fs';
 import { join as pathJoin } from 'path';
+import { tmpdir } from 'os';
+import { spawnSync } from 'child_process';
 import { createWorktree, removeWorktree } from '../../infra/worktree.js';
 import { ScannerAgent } from '../../agents/scanner.js';
 import { SynthesizerAgent } from '../../agents/synthesizer.js';
@@ -14,8 +16,22 @@ import { detectLang } from '../../infra/lang-detect.js';
 import type { ScannerContext } from '../../prompts/scanner.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
+import { SessionBudget } from '../cost-tracker.js';
 import { loadAuditCache, saveAuditCache, filterChangedFiles, getCachedFindingsForFiles } from '../../infra/audit-cache.js';
 import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
+import { rankFilesByRisk } from '../../infra/code-metrics.js';
+
+function fetchGitChurn(cwd: string, days = 90): Map<string, number> {
+  const result = spawnSync('git', ['log', '--name-only', '--pretty=format:', `--since=${days}.days.ago`], {
+    cwd, encoding: 'utf8', timeout: 10000,
+  });
+  const counts = new Map<string, number>();
+  for (const line of (result.stdout ?? '').split('\n')) {
+    const t = line.trim();
+    if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  return counts;
+}
 
 type OnChunk = (agentName: string, text: string) => void;
 type Emitter = (event: string, payload: unknown) => void;
@@ -177,6 +193,7 @@ export class AuditPipeline {
   ): Promise<AuditReport> {
     const taskId = randomUUID();
     const worktrees: Array<[string, string]> = [];
+    let synthDir: string | undefined;
 
     try {
       const stats = this.collectAuditStats(target);
@@ -257,15 +274,33 @@ export class AuditPipeline {
         ].filter(Boolean).join('\n'),
       });
 
+      // Session budget gate — warn or reduce scanners before spending tokens
+      const sessionBudget = new SessionBudget(this.cwd, this.policy.claudeMaxBudgetUsd);
+      const budgetWarn = sessionBudget.warningLine();
+      if (budgetWarn) this.emit('agent:output', { agentName: 'audit', text: `${budgetWarn}\n` });
+      const estimated = sessionBudget.estimatedCost(domains.length, this.policy.claudeModel);
+      if (!sessionBudget.canAfford(estimated)) {
+        const affordable = Math.max(1, Math.floor(sessionBudget.remaining() / (estimated / domains.length)));
+        domains.length = affordable;
+        this.emit('agent:output', {
+          agentName: 'audit',
+          text: `⚠ Budget constraint: reduced scanners to ${domains.length} (estimated $${estimated.toFixed(2)}, $${sessionBudget.remaining().toFixed(2)} remaining)\n`,
+        });
+      }
+
       const scannerCtx = await this.buildScannerContext();
       const maxFilesForAi = Math.max(1, options.maxFilesForAi ?? (
         this.policy.budget === 'deep' ? 120 : this.policy.budget === 'normal' ? 60 : 30
       ));
-      const aiTargetFiles = this.prioritizeFiles(filesToScan, maxFilesForAi);
+      const semgrepFileSet = new Set(semgrepResult.findings.map((f) => f.file ?? '').filter(Boolean));
+      const aiTargetFiles = this.prioritizeFiles(filesToScan, maxFilesForAi, {
+        semgrepFiles: semgrepFileSet,
+        hotspotFiles: scannerCtx.hotspotFiles,
+      });
       scannerCtx.targetFiles = aiTargetFiles;
       this.emit('agent:output', {
         agentName: 'audit',
-        text: `AI file scope: ${aiTargetFiles.length}/${filesToScan.length} prioritized source files. Use --max-files to change this.\n`,
+        text: `AI file scope: ${aiTargetFiles.length}/${filesToScan.length} prioritized by risk (churn + deps + semgrep). Use --max-files to change.\n`,
       });
 
       const aiScannerRuns = await this.runSequential(
@@ -299,9 +334,8 @@ export class AuditPipeline {
         options.scannerTimeoutMs,
       );
 
-      // Synthesize
-      const synthWT = createWorktree(this.cwd, 'synthesizer', taskId);
-      worktrees.push(['synthesizer', taskId]);
+      // Synthesize — use a temp dir (no git worktree needed, synthesizer reads no files)
+      synthDir = mkdtempSync(pathJoin(tmpdir(), 'aion-synth-'));
       this.emit('agent:start', { agentName: 'synthesizer' });
 
       const reports = [
@@ -311,7 +345,7 @@ export class AuditPipeline {
       const synthStart = Date.now();
       try {
         const synthRun = await new SynthesizerAgent().run(
-          { scanReports: reports, totalFiles: allFiles.length, worktreePath: synthWT },
+          { scanReports: reports, totalFiles: allFiles.length, worktreePath: synthDir },
           this.policy,
           this.onChunk,
         );
@@ -320,6 +354,7 @@ export class AuditPipeline {
         const deduped = this.deduplicateFindings([...cachedFindings, ...gated.findings]);
         const finalReport = recount({ ...gated, findings: deduped });
         saveAuditCache(this.cwd, allFiles, finalReport.findings);
+        sessionBudget.record(this.costs.totalUsd());
         return finalReport;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -329,12 +364,16 @@ export class AuditPipeline {
         const deduped = this.deduplicateFindings([...cachedFindings, ...fallback.findings]);
         const finalReport = recount({ ...fallback, findings: deduped });
         saveAuditCache(this.cwd, allFiles, finalReport.findings);
+        sessionBudget.record(this.costs.totalUsd());
         return finalReport;
       }
 
     } finally {
       for (const [agentName, taskId_] of worktrees) {
         try { removeWorktree(this.cwd, agentName, taskId_); } catch { /* best-effort */ }
+      }
+      if (synthDir) {
+        try { rmSync(synthDir, { recursive: true, force: true }); } catch { /* best-effort */ }
       }
     }
   }
@@ -456,31 +495,25 @@ export class AuditPipeline {
     return stats;
   }
 
-  prioritizeFiles(files: string[], max: number): string[] {
+  prioritizeFiles(
+    files: string[],
+    max: number,
+    extra?: { semgrepFiles?: Set<string>; hotspotFiles?: string[] },
+  ): string[] {
     if (files.length <= max) return files;
 
-    const scored = files.map((f) => {
-      let score = 0;
-      const depth = f.split('/').length;
-      score += Math.max(0, 6 - depth) * 3;
+    const churnCounts = fetchGitChurn(this.cwd);
+    const depFanIn = new Map<string, number>();
+    for (const h of extra?.hotspotFiles ?? []) {
+      depFanIn.set(h, (depFanIn.get(h) ?? 0) + 5);
+    }
 
-      const base = f.split('/').pop() ?? '';
-      if (/^(index|main|app|server|router|handler|controller|service|middleware|auth|api)\.[a-z]+$/.test(base)) score += 10;
-      if (/^(orchestrat|agent|provider|pipeline)\.[a-z]+$/.test(base)) score += 8;
-
-      try {
-        const size = statSync(pathJoin(this.cwd, f)).size;
-        score += Math.min(5, Math.floor(size / 5000));
-      } catch { /* skip */ }
-
-      if (/\.(test|spec)\.[a-z]+$/.test(f)) score -= 5;
-      return { f, score };
+    const ranked = rankFilesByRisk(files, {
+      churnCounts,
+      depFanIn,
+      semgrepFiles: extra?.semgrepFiles,
     });
 
-    return scored
-      .sort((a, b) => b.score - a.score)
-      .slice(0, max)
-      .map((s) => s.f)
-      .sort();
+    return ranked.slice(0, max).map((r) => r.file).sort();
   }
 }

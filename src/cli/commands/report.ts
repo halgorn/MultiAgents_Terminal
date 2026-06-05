@@ -21,10 +21,9 @@ function printLatest(cwd: string): void {
   if (latest.html) console.log(`  html:        ${latest.html}`);
   if (latest.digest) console.log(`  digest:      ${latest.digest}`);
   if (latest.aiContext) console.log(`  ai context:  ${latest.aiContext}`);
-  if (latest.actionPlan) console.log(`  action plan: ${latest.actionPlan}`);
   console.log('');
   console.log(chalk.bold('Recommended:'));
-  console.log(`  Human review: ${chalk.cyan(latest.digest ?? latest.summary ?? latest.runDir ?? '')}`);
+  console.log(`  Human review: ${chalk.cyan(latest.digest ?? latest.runDir ?? '')}`);
   console.log(`  Send to AI:   ${chalk.cyan(latest.aiContext ?? '')}`);
 }
 

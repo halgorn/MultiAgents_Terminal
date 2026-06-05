@@ -1,3 +1,6 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
+
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -96,5 +99,69 @@ export class CostTracker {
 
   byAgent(): AgentCost[] {
     return [...this.entries].sort((a, b) => b.costUsd - a.costUsd);
+  }
+}
+
+// ── Session Budget ────────────────────────────────────────────────────────────
+
+const SESSION_BUDGET_FILE = join('.ai-runtime', 'session-budget.json');
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+const AVG_SCANNER_COST_USD: Record<string, number> = {
+  'claude-haiku-4-5-20251001': 0.08,
+  'claude-sonnet-4-6': 0.30,
+  'claude-opus-4-8': 1.20,
+};
+
+interface SessionBudgetData {
+  capUsd: number;
+  spentUsd: number;
+  updatedAt: string;
+}
+
+export class SessionBudget {
+  private data: SessionBudgetData;
+  private readonly filePath: string;
+
+  constructor(cwd: string, capUsd = 1.50) {
+    this.filePath = join(cwd, SESSION_BUDGET_FILE);
+    try {
+      const raw = readFileSync(this.filePath, 'utf8');
+      const parsed = JSON.parse(raw) as SessionBudgetData;
+      const age = Date.now() - new Date(parsed.updatedAt).getTime();
+      this.data = age < SESSION_TTL_MS
+        ? { ...parsed, capUsd: Math.max(parsed.capUsd, capUsd) }
+        : { capUsd, spentUsd: 0, updatedAt: new Date().toISOString() };
+    } catch {
+      this.data = { capUsd, spentUsd: 0, updatedAt: new Date().toISOString() };
+    }
+  }
+
+  remaining(): number {
+    return Math.max(0, this.data.capUsd - this.data.spentUsd);
+  }
+
+  estimatedCost(nScanners: number, model: string): number {
+    const perScanner = AVG_SCANNER_COST_USD[model] ?? 0.10;
+    return nScanners * perScanner * 1.3;
+  }
+
+  canAfford(estimatedUsd: number): boolean {
+    return this.remaining() >= estimatedUsd;
+  }
+
+  warningLine(): string | null {
+    const pct = this.data.capUsd > 0 ? this.remaining() / this.data.capUsd : 1;
+    if (pct < 0.30) return `⚠ Session budget low: $${this.remaining().toFixed(2)} of $${this.data.capUsd.toFixed(2)} remaining`;
+    return null;
+  }
+
+  record(spentUsd: number): void {
+    this.data.spentUsd += spentUsd;
+    this.data.updatedAt = new Date().toISOString();
+    try {
+      mkdirSync(dirname(this.filePath), { recursive: true });
+      writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf8');
+    } catch { /* best-effort */ }
   }
 }
