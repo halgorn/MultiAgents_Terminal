@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { program } from 'commander';
 import { resolve } from 'path';
 import { existsSync, statSync } from 'fs';
+import { checkForUpdate, getCurrentVersion } from './infra/update-check.js';
 import { runMigrations } from './infra/db/migrations.js';
 import { registerAnalyze } from './cli/commands/analyze.js';
 import { registerFix } from './cli/commands/fix.js';
@@ -27,11 +28,12 @@ import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
 runMigrations();
+await checkForUpdate();
 
 program
   .name('ai')
   .description('Multi-agent AI engineering runtime')
-  .version('0.2.1')
+  .version(getCurrentVersion())
   .option('-C, --cwd <path>', 'working directory (defaults to current directory)')
   .argument('[request...]', 'natural language request (e.g. "corrija o bug de login")')
   .action(async (requestWords: string[]) => {
