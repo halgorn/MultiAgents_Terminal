@@ -1,32 +1,14 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { readdirSync, statSync, writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { join, relative } from 'path';
 import { KnowledgeStore } from '../../infra/knowledge.js';
 import { chunkFile } from '../../infra/chunker.js';
 import { buildDepGraph, formatDepReport } from '../../infra/dep-graph.js';
 import { buildRepoIndex, writeRepoIndex } from '../../infra/repo-index.js';
 import { formatRepoQuery, loadRepoIndex, queryRepoIndex } from '../../infra/repo-query.js';
-import { SOURCE_EXTS as SRC_EXTS, IGNORE_DIRS } from '../../core/pipelines/audit-file-scanner.js';
-
-const SOURCE_EXTS = new Set(SRC_EXTS);
-
-function collectSourceFiles(dir: string): string[] {
-  const results: string[] = [];
-  try {
-    for (const entry of readdirSync(dir)) {
-      if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) continue;
-      const full = join(dir, entry);
-      try {
-        const st = statSync(full);
-        if (st.isDirectory()) results.push(...collectSourceFiles(full));
-        else if (SOURCE_EXTS.has(entry.slice(entry.lastIndexOf('.')))) results.push(full);
-      } catch { /* skip */ }
-    }
-  } catch { /* skip */ }
-  return results;
-}
+import { collectAuditStats } from '../../core/pipelines/audit-file-scanner.js';
 
 export function registerMemory(program: Command): void {
   const memory = program
@@ -53,8 +35,9 @@ export function registerMemory(program: Command): void {
         let srcCount = 0;
         if (options.src !== false) {
           // 2. Index source code via Tree-sitter chunks
-          const srcDir = options.srcDir ? join(cwd, options.srcDir) : cwd;
-          const files = collectSourceFiles(srcDir);
+          const srcTarget = options.srcDir ?? '.';
+          const stats = collectAuditStats(cwd, srcTarget);
+          const files = stats.auditFiles.map((f) => join(cwd, f));
           spinner.text = `Chunking ${files.length} source files...`;
 
           const srcMemoryDir = join(cwd, '.ai-memory', 'architecture');

@@ -3,13 +3,8 @@ import { join as pathJoin } from 'path';
 import { spawnSync } from 'child_process';
 import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
 import { rankFilesByRisk, buildCognitiveScores } from '../../infra/code-metrics.js';
-
-export const SOURCE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.swift', '.kt', '.cs', '.cpp', '.c', '.h'];
-export const IGNORE_DIRS = new Set([
-  'node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage',
-  '.next', '__pycache__', 'vendor', 'target', '.gradle', 'Pods',
-  '.cache', 'tmp', 'temp', 'logs', 'fixtures', 'testdata',
-]);
+import { SOURCE_EXTS, IGNORE_DIRS } from '../../cli/cli-utils.js';
+export { SOURCE_EXTS, IGNORE_DIRS };
 export const IGNORE_PATTERNS = [
   /\.min\.[jt]sx?$/,
   /\.d\.ts$/,

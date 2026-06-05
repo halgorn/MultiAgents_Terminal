@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative, extname } from 'path';
 import { spawnSync } from 'child_process';
+import { IGNORE_DIRS, SOURCE_EXTS as SRC_EXTS } from '../cli/cli-utils.js';
 
 // ── Hot Zone Ranking ──────────────────────────────────────────────────────────
 
@@ -100,12 +101,7 @@ export interface SecretHit {
   preview: string;
 }
 
-const IGNORE_DIRS = new Set([
-  'node_modules', 'dist', 'build', '.git', '__pycache__',
-  '.venv', 'venv', 'env', 'coverage', '.next',
-]);
-
-const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb']);
+const SOURCE_EXTS = new Set(SRC_EXTS);
 
 function walk(dir: string, exts?: Set<string>): string[] {
   const files: string[] = [];
