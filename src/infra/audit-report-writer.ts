@@ -286,8 +286,9 @@ export function saveAuditReport(
 ): SavedAuditPaths {
   const dir = join(cwd, '.ai-runtime', 'reports');
   mkdirSync(dir, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const createdAt = new Date().toISOString();
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  const createdAt = now.toISOString();
   const fullReport: FullSavedAuditReport = { ...report, durationMs, createdAt, costSummary };
   const runDir = join(dir, 'audits', stamp);
   mkdirSync(runDir, { recursive: true });
@@ -298,6 +299,7 @@ export function saveAuditReport(
     digest: join(runDir, 'digest.md'),
     aiContext: join(runDir, 'ai-context.md'),
     report: join(runDir, 'report.json'),
+    dashboard: join(dir, 'index.html'),
   };
 
   const history = updateAuditHistory(dir, {

@@ -30,13 +30,12 @@ interface AuditOptions {
 }
 
 function renderAuditReport(report: AuditReport, durationMs: number): void {
+  const bySeverity = report.findings.reduce<Record<string, number>>((acc, f) => { acc[f.severity] = (acc[f.severity] ?? 0) + 1; return acc; }, {});
   const counts = [
     report.criticalCount > 0 ? chalk.bgRed.white.bold(` ${report.criticalCount} critical `) : null,
     report.highCount > 0 ? chalk.red.bold(`${report.highCount} high`) : null,
-    report.findings.filter((f) => f.severity === 'medium').length > 0
-      ? chalk.yellow(`${report.findings.filter((f) => f.severity === 'medium').length} medium`) : null,
-    report.findings.filter((f) => f.severity === 'low').length > 0
-      ? chalk.gray(`${report.findings.filter((f) => f.severity === 'low').length} low`) : null,
+    (bySeverity['medium'] ?? 0) > 0 ? chalk.yellow(`${bySeverity['medium']} medium`) : null,
+    (bySeverity['low'] ?? 0) > 0 ? chalk.gray(`${bySeverity['low']} low`) : null,
   ].filter(Boolean);
 
   console.log('\n' + chalk.bold.cyan('Audit complete') + chalk.gray(` — ${report.totalFiles} files, ${(durationMs / 1000).toFixed(1)}s`));
@@ -200,7 +199,7 @@ export function registerAudit(program: Command): void {
         };
         const saved = saveAuditReport(process.cwd(), report, durationMs, parsePositiveInt(mergedOptions.aiContextBudget, 8000, 100000), costSummary);
         console.log(chalk.gray(`\nhtml: ${saved.html}`));
-        console.log(chalk.gray(`dashboard: ${saved.runDir.replace(/audits[\\/][^\\/]+$/, 'index.html')}`));
+        console.log(chalk.gray(`dashboard: ${saved.dashboard}`));
         console.log(chalk.dim(orch.costs.summary()));
         await maybeAutoFix(options, report, orch);
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);

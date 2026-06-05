@@ -44,6 +44,7 @@ export interface SavedAuditPaths {
   digest: string;
   aiContext: string;
   report: string;
+  dashboard: string;
 }
 
 export interface ActionItem {

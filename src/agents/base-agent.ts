@@ -44,13 +44,7 @@ export abstract class BaseAgent<TInput, TOutput> {
       );
     };
 
-    let rawText: string;
-    try {
-      rawText = await attempt();
-    } catch (err) {
-      throw err;
-    }
-
+    let rawText = await attempt();
     let output: TOutput;
     try {
       output = this.parseOutput(rawText);
