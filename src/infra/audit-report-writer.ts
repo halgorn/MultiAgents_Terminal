@@ -318,6 +318,5 @@ export function saveAuditReport(
   writeFileSync(paths.aiContext, renderAiContext(fullReport, aiContextBudget), 'utf8');
   writeFileSync(paths.html, renderHtml(fullReport, history), 'utf8');
   writeFileSync(join(dir, 'index.html'), renderDashboardHtml(history), 'utf8');
-  writeFileSync(join(dir, 'latest-audit.json'), JSON.stringify({ ...paths, createdAt }, null, 2), 'utf8');
   return paths;
 }

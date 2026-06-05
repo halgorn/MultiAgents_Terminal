@@ -55,6 +55,7 @@ const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '🔍 Audit',    hint: 'multi-persona AI analysis',        value: 'audit' },
   { label: '💊 Health',   hint: 'composite score 0-100',            value: 'health' },
   { label: '🔬 Scan',     hint: 'zero-token local scans',           value: 'scan' },
+  { label: '🔀 Diff',     hint: 'compare two audit runs',           value: 'diff' },
   { label: 'Explore',  value: '', header: true },
   { label: '🌐 Graph',    hint: 'interactive dependency map',        value: 'graph' },
   { label: '📈 Churn',    hint: 'git churn + bus factor',           value: 'churn' },
@@ -64,6 +65,8 @@ const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '➡️  Next',    hint: 'recommended low-token next action', value: 'next' },
   { label: '💬 Explain',  hint: 'AI explanation + onboarding guide', value: 'explain' },
   { label: '🧾 Context',  hint: 'compact AI-safe context',          value: 'context' },
+  { label: '🔧 Fix',      hint: 'AI-guided fix for a finding',      value: 'fix' },
+  { label: '💭 Chat',     hint: 'interactive AI chat about the repo', value: 'chat' },
   { label: 'Utilities', value: '', header: true },
   { label: '📊 Report',   hint: 'health + findings + context.md',   value: 'report' },
   { label: '🔎 Search',   hint: 'repo index search',                value: 'search' },
@@ -130,6 +133,16 @@ async function runSearchMenu(cwd: string): Promise<void> {
   if (!query) return;
   console.log(chalk.bold.cyan(`\nSearching: ${query}…\n`));
   run(['--cwd', cwd, 'search', query]);
+}
+
+async function runFixMenu(cwd: string): Promise<void> {
+  const file = await promptLine('File to fix (relative path)');
+  if (!file) return;
+  const issue = await promptLine('Describe the issue (optional, Enter to skip)');
+  const args = ['--cwd', cwd, 'fix', file];
+  if (issue) args.push('--issue', issue);
+  console.log(chalk.bold.cyan(`\nRunning fix on ${file}…\n`));
+  run(args);
 }
 
 async function runExplainMenu(cwd: string): Promise<void> {
@@ -258,6 +271,8 @@ export async function runMenu(cwd: string): Promise<void> {
     churn:    ['--cwd', cwd, 'churn'],
     patterns: ['--cwd', cwd, 'patterns'],
     health:   ['--cwd', cwd, 'health'],
+    chat:     ['--cwd', cwd, 'chat'],
+    diff:     ['--cwd', cwd, 'diff'],
   };
 
   while (true) {
@@ -272,6 +287,7 @@ export async function runMenu(cwd: string): Promise<void> {
     if (action === 'scan')    { await runScanMenu(cwd); continue; }
     if (action === 'explain') { await runExplainMenu(cwd); continue; }
     if (action === 'search')  { await runSearchMenu(cwd); continue; }
+    if (action === 'fix')     { await runFixMenu(cwd); continue; }
     if (action === 'docs')    { printDocumentation(); continue; }
     if (action === 'nl') {
       const { runInteractive } = await import('./interactive.js');

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
+import chalk from 'chalk';
 
 const PACKAGE_NAME = '@aionlabsai/aion';
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -66,7 +67,6 @@ export async function checkForUpdate(): Promise<void> {
   const now = Date.now();
 
   if (cache && isNewer(cache.latestVersion, current)) {
-    const { default: chalk } = await import('chalk');
     console.log(
       '\n' +
       chalk.yellow.bold(`  ┌─ Update available: ${current} → ${cache.latestVersion}`) +

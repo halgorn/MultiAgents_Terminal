@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import type { ProviderName, RuntimePolicy } from '../core/runtime-policy.js';
 import { limitChars } from '../core/runtime-policy.js';
 import { SdkProvider } from './sdk-provider.js';
@@ -98,7 +98,11 @@ function runProcess(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      reject(new Error(`[${agentName}] failed to spawn ${command}: ${err.message}`));
+      const isNotFound = (err as NodeJS.ErrnoException).code === 'ENOENT';
+      const msg = isNotFound
+        ? `${command} not found. Install Claude CLI (https://claude.ai/download) or set ANTHROPIC_API_KEY`
+        : `[${agentName}] failed to spawn ${command}: ${err.message}`;
+      reject(new Error(msg));
     });
   });
 }
@@ -180,5 +184,15 @@ export function createProvider(name: ProviderName, policy?: { openrouterModel?: 
   // SDK provider when key is set: enables prompt caching + real streaming
   // Falls back to CLI provider when no key (uses claude CLI session auth)
   if (process.env['ANTHROPIC_API_KEY']) return new SdkProvider();
+  if (process.env['OPENROUTER_API_KEY']) return new OpenRouterProvider(process.env['OPENROUTER_MODEL'] ?? 'moonshotai/kimi-k2');
+  const which = spawnSync('which', ['claude'], { encoding: 'utf8' });
+  if (which.status !== 0) {
+    throw new Error(
+      'No AI provider configured.\n' +
+      '  • Set ANTHROPIC_API_KEY=sk-ant-...\n' +
+      '  • or OPENROUTER_API_KEY=sk-or-...\n' +
+      '  • or install Claude CLI: https://claude.ai/download'
+    );
+  }
   return new ClaudeCliProvider();
 }

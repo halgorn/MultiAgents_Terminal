@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { mkdtempSync, readdirSync, rmSync, statSync } from 'fs';
+import { mkdtempSync, rmSync } from 'fs';
 import { join as pathJoin } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
@@ -18,39 +18,15 @@ import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
 import { SessionBudget } from '../cost-tracker.js';
 import { loadAuditCache, saveAuditCache, filterChangedFiles, getCachedFindingsForFiles } from '../../infra/audit-cache.js';
-import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
-import { rankFilesByRisk } from '../../infra/code-metrics.js';
-
-function fetchGitChurn(cwd: string, days = 90): Map<string, number> {
-  const result = spawnSync('git', ['log', '--name-only', '--pretty=format:', `--since=${days}.days.ago`], {
-    cwd, encoding: 'utf8', timeout: 10000,
-  });
-  const counts = new Map<string, number>();
-  for (const line of (result.stdout ?? '').split('\n')) {
-    const t = line.trim();
-    if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
-  }
-  return counts;
-}
+import {
+  collectAuditStats,
+  prioritizeFiles,
+  type AuditFileStats,
+} from './audit-file-scanner.js';
 
 type OnChunk = (agentName: string, text: string) => void;
 type Emitter = (event: string, payload: unknown) => void;
 
-const SOURCE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.swift', '.kt', '.cs', '.cpp', '.c', '.h'];
-const IGNORE_DIRS = new Set([
-  'node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage',
-  '.next', '__pycache__', 'vendor', 'target', '.gradle', 'Pods',
-  '.cache', 'tmp', 'temp', 'logs', 'fixtures', 'testdata',
-]);
-const IGNORE_PATTERNS = [
-  /\.min\.[jt]sx?$/,
-  /\.d\.ts$/,
-  /\.test\.[jt]sx?$/,
-  /\.spec\.[jt]sx?$/,
-  /generated/i,
-  /\.pb\.[jt]sx?$/,
-];
-const MAX_FILE_SIZE = 200 * 1024;
 const MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS = 30;
 const MAX_FINDINGS_PER_SCANNER = 10;
 const MAX_FINDINGS_FOR_SYNTHESIS = 8;
@@ -66,14 +42,7 @@ function severityRank(severity: string): number {
   }
 }
 
-export interface AuditFileStats {
-  totalFiles: number;
-  auditFiles: string[];
-  ignoredDirs: number;
-  ignoredFiles: number;
-  oversizedFiles: number;
-  byExtension: Record<string, number>;
-}
+export { type AuditFileStats } from './audit-file-scanner.js';
 
 export interface AuditRunOptions {
   incremental?: boolean;
@@ -317,21 +286,22 @@ export class AuditPipeline {
               this.onChunk,
             );
             this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: run.durationMs });
-            // Tag each finding with the persona that found it
             const tagged = { ...run.output, findings: run.output.findings.map((f) => ({ ...f, persona: domain })) };
             return compactScanReport(tagged);
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             this.emit('agent:output', { agentName: `scanner-${domain}`, text: `Scanner failed; continuing with partial audit: ${message}\n` });
             this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: Date.now() - start });
-            return {
-              filesScanned: [],
-              findings: [],
-              summary: `Scanner ${domain} failed: ${compactText(message, 500)}`,
-            };
+            return { filesScanned: [], findings: [], summary: `Scanner ${domain} failed: ${compactText(message, 500)}` };
           }
         }),
         options.scannerTimeoutMs,
+        (err, idx) => {
+          const domain = domains[idx] ?? 'unknown';
+          this.emit('agent:output', { agentName: `scanner-${domain}`, text: `Scanner timed out; skipping: ${err.message}\n` });
+          this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: options.scannerTimeoutMs ?? 360000 });
+          return { filesScanned: [], findings: [], summary: `Scanner ${domain} timed out` };
+        },
       );
 
       // Synthesize — use a temp dir (no git worktree needed, synthesizer reads no files)
@@ -378,15 +348,23 @@ export class AuditPipeline {
     }
   }
 
-  private async runSequential<T>(tasks: Array<() => Promise<T>>, timeoutMs = 6 * 60 * 1000): Promise<T[]> {
+  private async runSequential<T>(
+    tasks: Array<() => Promise<T>>,
+    timeoutMs = 6 * 60 * 1000,
+    onError?: (err: Error, index: number) => T,
+  ): Promise<T[]> {
     const results: T[] = [];
-    for (const task of tasks) {
+    for (let i = 0; i < tasks.length; i++) {
       let timer: NodeJS.Timeout | undefined;
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(`Scanner timed out after ${timeoutMs / 1000}s`)), timeoutMs);
       });
       try {
-        results.push(await Promise.race([task(), timeout]));
+        results.push(await Promise.race([tasks[i]!(), timeout]));
+      } catch (err) {
+        if (onError) {
+          results.push(onError(err instanceof Error ? err : new Error(String(err)), i));
+        }
       } finally {
         if (timer) clearTimeout(timer);
       }
@@ -435,64 +413,11 @@ export class AuditPipeline {
   }
 
   collectSourceFiles(target: string): string[] {
-    return this.collectAuditStats(target).auditFiles;
+    return collectAuditStats(this.cwd, target).auditFiles;
   }
 
   collectAuditStats(target: string): AuditFileStats {
-    const stats: AuditFileStats = {
-      totalFiles: 0,
-      auditFiles: [],
-      ignoredDirs: 0,
-      ignoredFiles: 0,
-      oversizedFiles: 0,
-      byExtension: {},
-    };
-
-    const ignorePatterns = loadIgnorePatterns(this.cwd);
-    const root = pathJoin(this.cwd, target || '.');
-    const rootRel = target && target !== '.' ? target.replace(/^[./]+/, '') : '';
-
-    const walk = (dir: string, rel: string) => {
-      let entries: string[];
-      try { entries = readdirSync(dir); } catch { return; }
-
-      for (const entry of entries) {
-        const fullPath = pathJoin(dir, entry);
-        const relPath = rel ? `${rel}/${entry}` : entry;
-        try {
-          const st = statSync(fullPath);
-          if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) {
-            if (st.isDirectory()) stats.ignoredDirs++;
-            else stats.ignoredFiles++;
-            continue;
-          }
-          if (st.isDirectory()) {
-            walk(fullPath, relPath);
-            continue;
-          }
-
-          stats.totalFiles++;
-          const ext = SOURCE_EXTS.find((candidate) => entry.endsWith(candidate));
-          if (!ext) {
-            stats.ignoredFiles++;
-            continue;
-          }
-          stats.byExtension[ext] = (stats.byExtension[ext] ?? 0) + 1;
-
-          if (IGNORE_PATTERNS.some((p) => p.test(relPath)) || isIgnored(relPath, ignorePatterns)) {
-            stats.ignoredFiles++;
-          } else if (st.size >= MAX_FILE_SIZE) {
-            stats.oversizedFiles++;
-          } else {
-            stats.auditFiles.push(rootRel ? `${rootRel}/${relPath}` : relPath);
-          }
-        } catch { /* skip unreadable */ }
-      }
-    };
-
-    walk(root, '');
-    stats.auditFiles.sort();
-    return stats;
+    return collectAuditStats(this.cwd, target);
   }
 
   prioritizeFiles(
@@ -500,20 +425,6 @@ export class AuditPipeline {
     max: number,
     extra?: { semgrepFiles?: Set<string>; hotspotFiles?: string[] },
   ): string[] {
-    if (files.length <= max) return files;
-
-    const churnCounts = fetchGitChurn(this.cwd);
-    const depFanIn = new Map<string, number>();
-    for (const h of extra?.hotspotFiles ?? []) {
-      depFanIn.set(h, (depFanIn.get(h) ?? 0) + 5);
-    }
-
-    const ranked = rankFilesByRisk(files, {
-      churnCounts,
-      depFanIn,
-      semgrepFiles: extra?.semgrepFiles,
-    });
-
-    return ranked.slice(0, max).map((r) => r.file).sort();
+    return prioritizeFiles(this.cwd, files, max, extra);
   }
 }
