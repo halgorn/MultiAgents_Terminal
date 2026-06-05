@@ -61,26 +61,42 @@ function isNewer(a: string, b: string): boolean {
   return false;
 }
 
+function showBanner(current: string, latest: string): void {
+  console.log(
+    '\n' +
+    chalk.yellow.bold(`  ┌─ Update available: ${current} → ${latest}`) +
+    '\n' +
+    chalk.gray(`  │  npm install -g ${PACKAGE_NAME}@latest`) +
+    '\n' +
+    chalk.yellow('  └─────────────────────────────────────────') +
+    '\n'
+  );
+}
+
 export async function checkForUpdate(): Promise<void> {
   const current = getCurrentVersion();
   const cache = readCache();
   const now = Date.now();
 
+  const stale = !cache || now - cache.checkedAt > CHECK_INTERVAL_MS;
+
   if (cache && isNewer(cache.latestVersion, current)) {
-    console.log(
-      '\n' +
-      chalk.yellow.bold(`  ┌─ Update available: ${current} → ${cache.latestVersion}`) +
-      '\n' +
-      chalk.gray(`  │  npm install -g ${PACKAGE_NAME}@latest`) +
-      '\n' +
-      chalk.yellow('  └─────────────────────────────────────────') +
-      '\n'
-    );
+    showBanner(current, cache.latestVersion);
   }
 
-  if (!cache || now - cache.checkedAt > CHECK_INTERVAL_MS) {
-    fetchLatest()
-      .then((latest) => { if (latest) writeCache({ checkedAt: now, latestVersion: latest, currentVersion: current }); })
-      .catch(() => {});
+  if (stale) {
+    // Await with short timeout on cold cache so first-run sees the banner
+    const latest = cache ? undefined : await Promise.race([
+      fetchLatest(),
+      new Promise<null>((r) => setTimeout(() => r(null), 2000)),
+    ]);
+    if (latest) {
+      writeCache({ checkedAt: now, latestVersion: latest, currentVersion: current });
+      if (!cache && isNewer(latest, current)) showBanner(current, latest);
+    } else {
+      fetchLatest()
+        .then((v) => { if (v) writeCache({ checkedAt: now, latestVersion: v, currentVersion: current }); })
+        .catch(() => {});
+    }
   }
 }
