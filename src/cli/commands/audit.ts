@@ -49,23 +49,40 @@ function renderAuditReport(report: AuditReport, durationMs: number): void {
   }
 }
 
-function renderDryRun(pipeline: AuditPipeline, stats: ReturnType<AuditPipeline['collectAuditStats']>, maxFilesForAi: number): void {
-  console.log('\n' + chalk.bold.cyan('Audit dry run'));
-  console.log(chalk.gray('No agents were started and no API tokens were used.'));
-  console.log(`  total files seen: ${stats.totalFiles}`);
-  console.log(`  audit source files: ${stats.auditFiles.length}`);
-  console.log(`  AI target files: ${Math.min(stats.auditFiles.length, maxFilesForAi)} prioritized file(s)`);
-  console.log(`  ignored directories: ${stats.ignoredDirs}`);
-  console.log(`  ignored/non-source files: ${stats.ignoredFiles}`);
-  console.log(`  oversized source files: ${stats.oversizedFiles}`);
+async function renderDryRun(
+  pipeline: AuditPipeline,
+  stats: ReturnType<AuditPipeline['collectAuditStats']>,
+  maxFilesForAi: number,
+  nScanners: number,
+  policy: ReturnType<typeof createRuntimePolicy>,
+): Promise<void> {
+  const { SessionBudget } = await import('../../core/cost-tracker.js');
+  const sessionBudget = new SessionBudget(process.cwd(), policy.claudeMaxBudgetUsd);
+  const estimated = sessionBudget.estimatedCost(nScanners, policy.claudeModel);
+  const remaining = sessionBudget.remaining();
+
+  console.log('\n' + chalk.bold.cyan('Audit dry run') + chalk.gray(' — no agents started, no tokens used'));
+  console.log('');
+  console.log(chalk.bold('Files:'));
+  console.log(`  ${chalk.cyan(stats.auditFiles.length)} source files  (${stats.totalFiles} total, ${stats.ignoredDirs} dirs ignored, ${stats.oversizedFiles} oversized)`);
+  console.log(`  ${chalk.cyan(Math.min(stats.auditFiles.length, maxFilesForAi))} files will be sent to AI  (--max-files ${maxFilesForAi})`);
+  console.log('');
+  console.log(chalk.bold('Cost estimate:'));
+  console.log(`  ${chalk.cyan(nScanners)} scanners × est. ${chalk.yellow('$' + (estimated / nScanners).toFixed(3))} each = ${chalk.yellow.bold('~$' + estimated.toFixed(3))}`);
+  console.log(`  session budget remaining: ${remaining >= 10 ? chalk.green('$' + remaining.toFixed(2)) : chalk.red('$' + remaining.toFixed(2))}`);
+  if (remaining < estimated) console.log(chalk.red.bold('  ⚠ Estimated cost exceeds remaining budget — scanners will be reduced'));
+  console.log('');
+
   const exts = Object.entries(stats.byExtension).sort((a, b) => b[1] - a[1]);
   if (exts.length > 0) {
-    console.log('\n' + chalk.bold('Extensions:'));
-    exts.forEach(([ext, count]) => console.log(`  ${ext}: ${count}`));
+    console.log(chalk.bold('Extensions: ') + exts.map(([ext, n]) => `${ext}:${n}`).join('  '));
+    console.log('');
   }
   if (stats.auditFiles.length > 0) {
-    console.log('\n' + chalk.bold('AI target sample:'));
-    pipeline.prioritizeFiles(stats.auditFiles, maxFilesForAi).slice(0, 15).forEach((file) => console.log(`  ${file}`));
+    const targetFiles = pipeline.prioritizeFiles(stats.auditFiles, maxFilesForAi);
+    console.log(chalk.bold(`AI target files (top ${Math.min(targetFiles.length, 20)} by risk):`));
+    targetFiles.slice(0, 20).forEach((file) => console.log(`  ${chalk.dim('·')} ${file}`));
+    if (targetFiles.length > 20) console.log(chalk.dim(`  ... ${targetFiles.length - 20} more`));
   }
 }
 
@@ -148,7 +165,11 @@ export function registerAudit(program: Command): void {
       const policy = createRuntimePolicy(policyInput);
       if (options.dryRun) {
         const pipeline = new AuditPipeline(process.cwd(), policy, new CostTracker(), () => {}, () => {});
-        renderDryRun(pipeline, pipeline.collectAuditStats(target), maxFilesForAi);
+        const { domains: dryDomains } = await (await import('../../infra/persona-presets.js')).resolveDomainsFromConfig(
+          process.cwd(), mergedOptions.preset, mergedOptions.domains, explicitN
+        );
+        const dryN = Math.min(dryDomains.length || policy.maxAgents, explicitN ?? policy.maxAgents);
+        await renderDryRun(pipeline, pipeline.collectAuditStats(target), maxFilesForAi, dryN, policy);
         return;
       }
 

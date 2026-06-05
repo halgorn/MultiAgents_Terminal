@@ -24,6 +24,7 @@ import { registerContext } from './cli/commands/context.js';
 import { registerSearch } from './cli/commands/search.js';
 import { registerTree } from './cli/commands/tree.js';
 import { registerNext } from './cli/commands/next.js';
+import { registerCi } from './cli/commands/ci.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -86,6 +87,7 @@ registerContext(program);
 registerSearch(program);
 registerTree(program);
 registerNext(program);
+registerCi(program);
 
 // Explicit menu command
 program
