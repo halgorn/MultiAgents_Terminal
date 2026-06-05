@@ -61,16 +61,19 @@ function isNewer(a: string, b: string): boolean {
   return false;
 }
 
-function showBanner(current: string, latest: string): void {
-  console.log(
+function blockOnUpdate(current: string, latest: string): never {
+  console.error(
     '\n' +
-    chalk.yellow.bold(`  ┌─ Update available: ${current} → ${latest}`) +
+    chalk.red.bold(`  ┌─ Atualização obrigatória: ${current} → ${latest}`) +
     '\n' +
-    chalk.gray(`  │  npm install -g ${PACKAGE_NAME}@latest`) +
+    chalk.white(`  │  Execute o comando abaixo e tente novamente:`) +
     '\n' +
-    chalk.yellow('  └─────────────────────────────────────────') +
+    chalk.cyan.bold(`  │    npm install -g ${PACKAGE_NAME}@latest`) +
+    '\n' +
+    chalk.red('  └─────────────────────────────────────────') +
     '\n'
   );
+  process.exit(1);
 }
 
 export async function checkForUpdate(): Promise<void> {
@@ -78,25 +81,21 @@ export async function checkForUpdate(): Promise<void> {
   const cache = readCache();
   const now = Date.now();
 
-  const stale = !cache || now - cache.checkedAt > CHECK_INTERVAL_MS;
-
+  // Block immediately if cached version is newer
   if (cache && isNewer(cache.latestVersion, current)) {
-    showBanner(current, cache.latestVersion);
+    blockOnUpdate(current, cache.latestVersion);
   }
 
+  const stale = !cache || now - cache.checkedAt > CHECK_INTERVAL_MS;
   if (stale) {
-    // Await with short timeout on cold cache so first-run sees the banner
-    const latest = cache ? undefined : await Promise.race([
+    // Always await (up to 2s) so updates are caught on first run too
+    const latest = await Promise.race([
       fetchLatest(),
       new Promise<null>((r) => setTimeout(() => r(null), 2000)),
     ]);
     if (latest) {
       writeCache({ checkedAt: now, latestVersion: latest, currentVersion: current });
-      if (!cache && isNewer(latest, current)) showBanner(current, latest);
-    } else {
-      fetchLatest()
-        .then((v) => { if (v) writeCache({ checkedAt: now, latestVersion: v, currentVersion: current }); })
-        .catch(() => {});
+      if (isNewer(latest, current)) blockOnUpdate(current, latest);
     }
   }
 }
