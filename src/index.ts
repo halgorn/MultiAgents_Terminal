@@ -27,6 +27,7 @@ import { registerNext } from './cli/commands/next.js';
 import { registerCi } from './cli/commands/ci.js';
 import { registerEval } from './cli/commands/eval.js';
 import { registerTrace } from './cli/commands/trace.js';
+import { registerMcp } from './cli/commands/mcp.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -92,6 +93,7 @@ registerNext(program);
 registerCi(program);
 registerEval(program);
 registerTrace(program);
+registerMcp(program);
 
 // Explicit menu command
 program
