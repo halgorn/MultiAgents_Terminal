@@ -5,6 +5,7 @@ import { KnowledgeStore } from '../infra/knowledge.js';
 import { createRuntimePolicy, type RuntimePolicy, type RuntimePolicyInput } from './runtime-policy.js';
 import type { AuditReport } from '../schemas/audit.js';
 import { CostTracker } from './cost-tracker.js';
+import { Tracer } from '../infra/tracer.js';
 import { AuditPipeline, type AuditRunOptions } from './pipelines/audit-pipeline.js';
 import { runFixPipeline } from './pipelines/fix-pipeline.js';
 import { runAnalyzePipeline } from './pipelines/analyze-pipeline.js';
@@ -25,6 +26,7 @@ export class Orchestrator extends EventEmitter {
   private readonly knowledge: KnowledgeStore;
   private readonly policy: RuntimePolicy;
   readonly costs = new CostTracker();
+  private tracer: Tracer | null = null;
 
   constructor(private readonly cwd: string, policyInput: RuntimePolicyInput = {}) {
     super();
@@ -36,15 +38,31 @@ export class Orchestrator extends EventEmitter {
   private static readonly TOKEN_RE = /tokens:(\d+):(\d+):(\d+):(\d+)/;
   private static readonly USAGE_UNAVAILABLE_RE = /usage-unavailable/;
 
+  startTrace(command: string): void {
+    this.tracer = new Tracer(command);
+  }
+
+  flushTrace(): void {
+    this.tracer?.flush(this.cwd);
+    this.tracer = null;
+  }
+
   private onChunk = (agentName: string, text: string): void => {
     const match = Orchestrator.TOKEN_RE.exec(text);
     if (match) {
+      const input = parseInt(match[1]!);
+      const output = parseInt(match[2]!);
+      const cacheRead = parseInt(match[3]!);
+      const cacheWrite = parseInt(match[4]!);
       this.costs.record(agentName, this.policy.claudeModel, {
-        inputTokens: parseInt(match[1]!),
-        outputTokens: parseInt(match[2]!),
-        cacheReadTokens: parseInt(match[3]!),
-        cacheWriteTokens: parseInt(match[4]!),
+        inputTokens: input, outputTokens: output,
+        cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite,
       }, 0);
+      if (this.tracer) {
+        const costUsd = this.costs.byAgent().find((e) => e.agentName === agentName)?.costUsd ?? 0;
+        this.tracer.endSpan(agentName, this.policy.claudeModel,
+          { input, output, cache: cacheRead + cacheWrite }, costUsd);
+      }
       return;
     }
     if (Orchestrator.USAGE_UNAVAILABLE_RE.test(text)) {
@@ -55,11 +73,18 @@ export class Orchestrator extends EventEmitter {
   };
 
   private get pipelineContext(): PipelineContext {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const emit: any = (event: string, payload: unknown) => {
+      if (event === 'agent:start' && payload && typeof payload === 'object') {
+        this.tracer?.startSpan((payload as Record<string, string>)['agentName'] ?? '');
+      }
+      return this.emit(event, payload);
+    };
     return {
       cwd: this.cwd,
       policy: this.policy,
       knowledge: this.knowledge,
-      emit: this.emit.bind(this),
+      emit: emit as typeof this.emit,
       onChunk: this.onChunk,
     };
   }

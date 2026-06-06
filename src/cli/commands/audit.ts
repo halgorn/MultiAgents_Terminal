@@ -168,6 +168,7 @@ export function registerAudit(program: Command): void {
 
       const renderer = new Renderer();
       const orch = new Orchestrator(process.cwd(), policyInput);
+      orch.startTrace('audit');
       orch.on('agent:start', ({ agentName }) => renderer.agentStart(agentName));
       orch.on('agent:output', ({ agentName, text }) => renderer.agentChunk(agentName, text));
       orch.on('agent:done', ({ agentName, durationMs }) => renderer.agentDone(agentName, durationMs));
@@ -215,9 +216,11 @@ export function registerAudit(program: Command): void {
         console.log(chalk.gray(`\nhtml: ${saved.html}`));
         console.log(chalk.gray(`dashboard: ${saved.dashboard}`));
         console.log(chalk.dim(orch.costs.summary()));
+        orch.flushTrace();
         await maybeAutoFix(options, report, orch);
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
       } catch (err) {
+        orch.flushTrace();
         renderer.showError(err);
         process.exit(1);
       }
