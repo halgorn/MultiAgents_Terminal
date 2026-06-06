@@ -25,6 +25,7 @@ import { registerSearch } from './cli/commands/search.js';
 import { registerTree } from './cli/commands/tree.js';
 import { registerNext } from './cli/commands/next.js';
 import { registerCi } from './cli/commands/ci.js';
+import { registerEval } from './cli/commands/eval.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -88,6 +89,7 @@ registerSearch(program);
 registerTree(program);
 registerNext(program);
 registerCi(program);
+registerEval(program);
 
 // Explicit menu command
 program
