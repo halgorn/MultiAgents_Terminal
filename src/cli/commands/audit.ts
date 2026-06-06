@@ -187,6 +187,27 @@ export function registerAudit(program: Command): void {
         return;
       }
 
+      // HITL gate: confirm before deep budget runs (expensive)
+      if (budget === 'deep' && !mergedOptions.localOnly && process.stdin.isTTY) {
+        const { SessionBudget } = await import('../../core/cost-tracker.js');
+        const sb = new SessionBudget(process.cwd(), policy.claudeMaxBudgetUsd);
+        const estimated = sb.estimatedCost(maxAiScanners, policy.claudeModel);
+        if (estimated >= 0.50) {
+          const { default: readline } = await import('readline');
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+          const answer = await new Promise<string>((resolve) => {
+            rl.question(
+              chalk.yellow(`\n  Deep budget: ~$${estimated.toFixed(2)} estimated (${maxAiScanners} scanners). Proceed? [y/N] `),
+              (a) => { rl.close(); resolve(a.trim().toLowerCase()); },
+            );
+          });
+          if (answer !== 'y' && answer !== 'yes') {
+            console.log(chalk.gray('Aborted. Use --budget normal for a cheaper run.'));
+            return;
+          }
+        }
+      }
+
       const label = mergedOptions.localOnly ? 'local-only scan (no AI tokens)'
         : explicitDomains.length > 0 ? `personas: ${explicitDomains.slice(0, maxAiScanners).join(', ')} [${domainSource}]`
         : explicitN ? `${explicitN} scanners` : `auto scanners (${budget} budget)`;
