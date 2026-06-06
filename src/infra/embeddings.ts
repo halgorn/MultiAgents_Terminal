@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { createHash } from 'crypto';
 
 const VECTOR_DIMENSIONS = 384;
 
@@ -12,6 +13,7 @@ function hashToken(token: string): number {
   return hash >>> 0;
 }
 
+// Local hash-based embedding — deterministic, zero cost, not semantic
 export function embedText(text: string, maxChars: number): Float32Array {
   const vector = new Float32Array(VECTOR_DIMENSIONS);
   const tokens = text
@@ -35,10 +37,66 @@ export function embedText(text: string, maxChars: number): Float32Array {
   return vector;
 }
 
+// ── Real Embedding API ────────────────────────────────────────────────────────
+
+export function embeddingProvider(): string {
+  if (process.env.VOYAGE_API_KEY) return 'voyage-code-3 (1024d)';
+  if (process.env.OPENAI_API_KEY) return 'text-embedding-3-small (1536d)';
+  return 'hash-384d (local, no API key)';
+}
+
+// Single text — returns null if no API key configured
+export async function embedTextRemote(text: string): Promise<number[] | null> {
+  const batch = await embedBatch([text]);
+  return batch[0] ?? null;
+}
+
+// Batch embed — falls back to local hash when no API key
+export async function embedBatch(texts: string[]): Promise<number[][]> {
+  if (process.env.VOYAGE_API_KEY) return callVoyage(texts);
+  if (process.env.OPENAI_API_KEY) return callOpenAI(texts);
+  return texts.map((t) => Array.from(embedText(t, 2000)));
+}
+
+async function callVoyage(texts: string[]): Promise<number[][]> {
+  const results: number[][] = [];
+  // Voyage accepts up to 128 inputs per request
+  for (let i = 0; i < texts.length; i += 128) {
+    const batch = texts.slice(i, i + 128);
+    const res = await fetch('https://api.voyageai.com/v1/embeddings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.VOYAGE_API_KEY}` },
+      body: JSON.stringify({ input: batch, model: 'voyage-code-3' }),
+    });
+    if (!res.ok) throw new Error(`Voyage API ${res.status}: ${await res.text()}`);
+    const json = await res.json() as { data: Array<{ embedding: number[] }> };
+    results.push(...json.data.map((d) => d.embedding));
+  }
+  return results;
+}
+
+async function callOpenAI(texts: string[]): Promise<number[][]> {
+  const results: number[][] = [];
+  // OpenAI accepts up to 100 inputs per request
+  for (let i = 0; i < texts.length; i += 100) {
+    const batch = texts.slice(i, i + 100);
+    const res = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({ input: batch, model: 'text-embedding-3-small' }),
+    });
+    if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);
+    const json = await res.json() as { data: Array<{ embedding: number[] }> };
+    results.push(...json.data.map((d) => d.embedding));
+  }
+  return results;
+}
+
+// ── Similarity ────────────────────────────────────────────────────────────────
+
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
+  if (a.length !== b.length) return 0;
+  let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i]! * b[i]!;
     normA += a[i]! * a[i]!;
@@ -47,6 +105,8 @@ export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   const denom = Math.sqrt(normA) * Math.sqrt(normB);
   return denom === 0 ? 0 : dot / denom;
 }
+
+// ── EmbeddingStore (.ai-memory/ index) ───────────────────────────────────────
 
 export interface EmbeddedEntry {
   category: string;
@@ -59,6 +119,7 @@ interface EmbeddingCache {
   vector: number[];
   mtime: number;
   text: string;
+  provider?: string; // invalidate if provider changes
 }
 
 export class EmbeddingStore {
@@ -87,13 +148,22 @@ export class EmbeddingStore {
   }
 
   async embedFile(category: string, filename: string, text: string, mtime: number): Promise<Float32Array> {
+    const provider = embeddingProvider();
     const cached = this.loadCache(category, filename);
-    if (cached && cached.mtime === mtime) {
+    // Cache hit: same mtime AND same provider (dimension may differ between providers)
+    if (cached && cached.mtime === mtime && cached.provider === provider) {
       return new Float32Array(cached.vector);
     }
 
-    const vector = Array.from(embedText(text, 2000));
-    this.saveCache(category, filename, { vector, mtime, text: text.slice(0, 500) });
+    let vector: number[];
+    const remote = await embedTextRemote(text.slice(0, 4000));
+    if (remote) {
+      vector = remote;
+    } else {
+      vector = Array.from(embedText(text, 2000));
+    }
+
+    this.saveCache(category, filename, { vector, mtime, text: text.slice(0, 500), provider });
     return new Float32Array(vector);
   }
 
@@ -121,7 +191,8 @@ export class EmbeddingStore {
   }
 
   async query(queryText: string, topK = 5): Promise<EmbeddedEntry[]> {
-    const queryVec = embedText(queryText, 500);
+    const remote = await embedTextRemote(queryText);
+    const queryVec = remote ? new Float32Array(remote) : embedText(queryText, 500);
 
     const results: EmbeddedEntry[] = [];
 
@@ -152,4 +223,11 @@ export class EmbeddingStore {
       .sort((a, b) => b.score - a.score)
       .slice(0, topK);
   }
+}
+
+// ── Deterministic UUID from string (for vector store IDs) ────────────────────
+
+export function stringToUUID(str: string): string {
+  const h = createHash('sha256').update(str).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }

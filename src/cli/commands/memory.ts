@@ -5,6 +5,8 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { join, relative } from 'path';
 import { KnowledgeStore } from '../../infra/knowledge.js';
 import { chunkFile } from '../../infra/chunker.js';
+import { embedBatch, embeddingProvider } from '../../infra/embeddings.js';
+import { createVectorStore, vectorStoreBackend } from '../../infra/vector-store.js';
 import { buildDepGraph, formatDepReport } from '../../infra/dep-graph.js';
 import { buildRepoIndex, writeRepoIndex } from '../../infra/repo-index.js';
 import { formatRepoQuery, loadRepoIndex, queryRepoIndex } from '../../infra/repo-query.js';
@@ -24,46 +26,70 @@ export function registerMemory(program: Command): void {
     .action(async (options: { src: boolean; srcDir?: string }) => {
       const cwd = process.cwd();
       const store = new KnowledgeStore(cwd);
-      const spinner = ora('Building embedding index...').start();
+      const provider = embeddingProvider();
+      const backend = vectorStoreBackend();
+      const spinner = ora(`Building index [${provider}] → ${backend}`).start();
 
       try {
-        // 1. Index .ai-memory/ entries (bugs, decisions, patterns, etc.)
+        // 1. Index .ai-memory/ markdown entries
         const knowledgeCount = await store.embeddings.buildIndex([
           'architecture', 'bugs', 'features', 'decisions', 'patterns',
         ]);
 
         let srcCount = 0;
         if (options.src !== false) {
-          // 2. Index source code via Tree-sitter chunks
+          // 2. Chunk source files and embed into VectorStore (separate from .ai-memory/)
           const srcTarget = options.srcDir ?? '.';
           const stats = collectAuditStats(cwd, srcTarget);
           const files = stats.auditFiles.map((f) => join(cwd, f));
           spinner.text = `Chunking ${files.length} source files...`;
 
-          const srcMemoryDir = join(cwd, '.ai-memory', 'architecture');
-          mkdirSync(srcMemoryDir, { recursive: true });
-
+          // Collect all chunks first for batch embedding
+          const allChunks: Array<{ id: string; content: string; file: string; name: string; startLine: number; endLine: number }> = [];
           for (const file of files) {
             const chunks = await chunkFile(file, 1200);
+            const relPath = relative(cwd, file);
             for (const chunk of chunks) {
-              const relPath = relative(cwd, file);
-              const slug = `${relPath.replace(/[/\\]/g, '__')}__${chunk.name}`.replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
-              const content = `\`\`\`\n// ${relPath}:${chunk.startLine}-${chunk.endLine} [${chunk.type}: ${chunk.name}]\n${chunk.text}\n\`\`\``;
-              const outPath = join(srcMemoryDir, `src__${slug}.md`);
-              writeFileSync(outPath, `# ${chunk.name} (${relPath}:${chunk.startLine})\n\n${content}\n`, 'utf8');
-              srcCount++;
+              const id = `${relPath}:${chunk.startLine}:${chunk.name}`;
+              const content = `// ${relPath}:${chunk.startLine}-${chunk.endLine} [${chunk.type}: ${chunk.name}]\n${chunk.text}`;
+              allChunks.push({ id, content, file: relPath, name: chunk.name, startLine: chunk.startLine, endLine: chunk.endLine });
             }
-            spinner.text = `Chunked ${srcCount} chunks from ${files.indexOf(file) + 1}/${files.length} files...`;
           }
 
-          // Re-index now that source chunks are written
+          srcCount = allChunks.length;
+          spinner.text = `Embedding ${srcCount} chunks via ${provider}...`;
+
+          // Batch embed all chunks (efficient: one API call per 128 chunks for Voyage)
+          const vectorStore = createVectorStore(cwd);
+          const texts = allChunks.map((c) => c.content);
+          const vectors = await embedBatch(texts);
+
+          spinner.text = `Saving ${srcCount} chunks to ${backend}...`;
+          for (let i = 0; i < allChunks.length; i++) {
+            const c = allChunks[i]!;
+            await vectorStore.upsert(c.id, vectors[i]!, {
+              file: c.file, name: c.name, startLine: c.startLine, endLine: c.endLine,
+              preview: c.content.slice(0, 200),
+            });
+          }
+
+          // Also write chunks to .ai-memory/architecture/ for backward compat with EmbeddingStore
+          const srcMemoryDir = join(cwd, '.ai-memory', 'architecture');
+          mkdirSync(srcMemoryDir, { recursive: true });
+          for (const chunk of allChunks) {
+            const slug = `${chunk.file.replace(/[/\\]/g, '__')}__${chunk.name}`.replace(/[^a-z0-9_-]/gi, '_').slice(0, 80);
+            const outPath = join(srcMemoryDir, `src__${slug}.md`);
+            writeFileSync(outPath, `# ${chunk.name} (${chunk.file}:${chunk.startLine})\n\n\`\`\`\n${chunk.content}\n\`\`\`\n`, 'utf8');
+          }
           await store.embeddings.buildIndex(['architecture']);
         }
 
         spinner.succeed(chalk.green(
           `Indexed ${knowledgeCount} knowledge entries + ${srcCount} source chunks`,
         ));
-        console.log(chalk.gray('Run `ai memory search "<query>"` to test retrieval.'));
+        console.log(chalk.gray(`  Provider: ${provider}`));
+        console.log(chalk.gray(`  Backend:  ${backend}`));
+        console.log(chalk.gray('  Run `aion memory search "<query>"` to test retrieval.'));
       } catch (err) {
         spinner.fail(chalk.red('Build failed: ' + String(err)));
         process.exit(1);
@@ -73,33 +99,57 @@ export function registerMemory(program: Command): void {
   // ── ai memory search ──────────────────────────────────────────────────────
   memory
     .command('search <query>')
-    .description('Semantic search over the .ai-memory knowledge base')
+    .description('Semantic search over source code chunks and .ai-memory knowledge base')
     .option('-k, --top-k <n>', 'number of results', '5')
-    .action(async (query: string, options: { topK: string }) => {
-      const store = new KnowledgeStore(process.cwd());
-
-      if (!store.embeddings.hasIndex()) {
-        console.error(chalk.yellow('No embedding index found. Run `ai memory build` first.'));
-        process.exit(1);
-      }
-
+    .option('--knowledge', 'search .ai-memory/ markdown only (skip source code chunks)')
+    .action(async (query: string, options: { topK: string; knowledge?: boolean }) => {
+      const cwd = process.cwd();
+      const store = new KnowledgeStore(cwd);
+      const topK = Math.max(1, parseInt(options.topK, 10) || 5);
       const spinner = ora('Searching...').start();
 
       try {
-        const topK = Math.max(1, parseInt(options.topK, 10) || 5);
-        const results = await store.embeddings.query(query, topK);
-        spinner.stop();
-
-        if (results.length === 0) {
-          console.log(chalk.gray('No results found.'));
+        if (options.knowledge) {
+          // Knowledge-only: search .ai-memory/ markdown entries
+          if (!store.embeddings.hasIndex()) {
+            spinner.fail(chalk.yellow('No embedding index. Run `aion memory build` first.'));
+            process.exit(1);
+          }
+          const results = await store.embeddings.query(query, topK);
+          spinner.stop();
+          if (results.length === 0) { console.log(chalk.gray('No results.')); return; }
+          console.log(chalk.bold(`\nTop ${results.length} results for: "${query}"\n`));
+          for (const r of results) {
+            console.log(`${chalk.cyan(`${(r.score * 100).toFixed(1)}%`)}  ${chalk.bold(r.category + '/' + r.filename)}`);
+            console.log(chalk.gray('  ' + r.text.split('\n')[0]?.slice(0, 100)));
+            console.log();
+          }
           return;
         }
 
-        console.log(chalk.bold(`\nTop ${results.length} results for: "${query}"\n`));
+        // Default: search VectorStore (source code chunks) using real embeddings
+        const { embedTextRemote, embedText } = await import('../../infra/embeddings.js');
+        const { createVectorStore: cvs } = await import('../../infra/vector-store.js');
+        const vectorStore = cvs(cwd);
+
+        if (vectorStore.size() === 0) {
+          spinner.fail(chalk.yellow('No source code index. Run `aion memory build` first.'));
+          process.exit(1);
+        }
+
+        const remote = await embedTextRemote(query);
+        const queryVec = remote ? remote : Array.from(embedText(query, 500));
+        const results = await vectorStore.search(queryVec, topK);
+        spinner.stop();
+
+        if (results.length === 0) { console.log(chalk.gray('No results.')); return; }
+
+        console.log(chalk.bold(`\nTop ${results.length} source chunks for: "${query}"\n`));
         for (const r of results) {
           const score = chalk.cyan(`${(r.score * 100).toFixed(1)}%`);
-          console.log(`${score}  ${chalk.bold(r.category + '/' + r.filename)}`);
-          console.log(chalk.gray('  ' + r.text.split('\n')[0]?.slice(0, 100)));
+          const loc = `${r.payload['file']}:${r.payload['startLine']}`;
+          console.log(`${score}  ${chalk.bold(String(r.payload['name']))}  ${chalk.gray(loc)}`);
+          console.log(chalk.gray('  ' + String(r.payload['preview'] ?? '').split('\n')[1]?.slice(0, 100)));
           console.log();
         }
       } catch (err) {

@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { EmbeddingStore } from './embeddings.js';
-import { BM25Index, hybridScore } from './bm25.js';
+import { BM25Index, rrfScore } from './bm25.js';
 
 type KnowledgeCategory = 'architecture' | 'bugs' | 'features' | 'decisions' | 'patterns';
 
@@ -130,10 +130,10 @@ export class KnowledgeStore {
         .join('\n\n');
     }
 
-    // Hybrid: BM25 + vector cosine
+    // Hybrid: BM25 + vector via Reciprocal Rank Fusion (no alpha tuning needed)
     const vectorResults = await this.embeddings.query(query, topK * 2);
     const vecScores = vectorResults.map((r) => ({ id: `${r.category}/${r.filename}`, score: r.score }));
-    const hybrid = hybridScore(bm25Results, vecScores, 0.5).slice(0, topK);
+    const hybrid = rrfScore(bm25Results, vecScores).slice(0, topK);
 
     return hybrid
       .map(({ id }) => {

@@ -86,3 +86,24 @@ export function hybridScore(
 
   return combined.sort((a, b) => b.score - a.score);
 }
+
+/**
+ * Reciprocal Rank Fusion — more robust than weighted sum.
+ * Works regardless of score scale differences between BM25 and vector scores.
+ * Each result at rank i contributes 1/(k+i+1) to its final score.
+ * k=60 is the standard constant from the original RRF paper (Cormack 2009).
+ */
+export function rrfScore(
+  ...rankings: Array<Array<{ id: string; score: number }>>
+): Array<{ id: string; score: number }> {
+  const K = 60;
+  const scores = new Map<string, number>();
+  for (const ranking of rankings) {
+    ranking.forEach((r, i) => {
+      scores.set(r.id, (scores.get(r.id) ?? 0) + 1 / (K + i + 1));
+    });
+  }
+  return [...scores.entries()]
+    .map(([id, score]) => ({ id, score }))
+    .sort((a, b) => b.score - a.score);
+}
