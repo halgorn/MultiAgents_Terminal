@@ -29,6 +29,8 @@ import { registerEval } from './cli/commands/eval.js';
 import { registerTrace } from './cli/commands/trace.js';
 import { registerMcp } from './cli/commands/mcp.js';
 import { registerImpactLocal } from './cli/commands/impact-local.js';
+import { registerDocs } from './cli/commands/docs.js';
+import { registerCloud } from './cli/commands/cloud.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -96,6 +98,8 @@ registerEval(program);
 registerTrace(program);
 registerMcp(program);
 registerImpactLocal(program);
+registerDocs(program);
+registerCloud(program);
 
 // Explicit menu command
 program
