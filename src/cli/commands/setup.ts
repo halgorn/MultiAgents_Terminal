@@ -92,14 +92,6 @@ async function chooseDomain(): Promise<string> {
   return picked ?? 'bugs';
 }
 
-async function chooseSemanticRag(): Promise<boolean> {
-  const picked = await selectOne('Construir RAG semântico agora?', [
-    { label: 'Não', hint: 'pular por agora e continuar setup rápido', value: 'no' },
-    { label: 'Sim', hint: 'faz embeddings agora (mais lento/custo potencial)', value: 'yes' },
-  ], 'Opcional: você pode rodar depois com `aion memory build`');
-  return picked === 'yes';
-}
-
 export async function runProjectSetupWizard(cwd: string, options: SetupRunOptions = {}): Promise<SetupWizardResult> {
   const budget = options.budget ?? (process.stdin.isTTY ? await chooseBudget() : 'low');
   const domain = options.domain ?? (process.stdin.isTTY ? await chooseDomain() : 'bugs');
@@ -120,13 +112,9 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
   mkdirSync(join(cwd, '.ai-memory', 'architecture'), { recursive: true });
   writeFileSync(join(cwd, '.ai-memory', 'architecture', 'dep-graph.md'), formatDepReport(deps), 'utf8');
 
-  const shouldBuildSemanticRag = preSetupRagStatus.semanticVectorsReady
-    ? false
-    : options.skipSemanticRag
-    ? false
-    : options.semanticRag
-      ? true
-    : process.stdin.isTTY ? await chooseSemanticRag() : false;
+  // Always build semantic RAG unless already done or explicitly skipped.
+  // FNV-1a hash fallback requires no API key — always safe to run.
+  const shouldBuildSemanticRag = !preSetupRagStatus.semanticVectorsReady && !options.skipSemanticRag;
 
   let semanticRagBuilt = false;
   if (shouldBuildSemanticRag) {
