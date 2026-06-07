@@ -42,6 +42,7 @@ export const BUDGETS = [
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
 type AuditMode = 'dry-run' | 'local-only' | 'normal' | 'deep';
+type MenuAction = 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'health' | 'report' | 'deepeval' | 'orchestrator' | 'setup' | 'sep' | 'quit';
 
 const AUDIT_DOMAIN_ARGS: Record<AuditTrack, string> = {
   bugs: 'bugs,error-handling,architecture,testing',
@@ -158,6 +159,27 @@ function runAuditTrack(cwd: string, track: AuditTrack, mode: AuditMode): void {
   run([...args, '--budget', 'deep', '--force-full']);
 }
 
+function currentOrchestratorLabel(): string {
+  return process.env['AION_ORCHESTRATOR'] === 'langgraph'
+    ? chalk.green('LangGraph')
+    : chalk.gray('Padrão');
+}
+
+function currentLangfuseLabel(): string {
+  return process.env['LANGFUSE_PUBLIC_KEY'] && process.env['LANGFUSE_SECRET_KEY']
+    ? chalk.green('ON')
+    : chalk.gray('OFF');
+}
+
+async function chooseOrchestrator(): Promise<'default' | 'langgraph' | null> {
+  const value = await selectOne<'default' | 'langgraph'>('Orquestrador para fix/analyze/review', [
+    { label: 'Padrão', hint: 'orquestrador atual do Aion', value: 'default' },
+    { label: 'LangGraph', hint: 'adapter LangGraph sobre os mesmos pipelines', value: 'langgraph' },
+  ]);
+  if (!value) return null;
+  return value;
+}
+
 // ── Capability state ──────────────────────────────────────────────────────────
 
 let _ragReady = false;
@@ -212,6 +234,8 @@ export function runMenuFallback(cwd: string): void {
   console.log(chalk.bold('  Diagnóstico: ') + chalk.cyan('aion health  · aion scan secrets  · aion report'));
   console.log(chalk.bold('  Audit:       ') + chalk.cyan('aion audit . --domains security  · aion audit . --preset quality'));
   console.log(chalk.bold('  IA:          ') + chalk.cyan('aion fix <arquivo>  · aion analyze "<problema>"  · aion chat'));
+  console.log(chalk.bold('  Eval:        ') + chalk.cyan('aion deepeval init  · aion deepeval run'));
+  console.log(chalk.bold('  Fluxo IA:    ') + chalk.cyan('AION_ORCHESTRATOR=langgraph aion analyze "<problema>"'));
   console.log(chalk.bold('  Fluxo guiado:') + chalk.cyan('aion next'));
   console.log(chalk.bold('  Setup:       ') + chalk.cyan('aion setup  · aion memory build  · aion index'));
   console.log('');
@@ -219,7 +243,7 @@ export function runMenuFallback(cwd: string): void {
 
 // ── Main menu items ───────────────────────────────────────────────────────────
 
-export const MAIN_ITEMS: Array<MenuItem<string>> = [
+export const MAIN_ITEMS: Array<MenuItem<MenuAction>> = [
   { label: '🐛 Bugs & Qualidade',    hint: 'audit: bugs, error-handling, architecture, testing', value: 'bugs' },
   { label: '🔐 Segurança',           hint: 'audit: security, compliance, dependencies',           value: 'security' },
   { label: '⚡ Performance & Infra', hint: 'audit: performance, observability, resilience',       value: 'perf' },
@@ -227,6 +251,8 @@ export const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '🔍 Analisar problema',   hint: 'pede descrição → aion analyze',                       value: 'analyze' },
   { label: '🤖 Assistente NL (ações)', hint: 'fix/analyze/audit via linguagem natural',           value: 'assistant' },
   { label: '💬 Chat Q&A do código',   hint: 'perguntas e respostas com contexto do repositório',  value: 'chat-qa' },
+  { label: '🧪 DeepEval quickcheck',  hint: 'avaliação rápida de regressão LLM',                   value: 'deepeval' },
+  { label: '🕸️ Orquestrador IA',      hint: 'alterna padrão/LangGraph para fix/analyze/review',   value: 'orchestrator' },
   { label: '📊 Health check',        hint: 'sem IA, zero custo',                                  value: 'health' },
   { label: '📋 Ver relatório',       hint: 'abre o relatório principal unificado',                 value: 'report' },
   { label: '⚙️  Setup',              hint: 'wizard inicial: config, índices e RAG',               value: 'setup' },
@@ -270,7 +296,9 @@ export async function runMenu(cwd: string): Promise<void> {
   function buildStatusLine(): string {
     const rag = _ragReady ? chalk.green('✓ RAG') : chalk.yellow('⚠ RAG não treinado');
     const setup = _setupReady ? chalk.green('✓ Setup') : chalk.dim('○ Setup pendente');
-    return `  ${setup}   ${rag}`;
+    const lf = `LangFuse ${currentLangfuseLabel()}`;
+    const orch = `Orquestrador ${currentOrchestratorLabel()}`;
+    return `  ${setup}   ${rag}   ${lf}   ${orch}`;
   }
 
   while (true) {
@@ -281,7 +309,7 @@ export async function runMenu(cwd: string): Promise<void> {
 
     const action = await selectOne('O que você quer fazer?', MAIN_ITEMS);
     if (!action || action === 'quit') break;
-    if (action === 'sep' || action === '') continue;
+    if (action === 'sep') continue;
 
     if (action === 'bugs') {
       const mode = await chooseAuditMode('bugs');
@@ -324,6 +352,26 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'chat-qa') {
       run(['--cwd', cwd, 'chat']);
+      continue;
+    }
+
+    if (action === 'deepeval') {
+      run(['--cwd', cwd, 'deepeval', 'init']);
+      run(['--cwd', cwd, 'deepeval', 'run']);
+      await pressEnter();
+      continue;
+    }
+
+    if (action === 'orchestrator') {
+      const selected = await chooseOrchestrator();
+      if (selected === 'default') {
+        delete process.env['AION_ORCHESTRATOR'];
+        console.log(chalk.green('  Orquestrador definido para: padrão'));
+      } else if (selected === 'langgraph') {
+        process.env['AION_ORCHESTRATOR'] = 'langgraph';
+        console.log(chalk.green('  Orquestrador definido para: LangGraph'));
+      }
+      await pressEnter();
       continue;
     }
 

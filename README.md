@@ -113,6 +113,8 @@ The menu includes:
 - File fix and issue analysis shortcuts
 - Assistant NL mode (action-oriented workflows)
 - Chat Q&A mode (repository context Q&A)
+- DeepEval quickcheck integrated in menu flow
+- Orchestrator switch in menu (default/LangGraph) for fix/analyze/review
 - Health check
 - Unified report opening
 - Setup and indexing guidance
