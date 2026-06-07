@@ -179,10 +179,11 @@ export function registerAudit(program: Command): void {
       const maxAiScanners = explicitN ?? policy.maxAgents;
       const requestsFullPreset = (mergedOptions.preset === 'full' && explicitN === undefined) || explicitDomains.length > maxAiScanners;
       if (requestsFullPreset && !mergedOptions.forceFull && !mergedOptions.localOnly) {
+        const cappedDomains = explicitDomains.slice(0, Math.max(1, maxAiScanners)).join(',');
         console.error(chalk.red.bold('\nRefusing expensive full audit by default.\n'));
         console.error(chalk.gray(`Requested ${explicitDomains.length} domains, but ${budget} budget allows ${maxAiScanners} AI scanner(s).`));
         console.error(`  ${chalk.cyan('aion audit . --local-only')} no AI tokens`);
-        console.error(`  ${chalk.cyan(`aion audit . --preset ${mergedOptions.preset ?? 'security'} --scanners ${maxAiScanners}`)} capped AI audit`);
+        console.error(`  ${chalk.cyan(`aion audit . --domains ${cappedDomains} --budget ${budget}`)} capped AI audit`);
         console.error(`  ${chalk.cyan('aion audit . --preset full --force-full')} explicit full-cost run`);
         process.exitCode = 1;
         return;

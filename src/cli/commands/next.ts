@@ -27,7 +27,7 @@ export function registerNext(program: Command): void {
       console.log(chalk.bold('Low-token analysis flow:'));
       console.log(`  1. ${chalk.cyan('aion audit . --dry-run --max-files 20')}`);
       console.log(`  2. ${chalk.cyan('aion audit . --local-only')}`);
-      console.log(`  3. ${chalk.cyan('aion audit . --preset security --scanners 2 --max-files 20')}`);
+      console.log(`  3. ${chalk.cyan('aion audit . --domains security,dependencies --scanners 2 --budget normal --max-files 20')}`);
       console.log(`  4. ${chalk.cyan('aion context --audit --budget 6000')}`);
       console.log(`  5. ${chalk.cyan('aion report latest')}`);
       console.log('');

@@ -50,6 +50,12 @@ const AUDIT_DOMAIN_ARGS: Record<AuditTrack, string> = {
   perf: 'performance,observability,resilience',
 };
 
+const AUDIT_AI_DOMAIN_ARGS: Record<AuditTrack, string> = {
+  bugs: 'bugs',
+  security: 'security',
+  perf: 'performance',
+};
+
 const AUDIT_MODE_ITEMS: Array<MenuItem<AuditMode>> = [
   { label: '🧪 Local', hint: 'zero token · varredura local completa', value: 'local-only' },
   { label: '🤖 IA normal', hint: 'usa token · análise multi-agente balanceada', value: 'normal' },
@@ -133,12 +139,12 @@ async function chooseAuditMode(track: AuditTrack): Promise<AuditMode | null> {
 }
 
 function runAuditTrack(cwd: string, track: AuditTrack, mode: AuditMode): void {
-  const domains = AUDIT_DOMAIN_ARGS[track];
-  const args = ['--cwd', cwd, 'audit', '.', '--domains', domains];
   if (mode === 'local-only') {
+    const args = ['--cwd', cwd, 'audit', '.', '--domains', AUDIT_DOMAIN_ARGS[track]];
     run([...args, '--local-only']);
     return;
   }
+  const args = ['--cwd', cwd, 'audit', '.', '--domains', AUDIT_AI_DOMAIN_ARGS[track]];
   run([...args, '--budget', 'normal']);
 }
 

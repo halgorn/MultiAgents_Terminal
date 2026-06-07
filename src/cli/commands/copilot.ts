@@ -32,7 +32,7 @@ const WORKFLOWS: Record<WorkflowName, WorkflowSpec> = {
       ['health'],
       ['scan', 'secrets'],
       ['docs', 'analyze'],
-      ['audit', '.', '--domains', 'security,bugs', '--scanners', '2', '--max-files', '30', '--budget', 'low'],
+      ['audit', '.', '--domains', 'security,bugs', '--scanners', '2', '--max-files', '30', '--budget', 'normal'],
       ['report'],
     ],
   },
@@ -41,7 +41,7 @@ const WORKFLOWS: Record<WorkflowName, WorkflowSpec> = {
     description: 'Pre-release workflow with local and AI validations.',
     steps: [
       ['ci', '.', '--local-only', '--format', 'text'],
-      ['audit', '.', '--domains', 'security,bugs,architecture', '--scanners', '2', '--max-files', '50', '--budget', 'normal'],
+      ['audit', '.', '--domains', 'security,bugs', '--scanners', '2', '--max-files', '50', '--budget', 'normal'],
       ['report'],
     ],
   },
