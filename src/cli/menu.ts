@@ -117,9 +117,11 @@ function resetTty(): void {
 }
 
 function drainStdin(): void {
-  // Discard any bytes the child left buffered in stdin
+  // Discard ALL bytes the child left buffered in stdin (arrow keys, etc.)
   try {
-    process.stdin.read();
+    process.stdin.resume();
+    let chunk;
+    while ((chunk = process.stdin.read()) !== null) { void chunk; }
   } catch { /* ok */ }
 }
 
@@ -148,17 +150,24 @@ async function pressEnter(): Promise<void> {
   resetTty();
   drainStdin();
   return new Promise<void>((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
-    process.stdout.write(chalk.dim('\n  Pressione Enter para voltar ao menu...'));
+    process.stdout.write(chalk.dim('\n  ──────────────────────────────────────────────────\n'));
+    process.stdout.write('  ' + chalk.bold('↵  Pressione Enter para voltar ao menu'));
+
+    let resolved = false;
     const cleanup = () => {
-      rl.close();
+      if (resolved) return;
+      resolved = true;
       process.stdin.removeListener('data', onData);
       process.removeListener('SIGINT', onSigint);
       process.stdout.write('\n');
+      // Drain any remaining buffered bytes (e.g. arrow keys pressed before Enter)
+      drainStdin();
       resolve();
     };
     const onData = cleanup;
     const onSigint = cleanup;
+    // Ensure stdin is flowing so the 'data' event can fire
+    process.stdin.resume();
     process.stdin.once('data', onData);
     process.once('SIGINT', onSigint);
   });
