@@ -52,14 +52,39 @@ function hasDep(cwd: string, dep: string): boolean {
 }
 
 function grepCount(cwd: string, pattern: string): number {
-  const r = spawnSync('grep', ['-rn', '--include=*.py', '--include=*.ts', '--include=*.js', '-l', pattern, '.'], {
+  const r = spawnSync('grep', [
+    '-rn',
+    '--exclude-dir=node_modules',
+    '--exclude-dir=dist',
+    '--exclude-dir=build',
+    '--exclude-dir=.git',
+    '--exclude-dir=.ai-runtime',
+    '--exclude-dir=.worktrees',
+    '--include=*.py',
+    '--include=*.ts',
+    '--include=*.js',
+    '-l',
+    pattern,
+    '.',
+  ], {
     cwd, encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024,
   });
   return r.stdout ? r.stdout.split('\n').filter(Boolean).length : 0;
 }
 
 function grepLines(cwd: string, pattern: string, ext = '*.py'): string[] {
-  const r = spawnSync('grep', ['-rn', `--include=${ext}`, pattern, '.'], {
+  const r = spawnSync('grep', [
+    '-rn',
+    '--exclude-dir=node_modules',
+    '--exclude-dir=dist',
+    '--exclude-dir=build',
+    '--exclude-dir=.git',
+    '--exclude-dir=.ai-runtime',
+    '--exclude-dir=.worktrees',
+    `--include=${ext}`,
+    pattern,
+    '.',
+  ], {
     cwd, encoding: 'utf8', timeout: 10000, maxBuffer: 2 * 1024 * 1024,
   });
   return r.stdout ? r.stdout.split('\n').filter(Boolean).slice(0, 10) : [];

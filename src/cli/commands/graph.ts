@@ -303,6 +303,18 @@ function openFile(filePath: string): void {
   spawnSync(opener, args, { stdio: 'ignore', timeout: 5000 });
 }
 
+export function writeGraphHtml(cwd: string, index: RepoIndex, dep: DepGraph): string {
+  const outDir = join(cwd, '.ai-runtime');
+  mkdirSync(outDir, { recursive: true });
+  const d3Src = fetchD3(outDir);
+  const data = buildGraphData(index, dep);
+  data.stats.lang = detectLang(cwd).lang;
+  const projectName = cwd.split('/').pop() ?? 'project';
+  const outFile = join(outDir, 'graph.html');
+  writeFileSync(outFile, renderHtml(data, projectName, d3Src), 'utf8');
+  return outFile;
+}
+
 export function registerGraph(program: Command): void {
   program
     .command('graph [target]')
@@ -330,17 +342,9 @@ export function registerGraph(program: Command): void {
         console.log('  dep-graph unavailable, using index only');
       }
 
-      console.log('Fetching D3.js (cached after first run)…');
-      const d3Src = fetchD3(outDir);
-      if (!d3Src) console.log('  D3 not cached — will use CDN on open (requires internet)');
-
+      console.log('Generating interactive graph…');
+      const outFile = writeGraphHtml(cwd, index, dep);
       const data = buildGraphData(index, dep);
-      data.stats.lang = lang.lang;
-
-      const projectName = cwd.split('/').pop() ?? 'project';
-      const html = renderHtml(data, projectName, d3Src);
-      const outFile = join(outDir, 'graph.html');
-      writeFileSync(outFile, html, 'utf8');
 
       console.log(`\nGraph: ${outFile}`);
       console.log(`  ${data.nodes.length} nodes · ${data.edges.length} edges`);

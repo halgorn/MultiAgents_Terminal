@@ -37,6 +37,20 @@ export async function refreshUnifiedReport(cwd: string, options: RefreshReportOp
   const data = await buildProjectReportData(cwd, options.days ?? 90, progress ? (message) => {
     console.log(chalk.gray(`  • ${message}`));
   } : undefined);
+  if (!options.mdOnly) {
+    try {
+      if (progress) console.log(chalk.gray('  • gerando grafo interativo'));
+      const { GraphAgent } = await import('../agents/graph-agent.js');
+      const { detectLang } = await import('./lang-detect.js');
+      const { buildDepGraphAuto } = await import('./dep-graph.js');
+      const { writeGraphHtml } = await import('../cli/commands/graph.js');
+      const index = await new GraphAgent(cwd).ensureIndex();
+      const dep = buildDepGraphAuto(cwd, detectLang(cwd).lang);
+      writeGraphHtml(cwd, index, dep);
+    } catch {
+      // The inline architecture graph in project.html remains available.
+    }
+  }
   const written = writeProjectReport(cwd, data, Boolean(options.mdOnly));
 
   if (progress && written.htmlFile) {

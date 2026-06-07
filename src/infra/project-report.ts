@@ -8,9 +8,110 @@ import { computeHealthScore } from './health-score.js';
 import { GraphAgent } from '../agents/graph-agent.js';
 import type { AuditFinding, AuditReport } from '../schemas/audit.js';
 import { SEVERITY_RANK } from './audit-model.js';
+import type { RepoIndex } from './repo-index.js';
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+interface ArchitectureNode {
+  id: string;
+  files: number;
+  loc: number;
+  symbols: number;
+  fanIn: number;
+  fanOut: number;
+}
+
+interface ArchitectureEdge {
+  from: string;
+  to: string;
+  weight: number;
+}
+
+function moduleName(path: string): string {
+  const parts = path.split('/');
+  if (parts[0] === 'src' && parts[1]) return `src/${parts[1]}`;
+  return parts[0] ?? 'root';
+}
+
+function buildArchitectureView(index: RepoIndex, cycles: number, lang: string) {
+  const nodes = new Map<string, ArchitectureNode>();
+  const edgeCounts = new Map<string, ArchitectureEdge>();
+
+  for (const file of index.files) {
+    const id = moduleName(file.path);
+    const node = nodes.get(id) ?? { id, files: 0, loc: 0, symbols: 0, fanIn: 0, fanOut: 0 };
+    node.files++;
+    node.loc += file.loc;
+    nodes.set(id, node);
+  }
+
+  for (const symbol of index.symbols) {
+    const node = nodes.get(moduleName(symbol.file));
+    if (node) node.symbols++;
+  }
+
+  for (const imp of index.imports) {
+    if (!imp.resolved) continue;
+    const from = moduleName(imp.from);
+    const to = moduleName(imp.resolved);
+    if (from === to) continue;
+    const key = `${from} -> ${to}`;
+    const edge = edgeCounts.get(key) ?? { from, to, weight: 0 };
+    edge.weight++;
+    edgeCounts.set(key, edge);
+    const fromNode = nodes.get(from);
+    const toNode = nodes.get(to);
+    if (fromNode) fromNode.fanOut++;
+    if (toNode) toNode.fanIn++;
+  }
+
+  const topNodes = [...nodes.values()]
+    .sort((a, b) => (b.fanIn + b.fanOut + b.files) - (a.fanIn + a.fanOut + a.files) || a.id.localeCompare(b.id))
+    .slice(0, 12);
+  const kept = new Set(topNodes.map((node) => node.id));
+  const edges = [...edgeCounts.values()]
+    .filter((edge) => kept.has(edge.from) && kept.has(edge.to))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 24);
+
+  const style = cycles > 0 ? 'Cyclic / coupled' : edges.length > topNodes.length * 1.5 ? 'Layered with cross-module coupling' : 'Modular / low-cycle';
+  return { lang, style, nodes: topNodes, edges };
+}
+
+function renderArchitectureSvg(nodes: ArchitectureNode[], edges: ArchitectureEdge[]): string {
+  if (nodes.length === 0) return '<p class="muted">No architecture graph data available.</p>';
+  const width = 1040;
+  const height = Math.max(360, Math.ceil(nodes.length / 4) * 130 + 80);
+  const positions = new Map<string, { x: number; y: number }>();
+  nodes.forEach((node, i) => {
+    const col = i % 4;
+    const row = Math.floor(i / 4);
+    positions.set(node.id, { x: 140 + col * 250, y: 90 + row * 130 });
+  });
+  const edgeSvg = edges.map((edge) => {
+    const from = positions.get(edge.from);
+    const to = positions.get(edge.to);
+    if (!from || !to) return '';
+    const stroke = Math.min(5, 1 + edge.weight / 2);
+    return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="#30363d" stroke-width="${stroke}" marker-end="url(#arrow)"><title>${esc(edge.from)} -> ${esc(edge.to)} (${edge.weight})</title></line>`;
+  }).join('');
+  const nodeSvg = nodes.map((node) => {
+    const pos = positions.get(node.id)!;
+    const r = Math.max(34, Math.min(58, 28 + Math.sqrt(node.files + node.symbols)));
+    const hot = node.fanIn + node.fanOut >= 10;
+    return `<g transform="translate(${pos.x},${pos.y})">
+  <circle r="${r}" fill="${hot ? '#3d2f00' : '#161b22'}" stroke="${hot ? '#e3b341' : '#58a6ff'}" stroke-width="2"></circle>
+  <text text-anchor="middle" y="-6" fill="#e6edf3" font-size="12" font-weight="700">${esc(node.id)}</text>
+  <text text-anchor="middle" y="14" fill="#8b949e" font-size="11">${node.files} files · ${node.symbols} sym</text>
+  <text text-anchor="middle" y="31" fill="#8b949e" font-size="10">in ${node.fanIn} / out ${node.fanOut}</text>
+</g>`;
+  }).join('');
+  return `<div class="graph-wrap"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Application module graph">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#30363d"/></marker></defs>
+${edgeSvg}${nodeSvg}
+</svg></div>`;
 }
 
 // ── Original report functions ─────────────────────────────────────────────────
@@ -67,11 +168,13 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   const index = await graph.ensureIndex();
   let hotspots: Array<{ file: string; fanIn: number; fanOut: number }> = [];
   let cycles = 0;
+  let detectedLang = 'unknown';
   onProgress?.('calculando dependências e hotspots');
   try {
     const { detectLang } = await import('./lang-detect.js');
     const { buildDepGraphAuto } = await import('./dep-graph.js');
     const lang = detectLang(cwd);
+    detectedLang = lang.lang;
     const dep = buildDepGraphAuto(cwd, lang.lang);
     hotspots = dep.hotspots;
     cycles = dep.cycles.length;
@@ -88,6 +191,7 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   const envAudit = auditEnvVars(cwd);
   const secrets = scanCurrentSecrets(cwd);
   const sbom = buildSbom(cwd);
+  const architecture = buildArchitectureView(index, cycles, detectedLang);
   onProgress?.('calculando health score');
   const health = computeHealthScore({
     totalFiles: index.stats.files,
@@ -104,7 +208,7 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   });
   onProgress?.('gerando relatório HTML');
   return { projectName, health, audit, churn, patterns, cognitive, generatedAt: new Date().toLocaleString(),
-    totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, apiEndpoints, envAudit, secrets, sbom };
+    totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom };
 }
 
 export function renderProjectMarkdown(data: Awaited<ReturnType<typeof buildProjectReportData>>): string {
@@ -119,6 +223,14 @@ export function renderProjectMarkdown(data: Awaited<ReturnType<typeof buildProje
   lines.push(`- Symbols: ${data.totalSymbols}`);
   lines.push(`- Dependency cycles: ${data.cycles}`);
   lines.push(`- Git commits (${data.churn.periodDays}d): ${data.churn.totalCommits}`, '');
+  lines.push('## Architecture');
+  lines.push(`- Primary language: ${data.architecture.lang}`);
+  lines.push(`- Shape: ${data.architecture.style}`);
+  lines.push(`- Modules: ${data.architecture.nodes.length}`);
+  if (data.patterns.detected.length > 0) {
+    lines.push('- Detected patterns: ' + data.patterns.detected.slice(0, 8).map((p) => p.pattern).join(', '));
+  }
+  lines.push('');
   if (data.health.topRisks.length > 0) {
     lines.push('## Top Risks', ...data.health.topRisks.map((r) => `- ${r}`), '');
   }
@@ -169,17 +281,27 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const cogRows = data.cognitive.slice(0, 15).map((c) => `<tr><td class="mono">${esc(c.file)}</td><td>${c.score}</td><td>${c.maxNesting}</td><td>${c.longFunctions}</td><td>${c.loc}</td></tr>`).join('');
   const dimBars = data.health.dimensions.map((d) => `<div class="dim-row"><div>${esc(d.name)}</div><div class="bar"><div style="width:${d.score}%;background:${d.score >= 80 ? '#3fb950' : d.score >= 60 ? '#e3b341' : '#f85149'}"></div></div><strong>${d.score}</strong><small>${esc(d.detail)}</small></div>`).join('');
   const riskRows = data.health.topRisks.map((r) => `<li>${esc(r)}</li>`).join('');
+  const architectureRows = data.architecture.nodes.map((node) => `<tr><td class="mono">${esc(node.id)}</td><td>${node.files}</td><td>${node.symbols}</td><td>${node.loc}</td><td>${node.fanIn}</td><td>${node.fanOut}</td></tr>`).join('');
+  const patternRows = data.patterns.detected.slice(0, 12).map((pattern) => `<tr><td>${esc(pattern.pattern)}</td><td>${esc(pattern.category)}</td><td>${esc(pattern.confidence)}</td><td>${pattern.evidence.map(esc).join('<br>')}</td></tr>`).join('');
+  const antiPatternRows = data.patterns.antiPatterns.slice(0, 12).map((pattern) => `<tr><td>${esc(pattern.name)}</td><td>${esc(pattern.severity)}</td><td>${esc(pattern.description)}</td><td>${pattern.evidence.map(esc).join('<br>')}</td></tr>`).join('');
   const secretRows = data.secrets.length
     ? data.secrets.map((s) => `<tr><td class="mono">${esc(s.file)}:${s.line}</td><td>${esc(s.pattern)}</td><td class="mono">${esc(s.preview)}</td></tr>`).join('')
     : '<tr><td colspan="3">No hardcoded secrets detected.</td></tr>';
   const envRows = data.envAudit.vars.slice(0, 50).map((v) => `<tr><td>${v.documented ? 'yes' : 'no'}</td><td class="mono">${esc(v.name)}</td><td class="mono">${esc(v.file)}:${v.line}</td></tr>`).join('');
   const sbomRows = data.sbom.unpinned.slice(0, 50).map((p) => `<tr><td>${esc(p.lang)}</td><td class="mono">${esc(p.name)}</td><td>${esc(p.version)}</td></tr>`).join('');
   const apiRows = data.apiEndpoints.slice(0, 50).map((ep) => `<tr><td>${esc(ep.method)}</td><td class="mono">${esc(ep.path)}</td><td>${ep.hasAuth ? 'yes' : 'no'}</td><td>${ep.hasRateLimit ? 'yes' : 'no'}</td><td class="mono">${esc(ep.file)}:${ep.line}</td></tr>`).join('');
+  const architectureSvg = renderArchitectureSvg(data.architecture.nodes, data.architecture.edges);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>
-body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px;flex-wrap:wrap}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{font-size:56px;font-weight:700;color:${gradeColor}}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.card strong{font-size:24px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}.muted{color:#8b949e}.warn{color:#e3b341}.ok{color:#3fb950}@media(max-width:800px){.grid,.dim-row{grid-template-columns:1fr}.header{display:block}}
-</style></head><body><nav><a href="#health">Health</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="graph.html">Graph</a>' : ''}</nav><main class="container">
+body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px;flex-wrap:wrap;z-index:2}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{font-size:56px;font-weight:700;color:${gradeColor}}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.card strong{font-size:24px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}.muted{color:#8b949e}.warn{color:#e3b341}.ok{color:#3fb950}.graph-wrap{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:auto;margin:14px 0}.graph-wrap svg{display:block;min-width:900px;width:100%;height:auto}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:800px){.grid,.dim-row,.split{grid-template-columns:1fr}.header{display:block}}
+</style></head><body><nav><a href="#health">Health</a><a href="#architecture">Architecture</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score">${data.health.total} ${data.health.grade}</div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
+<section id="architecture"><h2>Architecture</h2><div class="grid"><div class="card"><strong>${esc(data.architecture.lang)}</strong><br>Primary language</div><div class="card"><strong>${data.architecture.nodes.length}</strong><br>Top modules</div><div class="card"><strong class="${data.cycles ? 'warn' : 'ok'}">${data.cycles}</strong><br>Dependency cycles</div><div class="card"><strong>${data.hotspots.length}</strong><br>Hotspots</div></div>
+<p class="muted">Shape: ${esc(data.architecture.style)}${graphExists ? ' · Interactive dependency graph available in the top nav.' : ''}</p>
+${architectureSvg}
+<div class="split"><div><h3>Detected Architecture Patterns</h3><table><tr><th>Pattern</th><th>Category</th><th>Confidence</th><th>Evidence</th></tr>${patternRows || '<tr><td colspan="4">No explicit architecture patterns detected.</td></tr>'}</table></div>
+<div><h3>Architecture Risks</h3><table><tr><th>Name</th><th>Severity</th><th>Description</th><th>Evidence</th></tr>${antiPatternRows || '<tr><td colspan="4">No architecture anti-patterns detected.</td></tr>'}</table></div></div>
+<h3>Module Coupling</h3><table><tr><th>Module</th><th>Files</th><th>Symbols</th><th>LOC</th><th>Fan-in</th><th>Fan-out</th></tr>${architectureRows || '<tr><td colspan="6">No module data available.</td></tr>'}</table></section>
 <section id="diagnostics"><h2>Local Diagnostics <span class="muted">(zero token)</span></h2><div class="grid"><div class="card"><strong class="${data.secrets.length ? 'warn' : 'ok'}">${data.secrets.length}</strong><br>Secrets</div><div class="card"><strong>${data.envAudit.vars.length}</strong><br>Env vars</div><div class="card"><strong class="${data.sbom.unpinned.length ? 'warn' : 'ok'}">${data.sbom.unpinned.length}</strong><br>Unpinned deps</div><div class="card"><strong>${data.apiEndpoints.length}</strong><br>API endpoints</div></div>
 <h3>Secrets</h3><table><tr><th>Location</th><th>Pattern</th><th>Preview</th></tr>${secretRows}</table>
 <h3>Environment Variables</h3><table><tr><th>Documented</th><th>Name</th><th>Location</th></tr>${envRows || '<tr><td colspan="3">No environment variables detected.</td></tr>'}</table>
