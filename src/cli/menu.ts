@@ -123,9 +123,20 @@ function drainStdin(): void {
 
 function run(args: string[]): void {
   resetTty();
+
+  const displayArgs = args.filter((a, i) => a !== '--cwd' && args[i - 1] !== '--cwd');
+  console.log(chalk.dim(`\n  ⏳ aion ${displayArgs.join(' ')}  (Ctrl+C para cancelar)\n`));
+
+  // Swallow SIGINT in the menu process — the child shares the terminal's
+  // foreground process group and receives SIGINT directly from the OS.
+  const onSigint = () => { /* intentional: let child handle it, menu survives */ };
+  process.on('SIGINT', onSigint);
+
   const result = spawnSync(process.execPath, [process.argv[1]!, ...args], {
     stdio: 'inherit', env: process.env,
   });
+
+  process.removeListener('SIGINT', onSigint);
   resetTty();
   drainStdin();
   if (result.error) console.error(chalk.red(result.error.message));
