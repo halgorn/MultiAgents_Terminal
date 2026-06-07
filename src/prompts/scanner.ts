@@ -154,6 +154,7 @@ function buildContextBlock(ctx: ScannerContext): string {
   if (ctx.targetFiles && ctx.targetFiles.length > 0) {
     parts.push(`## Target Files For This Audit\nFocus your Read calls on these files first. Use Grep/Bash only to find evidence that points back to these files unless the user explicitly requested a broader run.\n${ctx.targetFiles.map((f) => `- ${f}`).join('\n')}`);
   }
+  if (ctx.ragContext) parts.push(`## Relevant Code Context (RAG)\nMost semantically relevant snippets for this audit domain — use as starting point before Grep:\n${ctx.ragContext}`);
   if (ctx.repoSummary) parts.push(`## Repository Structure\n${ctx.repoSummary}`);
   if (ctx.depGraph) parts.push(`## Dependency Graph\n${ctx.depGraph}`);
   if (ctx.hotspotFiles && ctx.hotspotFiles.length > 0) {
@@ -167,6 +168,7 @@ export interface ScannerContext {
   depGraph?: string;         // formatted dep-graph: cycles, hotspots
   hotspotFiles?: string[];   // top files by coupling score — read these first
   targetFiles?: string[];    // prioritized source files for AI scanners
+  ragContext?: string;       // semantic RAG snippets relevant to this domain
 }
 
 export function buildScannerPrompt(domain: ScanDomain, scannerIndex: number, totalScanners: number, ctx?: ScannerContext): string {

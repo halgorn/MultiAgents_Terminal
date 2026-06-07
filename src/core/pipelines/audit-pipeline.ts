@@ -11,6 +11,7 @@ import { validateAuditFindings } from '../../infra/evidence-gate.js';
 import { loadRepoIndex } from '../../infra/repo-query.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { buildDepGraphAuto } from '../../infra/dep-graph.js';
+import { KnowledgeStore } from '../../infra/knowledge.js';
 
 import { detectLang } from '../../infra/lang-detect.js';
 import type { ScannerContext } from '../../prompts/scanner.js';
@@ -118,7 +119,7 @@ export class AuditPipeline {
     private readonly onChunk: OnChunk,
   ) {}
 
-  private async buildScannerContext(): Promise<ScannerContext> {
+  private async buildScannerContext(domains?: import('../../prompts/scanner.js').ScanDomain[]): Promise<ScannerContext> {
     const ctx: ScannerContext = {};
     try {
       const graph = new GraphAgent(this.cwd);
@@ -138,6 +139,33 @@ export class AuditPipeline {
       }
       if (lines.length > 0) ctx.depGraph = lines.join('\n');
     } catch { /* best-effort */ }
+    try {
+      const knowledge = new KnowledgeStore(this.cwd);
+      if (knowledge.embeddings.hasIndex()) {
+        const DOMAIN_QUERIES: Record<string, string> = {
+          security: 'authentication authorization input validation token session credentials',
+          bugs: 'null undefined error exception race condition off-by-one async await',
+          'error-handling': 'try catch throw error exception promise rejection fallback',
+          architecture: 'coupling dependency module interface abstraction design pattern',
+          testing: 'test spec mock assert coverage unit integration',
+          performance: 'cache query loop n+1 memory cpu latency bottleneck',
+          observability: 'log trace metric event span instrumentation',
+          resilience: 'timeout retry circuit breaker fallback rate limit',
+          data: 'query database transaction index migration schema',
+          dependencies: 'package import dependency version lock',
+          compliance: 'gdpr lgpd pii personal data consent audit log',
+          infrastructure: 'docker kubernetes container deploy config environment',
+          multitenancy: 'tenant isolation scope filter permission row',
+          redundancy: 'duplicate copy dead code unused unreachable',
+          'prompt-audit': 'prompt llm injection template system message',
+        };
+        const query = (domains ?? [])
+          .map((d) => DOMAIN_QUERIES[d] ?? d)
+          .join(' ')
+          || 'security bugs architecture error handling';
+        ctx.ragContext = await knowledge.buildContextSemantic(query, 2000);
+      }
+    } catch { /* best-effort — RAG opcional */ }
     return ctx;
   }
 
@@ -255,7 +283,7 @@ export class AuditPipeline {
         });
       }
 
-      const scannerCtx = await this.buildScannerContext();
+      const scannerCtx = await this.buildScannerContext(explicitDomains);
       const maxFilesForAi = Math.max(1, options.maxFilesForAi ?? (
         this.policy.budget === 'deep' ? 120 : this.policy.budget === 'normal' ? 60 : 30
       ));
