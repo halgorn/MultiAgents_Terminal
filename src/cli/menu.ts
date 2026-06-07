@@ -148,13 +148,17 @@ async function pressEnter(): Promise<void> {
   return new Promise<void>((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
     process.stdout.write(chalk.dim('\n  Pressione Enter para voltar ao menu...'));
-    const onData = () => {
+    const cleanup = () => {
       rl.close();
       process.stdin.removeListener('data', onData);
+      process.removeListener('SIGINT', onSigint);
       process.stdout.write('\n');
       resolve();
     };
+    const onData = cleanup;
+    const onSigint = cleanup;
     process.stdin.once('data', onData);
+    process.once('SIGINT', onSigint);
   });
 }
 
@@ -163,7 +167,13 @@ async function promptLine(question: string): Promise<string> {
   drainStdin();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise<string>((resolve) => {
-    rl.question(chalk.cyan(`  ${question}: `), (ans) => { rl.close(); resolve(ans.trim()); });
+    const onSigint = () => { rl.close(); process.removeListener('SIGINT', onSigint); resolve(''); };
+    process.once('SIGINT', onSigint);
+    rl.question(chalk.cyan(`  ${question}: `), (ans) => {
+      process.removeListener('SIGINT', onSigint);
+      rl.close();
+      resolve(ans.trim());
+    });
   });
 }
 
@@ -540,7 +550,7 @@ export async function runMenu(cwd: string): Promise<void> {
     console.log('');
     printHeader(cwd.split('/').pop() ?? cwd, info);
     console.log(buildStatusLine());
-    const action = await selectOne('What do you want to run?', MAIN_ITEMS);
+    const action = await selectOne('O que você quer fazer?', MAIN_ITEMS);
 
     if (!action || action === 'quit') break;
     if (action === 'sep' || action === '') continue;
