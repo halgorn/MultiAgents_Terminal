@@ -40,7 +40,7 @@ test('packed npm tarball installs and exposes aion and ai-runtime binaries', { t
 
     const menuFallback = run('npx', ['aion', 'menu'], projectDir);
     assert.equal(menuFallback.status, 0, menuFallback.stderr);
-    assert.match(menuFallback.stdout, /Run from an interactive terminal/);
+    assert.match(menuFallback.stdout, /Execute em um terminal interativo/);
 
     const assistHelp = run('npx', ['aion', 'assist', '--help'], projectDir);
     assert.equal(assistHelp.status, 0, assistHelp.stderr);

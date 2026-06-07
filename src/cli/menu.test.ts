@@ -14,32 +14,36 @@ test('menu action audit covers every selectable main menu item', () => {
 test('main menu exposes simplified human workflows', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
-  assert.equal(labels.includes('Preparar / configurar projeto'), true);
-  assert.equal(labels.includes('Copiloto de workflows IA'), true);
-  assert.equal(labels.includes('Ver estado do projeto'), true);
-  assert.equal(labels.includes('Encontrar problemas'), true);
-  assert.equal(labels.includes('Buscar e entender código'), true);
-  assert.equal(labels.includes('Corrigir ou revisar com IA'), true);
+  assert.equal(labels.includes('Diagnóstico local'), true);
+  assert.equal(labels.includes('IA — Copilot / Audit'), true);
+  assert.equal(labels.includes('Preparar / configurar'), true);
   assert.equal(labels.includes('Publicar / operar'), true);
   assert.equal(labels.includes('Avançado'), true);
+  // Modelo 2 e 3 colapsados em IA; NL movido para dentro do menu IA
+  assert.equal(labels.includes('Modelo 2 — Copiloto IA'), false);
+  assert.equal(labels.includes('Modelo 3 — IA + RAG obrigatório'), false);
+  assert.equal(MAIN_ITEMS.filter((i) => !i.separator && i.value !== 'sep' && i.value !== 'quit' && i.value !== '').length, 5);
 });
 
 test('direct menu commands map to real CLI subcommands without cwd baked in', () => {
   assert.deepEqual(DIRECT_COMMANDS.setup, ['setup']);
-  assert.deepEqual(DIRECT_COMMANDS.copilot, ['copilot', 'safe']);
   assert.deepEqual(DIRECT_COMMANDS.health, ['health']);
   assert.deepEqual(DIRECT_COMMANDS.tree, ['tree', '--hotspots']);
   assert.deepEqual(DIRECT_COMMANDS.trace, ['trace']);
+  // copilot removido — chamado diretamente em runIaMenu com args explícitos
+  assert.equal(Object.hasOwn(DIRECT_COMMANDS, 'copilot'), false);
   assert.equal(Object.hasOwn(DIRECT_COMMANDS, 'impact'), false);
 });
 
-test('menu matrix classifies advanced or costly actions explicitly', () => {
+test('menu matrix reflete os 5 itens reais do menu principal', () => {
   const byAction = new Map(MENU_ACTION_AUDIT.map((entry) => [entry.action, entry]));
 
-  assert.equal(byAction.get('scan')?.cost, 'zero-token');
-  assert.equal(byAction.get('audit')?.cost, 'ai');
-  assert.equal(byAction.get('mcp')?.recommendation, 'hide');
-  assert.equal(byAction.get('impact')?.submenu, 'prompt');
+  assert.equal(byAction.get('model-local')?.cost, 'zero-token');
+  assert.equal(byAction.get('ia')?.cost, 'ai');
+  assert.equal(byAction.get('setup')?.cost, 'local-side-effect');
+  assert.equal(byAction.get('publish')?.cost, 'local-side-effect');
+  assert.equal(byAction.get('advanced')?.cost, 'external-service');
+  assert.equal(MENU_ACTION_AUDIT.length, 5);
 });
 
 test('non-TTY menu fallback prints actionable commands and exits', () => {
@@ -57,10 +61,10 @@ test('non-TTY menu fallback prints actionable commands and exits', () => {
   }
 
   assert.match(output, /aion — example-project/);
-  assert.match(output, /aion setup/);
-  assert.match(output, /aion copilot quick/);
   assert.match(output, /aion health/);
-  assert.match(output, /aion audit \. --domains security --scanners 1/);
-  assert.match(output, /aion audit \. --domains bugs --scanners 1/);
+  assert.match(output, /aion copilot safe/);
+  assert.match(output, /aion memory build/);
+  assert.match(output, /aion setup/);
   assert.match(output, /aion deploy assist/);
+  assert.match(output, /Diagnóstico/);
 });
