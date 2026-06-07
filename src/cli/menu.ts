@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { createInterface } from 'readline';
 import chalk from 'chalk';
 import { selectOne, selectMany, printHeader } from './tui.js';
 import type { MenuItem } from './tui.js';
@@ -86,15 +87,50 @@ const MAIN_ITEMS: Array<MenuItem<string>> = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function resetTty(): void {
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode!(false);
+    process.stdout.write('\x1b[?25h'); // show cursor
+  } catch { /* ok */ }
+}
+
+function drainStdin(): void {
+  // Discard any bytes the child left buffered in stdin
+  try {
+    process.stdin.read();
+  } catch { /* ok */ }
+}
+
 function run(args: string[]): void {
+  resetTty();
   const result = spawnSync(process.execPath, [process.argv[1]!, ...args], {
     stdio: 'inherit', env: process.env,
   });
+  resetTty();
+  drainStdin();
   if (result.error) console.error(chalk.red(result.error.message));
 }
 
+async function pressEnter(): Promise<void> {
+  resetTty();
+  drainStdin();
+  return new Promise<void>((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+    process.stdout.write(chalk.dim('\n  Press Enter to return to menu...'));
+    const onData = () => {
+      rl.close();
+      process.stdin.removeListener('data', onData);
+      process.stdout.write('\n');
+      resolve();
+    };
+    process.stdin.once('data', onData);
+  });
+}
+
 async function promptLine(question: string): Promise<string> {
-  const rl = (await import('readline')).createInterface({ input: process.stdin, output: process.stdout });
+  resetTty();
+  drainStdin();
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise<string>((resolve) => {
     rl.question(chalk.cyan(`  ${question}: `), (ans) => { rl.close(); resolve(ans.trim()); });
   });
@@ -120,6 +156,7 @@ async function runAuditMenu(cwd: string): Promise<void> {
 
   console.log(chalk.bold.cyan('\nStarting audit…\n'));
   run(['--cwd', cwd, 'audit', '.', ...domainArgs, '--budget', budget]);
+  await pressEnter();
 }
 
 async function runScanMenu(cwd: string): Promise<void> {
@@ -133,6 +170,7 @@ async function runScanMenu(cwd: string): Promise<void> {
   ]);
   if (!item || item === 'back') return;
   run(['--cwd', cwd, 'scan', item]);
+  await pressEnter();
 }
 
 async function runMemoryMenu(cwd: string): Promise<void> {
@@ -148,9 +186,11 @@ async function runMemoryMenu(cwd: string): Promise<void> {
     const q = await promptLine('Search query');
     if (!q) return;
     run(['--cwd', cwd, 'memory', 'search', q]);
+    await pressEnter();
     return;
   }
   run(['--cwd', cwd, 'memory', action]);
+  await pressEnter();
 }
 
 async function runExplainMenu(cwd: string): Promise<void> {
@@ -163,12 +203,14 @@ async function runExplainMenu(cwd: string): Promise<void> {
 
   if (mode === 'onboard') {
     run(['--cwd', cwd, 'onboard']);
+    await pressEnter();
     return;
   }
 
   const file = await promptLine('File path');
   if (!file) return;
   run(['--cwd', cwd, mode, file]);
+  await pressEnter();
 }
 
 async function runDocsMenu(cwd: string): Promise<void> {
@@ -179,6 +221,7 @@ async function runDocsMenu(cwd: string): Promise<void> {
   ]);
   if (!action || action === 'back') return;
   run(['--cwd', cwd, 'docs', action]);
+  await pressEnter();
 }
 
 async function runCloudMenu(cwd: string): Promise<void> {
@@ -190,6 +233,7 @@ async function runCloudMenu(cwd: string): Promise<void> {
   ]);
   if (!action || action === 'back') return;
   run(['--cwd', cwd, 'cloud', action]);
+  await pressEnter();
 }
 
 async function runMcpMenu(cwd: string): Promise<void> {
@@ -200,8 +244,9 @@ async function runMcpMenu(cwd: string): Promise<void> {
     { label: '← Back',     value: 'back' },
   ]);
   if (!action || action === 'back') return;
-  if (action === 'register') { run(['--cwd', cwd, 'mcp', 'serve', '--register']); return; }
+  if (action === 'register') { run(['--cwd', cwd, 'mcp', 'serve', '--register']); await pressEnter(); return; }
   run(['--cwd', cwd, 'mcp', action]);
+  await pressEnter();
 }
 
 async function runEvalMenu(cwd: string): Promise<void> {
@@ -212,9 +257,10 @@ async function runEvalMenu(cwd: string): Promise<void> {
     { label: '← Back',             value: 'back' },
   ]);
   if (!action || action === 'back') return;
-  if (action === 'scaffold') { run(['--cwd', cwd, 'eval', 'retrieval', '--scaffold']); return; }
-  if (action === 'retrieval-llm') { run(['--cwd', cwd, 'eval', 'retrieval', '--rerank', 'llm']); return; }
+  if (action === 'scaffold') { run(['--cwd', cwd, 'eval', 'retrieval', '--scaffold']); await pressEnter(); return; }
+  if (action === 'retrieval-llm') { run(['--cwd', cwd, 'eval', 'retrieval', '--rerank', 'llm']); await pressEnter(); return; }
   run(['--cwd', cwd, 'eval', 'retrieval']);
+  await pressEnter();
 }
 
 // ── Fallback (non-TTY) ────────────────────────────────────────────────────────
@@ -299,22 +345,22 @@ export async function runMenu(cwd: string): Promise<void> {
     // Prompt-based
     if (action === 'fix') {
       const file = await promptLine('File to fix (relative path)');
-      if (file) run(['--cwd', cwd, 'fix', file]);
+      if (file) { run(['--cwd', cwd, 'fix', file]); await pressEnter(); }
       continue;
     }
     if (action === 'analyze') {
       const target = await promptLine('Describe the bug or issue');
-      if (target) run(['--cwd', cwd, 'analyze', target]);
+      if (target) { run(['--cwd', cwd, 'analyze', target]); await pressEnter(); }
       continue;
     }
     if (action === 'review') {
       const target = await promptLine('File path or diff to review');
-      if (target) run(['--cwd', cwd, 'review', target]);
+      if (target) { run(['--cwd', cwd, 'review', target]); await pressEnter(); }
       continue;
     }
     if (action === 'search') {
       const q = await promptLine('Search query');
-      if (q) run(['--cwd', cwd, 'search', q]);
+      if (q) { run(['--cwd', cwd, 'search', q]); await pressEnter(); }
       continue;
     }
     if (action === 'nl') {
@@ -328,13 +374,8 @@ export async function runMenu(cwd: string): Promise<void> {
     if (args) {
       console.log(chalk.bold.cyan(`\nRunning ${action}…\n`));
       run(args);
+      await pressEnter();
     }
-
-    const cont = await selectOne('', [
-      { label: '← Back to menu', value: 'menu' },
-      { label: '  Quit',         value: 'quit' },
-    ]);
-    if (cont === 'quit' || !cont) break;
   }
 
   console.log(chalk.dim('\nBye!\n'));
