@@ -7,7 +7,7 @@ test('menu principal tem os itens acionáveis esperados', () => {
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
 
-  assert.deepEqual(selectable, ['bugs', 'security', 'perf', 'fix', 'analyze', 'assistant', 'chat-qa', 'deepeval', 'orchestrator', 'health', 'report', 'setup']);
+  assert.deepEqual(selectable, ['local-check', 'bugs', 'security', 'perf', 'fix', 'analyze', 'assistant', 'chat-qa', 'report']);
 });
 
 test('menu não tem submenus antigos', () => {
@@ -22,18 +22,18 @@ test('menu não tem submenus antigos', () => {
 test('menu tem os labels corretos', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
+  assert.equal(labels.includes('📊 Diagnóstico automático'), true);
   assert.equal(labels.includes('🐛 Bugs & Qualidade'), true);
   assert.equal(labels.includes('🔐 Segurança'), true);
   assert.equal(labels.includes('⚡ Performance & Infra'), true);
   assert.equal(labels.includes('🔧 Corrigir arquivo'), true);
   assert.equal(labels.includes('🔍 Analisar problema'), true);
-  assert.equal(labels.includes('🤖 Assistente NL (ações)'), true);
-  assert.equal(labels.includes('💬 Chat Q&A do código'), true);
-  assert.equal(labels.includes('🧪 DeepEval quickcheck'), true);
-  assert.equal(labels.includes('🕸️ Orquestrador IA'), true);
-  assert.equal(labels.includes('📊 Health check'), true);
+  assert.equal(labels.includes('🤖 Assistente direto'), true);
+  assert.equal(labels.includes('💬 Chat do código'), true);
   assert.equal(labels.includes('📋 Ver relatório'), true);
-  assert.equal(labels.includes('⚙️  Setup'), true);
+  assert.equal(labels.includes('🧪 DeepEval quickcheck'), false);
+  assert.equal(labels.includes('🕸️ Orquestrador IA'), false);
+  assert.equal(labels.includes('⚙️  Setup'), false);
 });
 
 test('non-TTY fallback imprime comandos acionáveis', () => {
@@ -53,9 +53,9 @@ test('non-TTY fallback imprime comandos acionáveis', () => {
   assert.match(output, /aion — example-project/);
   assert.match(output, /aion health/);
   assert.match(output, /aion fix/);
-  assert.match(output, /aion setup/);
   assert.match(output, /aion audit/);
-  assert.match(output, /aion next/);
-  assert.match(output, /aion deepeval/);
-  assert.match(output, /AION_ORCHESTRATOR=langgraph/);
+  assert.match(output, /zero token/i);
+  assert.doesNotMatch(output, /aion setup/);
+  assert.doesNotMatch(output, /aion deepeval/);
+  assert.doesNotMatch(output, /AION_ORCHESTRATOR=langgraph/);
 });

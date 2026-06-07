@@ -76,7 +76,7 @@ When enabled, Aion emits observation traces for agent runs and cost lifecycle ev
 export AI_RUNTIME_CODEX_MODEL="gpt-5-codex"
 ```
 
-### LangGraph (optional orchestration adapter)
+### LangGraph (advanced, optional)
 
 ```bash
 export AION_ORCHESTRATOR="langgraph"
@@ -95,6 +95,14 @@ aion analyze .
 aion "review this project and find risky code"
 ```
 
+## Practical Scope For Today
+
+The main menu is intentionally small. It prioritizes flows that are ready to demo and publish:
+
+- Works without tokens: `health`, `report`, `scan secrets`, `scan env-audit`, `scan sbom`, `scan cognitive-load`, and audit in local mode.
+- Uses AI tokens: `audit` in AI mode, `fix`, `analyze`, `chat`, `review`, and natural-language requests that trigger those actions.
+- Hidden from the main menu for now: DeepEval setup/run, LangGraph orchestration switching, and manual setup/indexing shortcuts. They still exist as CLI commands, but they are advanced/experimental for today's release surface.
+
 ## Interactive Menu
 
 Run:
@@ -105,19 +113,15 @@ aion menu
 
 The menu includes:
 
-- Guided audit tracks (bugs, security, performance) with mode selection:
-  - dry-run (fast preview)
-  - local-only (no AI cost)
-  - normal AI
-  - deep AI (explicit confirmation)
+- Automatic local diagnosis: health, secrets, env vars, SBOM, and cognitive-load scans.
+- Guided audit tracks for bugs, security, and performance/infra.
+- Two audit modes:
+  - local (zero token)
+  - normal AI (uses tokens)
 - File fix and issue analysis shortcuts
-- Assistant NL mode (action-oriented workflows)
-- Chat Q&A mode (repository context Q&A)
-- DeepEval quickcheck integrated in menu flow
-- Orchestrator switch in menu (default/LangGraph) for fix/analyze/review
-- Health check
+- Assistant direct mode
+- Chat Q&A mode
 - Unified report opening
-- Setup and indexing guidance
 
 ## Common Commands
 

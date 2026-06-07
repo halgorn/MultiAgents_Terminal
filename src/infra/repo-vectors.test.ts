@@ -6,6 +6,21 @@ import { tmpdir } from 'os';
 import { buildRepoIndex } from './repo-index.js';
 import { buildRepoVectorIndex, ensureRepoVectorIndex, queryRepoVectors } from './repo-vectors.js';
 
+async function withoutRemoteEmbeddingEnv<T>(fn: () => Promise<T>): Promise<T> {
+  const originalOpenAi = process.env['OPENAI_API_KEY'];
+  const originalVoyage = process.env['VOYAGE_API_KEY'];
+  delete process.env['OPENAI_API_KEY'];
+  delete process.env['VOYAGE_API_KEY'];
+  try {
+    return await fn();
+  } finally {
+    if (originalOpenAi === undefined) delete process.env['OPENAI_API_KEY'];
+    else process.env['OPENAI_API_KEY'] = originalOpenAi;
+    if (originalVoyage === undefined) delete process.env['VOYAGE_API_KEY'];
+    else process.env['VOYAGE_API_KEY'] = originalVoyage;
+  }
+}
+
 function makeRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'repo-vectors-'));
   mkdirSync(join(dir, 'src'), { recursive: true });
@@ -25,13 +40,15 @@ function makeRepo(): string {
 test('repo vector index supports deterministic zero-token semantic search', async () => {
   const dir = makeRepo();
   try {
-    const index = await buildRepoIndex(dir);
-    const vectors = buildRepoVectorIndex(dir, index);
-    const results = queryRepoVectors(vectors, 'semantic retrieval context', 3);
+    await withoutRemoteEmbeddingEnv(async () => {
+      const index = await buildRepoIndex(dir);
+      const vectors = await buildRepoVectorIndex(dir, index);
+      const results = await queryRepoVectors(vectors, 'semantic retrieval context', 3);
 
-    assert.ok(results.length > 0);
-    assert.equal(results[0]?.file, 'src/rag.ts');
-    assert.match(results[0]?.text ?? '', /retrieveContext/);
+      assert.ok(results.length > 0);
+      assert.equal(results[0]?.file, 'src/rag.ts');
+      assert.match(results[0]?.text ?? '', /retrieveContext/);
+    });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -40,12 +57,14 @@ test('repo vector index supports deterministic zero-token semantic search', asyn
 test('ensureRepoVectorIndex reuses a valid cache for unchanged repo index', async () => {
   const dir = makeRepo();
   try {
-    const index = await buildRepoIndex(dir);
-    const first = ensureRepoVectorIndex(dir, index, true);
-    const second = ensureRepoVectorIndex(dir, index, false);
+    await withoutRemoteEmbeddingEnv(async () => {
+      const index = await buildRepoIndex(dir);
+      const first = await ensureRepoVectorIndex(dir, index, true);
+      const second = await ensureRepoVectorIndex(dir, index, false);
 
-    assert.equal(second.repoHash, first.repoHash);
-    assert.equal(second.entries.length, first.entries.length);
+      assert.equal(second.repoHash, first.repoHash);
+      assert.equal(second.entries.length, first.entries.length);
+    });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

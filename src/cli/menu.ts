@@ -41,8 +41,8 @@ export const BUDGETS = [
 ];
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
-type AuditMode = 'dry-run' | 'local-only' | 'normal' | 'deep';
-type MenuAction = 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'health' | 'report' | 'deepeval' | 'orchestrator' | 'setup' | 'sep' | 'quit';
+type AuditMode = 'local-only' | 'normal';
+type MenuAction = 'local-check' | 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'sep' | 'quit';
 
 const AUDIT_DOMAIN_ARGS: Record<AuditTrack, string> = {
   bugs: 'bugs,error-handling,architecture,testing',
@@ -51,10 +51,8 @@ const AUDIT_DOMAIN_ARGS: Record<AuditTrack, string> = {
 };
 
 const AUDIT_MODE_ITEMS: Array<MenuItem<AuditMode>> = [
-  { label: '⚡ Rápido (dry-run)', hint: 'sem IA · prévia dos scanners e custo', value: 'dry-run' },
-  { label: '🧪 Local only', hint: 'sem IA · varredura local completa', value: 'local-only' },
-  { label: '🤖 IA normal', hint: 'balanceado · budget normal', value: 'normal' },
-  { label: '🧠 IA profunda', hint: 'mais cobertura e mais custo', value: 'deep' },
+  { label: '🧪 Local', hint: 'zero token · varredura local completa', value: 'local-only' },
+  { label: '🤖 IA normal', hint: 'usa token · análise multi-agente balanceada', value: 'normal' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -131,53 +129,23 @@ async function promptLine(question: string): Promise<string> {
 async function chooseAuditMode(track: AuditTrack): Promise<AuditMode | null> {
   const mode = await selectOne(`Modo do audit (${track})`, AUDIT_MODE_ITEMS);
   if (!mode) return null;
-  if (mode !== 'deep') return mode;
-
-  const confirm = await promptLine('Confirmar modo profundo? Digite DEEP');
-  if (confirm !== 'DEEP') {
-    console.log(chalk.yellow('  Audit profundo cancelado (confirmação não fornecida).'));
-    return null;
-  }
   return mode;
 }
 
 function runAuditTrack(cwd: string, track: AuditTrack, mode: AuditMode): void {
   const domains = AUDIT_DOMAIN_ARGS[track];
   const args = ['--cwd', cwd, 'audit', '.', '--domains', domains];
-  if (mode === 'dry-run') {
-    run([...args, '--dry-run', '--max-files', '20']);
-    return;
-  }
   if (mode === 'local-only') {
     run([...args, '--local-only']);
     return;
   }
-  if (mode === 'normal') {
-    run([...args, '--budget', 'normal']);
-    return;
-  }
-  run([...args, '--budget', 'deep', '--force-full']);
-}
-
-function currentOrchestratorLabel(): string {
-  return process.env['AION_ORCHESTRATOR'] === 'langgraph'
-    ? chalk.green('LangGraph')
-    : chalk.gray('Padrão');
+  run([...args, '--budget', 'normal']);
 }
 
 function currentLangfuseLabel(): string {
   return process.env['LANGFUSE_PUBLIC_KEY'] && process.env['LANGFUSE_SECRET_KEY']
     ? chalk.green('ON')
     : chalk.gray('OFF');
-}
-
-async function chooseOrchestrator(): Promise<'default' | 'langgraph' | null> {
-  const value = await selectOne<'default' | 'langgraph'>('Orquestrador para fix/analyze/review', [
-    { label: 'Padrão', hint: 'orquestrador atual do Aion', value: 'default' },
-    { label: 'LangGraph', hint: 'adapter LangGraph sobre os mesmos pipelines', value: 'langgraph' },
-  ]);
-  if (!value) return null;
-  return value;
 }
 
 // ── Capability state ──────────────────────────────────────────────────────────
@@ -231,31 +199,24 @@ export function runMenuFallback(cwd: string): void {
   console.log(chalk.dim('  ─────────────────────────────────────'));
   console.log(chalk.dim('  Execute em um terminal interativo para acessar o menu.'));
   console.log('');
-  console.log(chalk.bold('  Diagnóstico: ') + chalk.cyan('aion health  · aion scan secrets  · aion report'));
-  console.log(chalk.bold('  Audit:       ') + chalk.cyan('aion audit . --domains security  · aion audit . --preset quality'));
-  console.log(chalk.bold('  IA:          ') + chalk.cyan('aion fix <arquivo>  · aion analyze "<problema>"  · aion chat'));
-  console.log(chalk.bold('  Eval:        ') + chalk.cyan('aion deepeval init  · aion deepeval run'));
-  console.log(chalk.bold('  Fluxo IA:    ') + chalk.cyan('AION_ORCHESTRATOR=langgraph aion analyze "<problema>"'));
-  console.log(chalk.bold('  Fluxo guiado:') + chalk.cyan('aion next'));
-  console.log(chalk.bold('  Setup:       ') + chalk.cyan('aion setup  · aion memory build  · aion index'));
+  console.log(chalk.bold('  Zero token:  ') + chalk.cyan('aion health  · aion scan secrets  · aion scan env-audit  · aion report'));
+  console.log(chalk.bold('  Usa IA:      ') + chalk.cyan('aion audit . --budget normal  · aion fix <arquivo>  · aion analyze "<problema>"  · aion chat'));
+  console.log(chalk.bold('  Guiado:      ') + chalk.cyan('aion menu'));
   console.log('');
 }
 
 // ── Main menu items ───────────────────────────────────────────────────────────
 
 export const MAIN_ITEMS: Array<MenuItem<MenuAction>> = [
-  { label: '🐛 Bugs & Qualidade',    hint: 'audit: bugs, error-handling, architecture, testing', value: 'bugs' },
-  { label: '🔐 Segurança',           hint: 'audit: security, compliance, dependencies',           value: 'security' },
-  { label: '⚡ Performance & Infra', hint: 'audit: performance, observability, resilience',       value: 'perf' },
-  { label: '🔧 Corrigir arquivo',    hint: 'pede caminho → aion fix',                             value: 'fix' },
-  { label: '🔍 Analisar problema',   hint: 'pede descrição → aion analyze',                       value: 'analyze' },
-  { label: '🤖 Assistente NL (ações)', hint: 'fix/analyze/audit via linguagem natural',           value: 'assistant' },
-  { label: '💬 Chat Q&A do código',   hint: 'perguntas e respostas com contexto do repositório',  value: 'chat-qa' },
-  { label: '🧪 DeepEval quickcheck',  hint: 'avaliação rápida de regressão LLM',                   value: 'deepeval' },
-  { label: '🕸️ Orquestrador IA',      hint: 'alterna padrão/LangGraph para fix/analyze/review',   value: 'orchestrator' },
-  { label: '📊 Health check',        hint: 'sem IA, zero custo',                                  value: 'health' },
-  { label: '📋 Ver relatório',       hint: 'abre o relatório principal unificado',                 value: 'report' },
-  { label: '⚙️  Setup',              hint: 'wizard inicial: config, índices e RAG',               value: 'setup' },
+  { label: '📊 Diagnóstico automático', hint: 'zero token · health + secrets + env + SBOM + complexidade', value: 'local-check' },
+  { label: '🐛 Bugs & Qualidade',       hint: 'local zero token ou IA normal',                         value: 'bugs' },
+  { label: '🔐 Segurança',              hint: 'local zero token ou IA normal',                         value: 'security' },
+  { label: '⚡ Performance & Infra',    hint: 'local zero token ou IA normal',                         value: 'perf' },
+  { label: '🔧 Corrigir arquivo',       hint: 'usa IA · pede caminho e aplica pipeline de fix',         value: 'fix' },
+  { label: '🔍 Analisar problema',      hint: 'usa IA · pede uma descrição objetiva',                   value: 'analyze' },
+  { label: '🤖 Assistente direto',      hint: 'usa IA quando a intenção exigir',                        value: 'assistant' },
+  { label: '💬 Chat do código',         hint: 'usa IA · perguntas com contexto do repositório',         value: 'chat-qa' },
+  { label: '📋 Ver relatório',          hint: 'zero token · abre o relatório principal unificado',      value: 'report' },
   { label: '', value: 'sep', separator: true },
   { label: '  Sair', value: 'quit' },
 ];
@@ -294,11 +255,10 @@ export async function runMenu(cwd: string): Promise<void> {
   const staleWarning = checkIndexStaleness(cwd);
 
   function buildStatusLine(): string {
-    const rag = _ragReady ? chalk.green('✓ RAG') : chalk.yellow('⚠ RAG não treinado');
-    const setup = _setupReady ? chalk.green('✓ Setup') : chalk.dim('○ Setup pendente');
+    const rag = _ragReady ? chalk.green('RAG pronto') : chalk.dim('RAG opcional');
+    const setup = _setupReady ? chalk.green('setup ok') : chalk.dim('setup inicial pendente');
     const lf = `LangFuse ${currentLangfuseLabel()}`;
-    const orch = `Orquestrador ${currentOrchestratorLabel()}`;
-    return `  ${setup}   ${rag}   ${lf}   ${orch}`;
+    return `  zero token: diagnóstico/relatório/audit local   usa IA: fix/analyze/chat/audit normal   ${setup}   ${rag}   ${lf}`;
   }
 
   while (true) {
@@ -310,6 +270,16 @@ export async function runMenu(cwd: string): Promise<void> {
     const action = await selectOne('O que você quer fazer?', MAIN_ITEMS);
     if (!action || action === 'quit') break;
     if (action === 'sep') continue;
+
+    if (action === 'local-check') {
+      run(['--cwd', cwd, 'health']);
+      run(['--cwd', cwd, 'scan', 'secrets']);
+      run(['--cwd', cwd, 'scan', 'env-audit']);
+      run(['--cwd', cwd, 'scan', 'sbom', '--unpinned-only']);
+      run(['--cwd', cwd, 'scan', 'cognitive-load', '--top', '10']);
+      await pressEnter();
+      continue;
+    }
 
     if (action === 'bugs') {
       const mode = await chooseAuditMode('bugs');
@@ -355,42 +325,9 @@ export async function runMenu(cwd: string): Promise<void> {
       continue;
     }
 
-    if (action === 'deepeval') {
-      run(['--cwd', cwd, 'deepeval', 'init']);
-      run(['--cwd', cwd, 'deepeval', 'run']);
-      await pressEnter();
-      continue;
-    }
-
-    if (action === 'orchestrator') {
-      const selected = await chooseOrchestrator();
-      if (selected === 'default') {
-        delete process.env['AION_ORCHESTRATOR'];
-        console.log(chalk.green('  Orquestrador definido para: padrão'));
-      } else if (selected === 'langgraph') {
-        process.env['AION_ORCHESTRATOR'] = 'langgraph';
-        console.log(chalk.green('  Orquestrador definido para: LangGraph'));
-      }
-      await pressEnter();
-      continue;
-    }
-
-    if (action === 'health') {
-      run(['--cwd', cwd, 'health']);
-      await pressEnter();
-      continue;
-    }
-
     if (action === 'report') {
       run(['--cwd', cwd, 'report']);
       await pressEnter();
-      continue;
-    }
-
-    if (action === 'setup') {
-      run(['--cwd', cwd, 'setup']);
-      await pressEnter();
-      await loadCapState(cwd);
       continue;
     }
   }
