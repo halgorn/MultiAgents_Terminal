@@ -8,6 +8,7 @@ import type { TaskResult } from '../task.js';
 import type { TaskState } from '../state-machine.js';
 import type { EvidenceReport } from '../../schemas/evidence.js';
 import type { PatchReport } from '../../schemas/patch.js';
+import { KnowledgeStore } from '../../infra/knowledge.js';
 
 export async function runReviewPipeline(ctx: PipelineContext, target: string): Promise<TaskResult> {
   const req = { id: randomUUID(), command: 'review' as const, target, cwd: ctx.cwd, createdAt: new Date() };
@@ -22,10 +23,18 @@ export async function runReviewPipeline(ctx: PipelineContext, target: string): P
     let diffContent = target;
     try { diffContent = readFileSync(target, 'utf8'); } catch { /* target is a description */ }
 
+    let ragSummary = '';
+    try {
+      const knowledge = new KnowledgeStore(ctx.cwd);
+      if (knowledge.embeddings.hasIndex()) {
+        ragSummary = await knowledge.buildContextSemantic(target, 1500);
+      }
+    } catch { /* best-effort */ }
+
     const syntheticEvidence: EvidenceReport = {
       reproduced: true,
       confidence: 100,
-      logs: ['review requested by user'],
+      logs: ['review requested by user', ...(ragSummary ? [`RAG context:\n${ragSummary}`] : [])],
       files: [{ path: target, line: 1, snippet: diffContent.slice(0, 200) }],
       summary: `Code review of: ${target}`,
     };
