@@ -87,16 +87,17 @@ aion menu
 
 The menu includes:
 
-- Audit presets
-- Reports
-- Dependency graph
-- Churn analysis
-- Local scans
-- Pattern detection
-- Health score
-- Explain and onboarding commands
-- Built-in terminal documentation
-- Natural language mode
+- Guided audit tracks (bugs, security, performance) with mode selection:
+  - dry-run (fast preview)
+  - local-only (no AI cost)
+  - normal AI
+  - deep AI (explicit confirmation)
+- File fix and issue analysis shortcuts
+- Assistant NL mode (action-oriented workflows)
+- Chat Q&A mode (repository context Q&A)
+- Health check
+- Unified report opening
+- Setup and indexing guidance
 
 ## Common Commands
 

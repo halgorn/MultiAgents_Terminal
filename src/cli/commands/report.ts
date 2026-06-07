@@ -1,12 +1,23 @@
 import type { Command } from 'commander';
 import { spawnSync } from 'child_process';
 import chalk from 'chalk';
-import { buildProjectReportData, latestAuditPointer, writeProjectReport } from '../../infra/project-report.js';
+import { buildProjectReportData, latestAuditPointer, projectReportPath, writeProjectReport } from '../../infra/project-report.js';
 
 function openFile(path: string): void {
   const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
   const args = process.platform === 'win32' ? ['/c', 'start', '', path] : [path];
   spawnSync(opener, args, { stdio: 'ignore', timeout: 5000 });
+}
+
+function ensureUnifiedReport(cwd: string): string {
+  const reportPath = projectReportPath(cwd);
+  if (!latestAuditPointer(cwd)) {
+    throw new Error('No audit report found. Run: aion audit . --local-only');
+  }
+  if (!reportPath) {
+    throw new Error('Could not resolve unified report path.');
+  }
+  return reportPath;
 }
 
 function printLatest(cwd: string): void {
@@ -40,7 +51,13 @@ export function registerReport(program: Command): void {
       const cwd = process.cwd();
       const latest = latestAuditPointer(cwd);
       printLatest(cwd);
-      if (options.open && latest?.html) openFile(latest.html);
+      if (options.open && latest) {
+        try {
+          openFile(ensureUnifiedReport(cwd));
+        } catch (err) {
+          console.log(chalk.yellow(String((err as Error).message)));
+        }
+      }
     });
 
   report
@@ -49,6 +66,15 @@ export function registerReport(program: Command): void {
     .option('--days <n>', 'git lookback for churn analysis', '90')
     .action(async (options: { open: boolean; md?: boolean; days: string }) => {
       const cwd = process.cwd();
+      const latest = latestAuditPointer(cwd);
+      if (latest) {
+        const unified = projectReportPath(cwd);
+        console.log(`Unified HTML: ${unified}`);
+        console.log(`Latest run:    ${latest.html ?? latest.runDir ?? 'n/a'}`);
+        if (options.open !== false) openFile(unified);
+        return;
+      }
+
       const days = parseInt(options.days, 10) || 90;
       console.log(`Building report for ${cwd.split('/').pop() ?? 'project'}...`);
       const data = await buildProjectReportData(cwd, days);

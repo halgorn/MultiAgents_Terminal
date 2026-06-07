@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MAIN_ITEMS, runMenuFallback } from './menu.js';
 
-test('menu principal tem os 8 itens acionáveis esperados', () => {
+test('menu principal tem os itens acionáveis esperados', () => {
   const selectable = MAIN_ITEMS
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
 
-  assert.deepEqual(selectable, ['bugs', 'security', 'perf', 'fix', 'analyze', 'chat', 'health', 'setup']);
+  assert.deepEqual(selectable, ['bugs', 'security', 'perf', 'fix', 'analyze', 'assistant', 'chat-qa', 'health', 'report', 'setup']);
 });
 
 test('menu não tem submenus antigos', () => {
@@ -27,8 +27,10 @@ test('menu tem os labels corretos', () => {
   assert.equal(labels.includes('⚡ Performance & Infra'), true);
   assert.equal(labels.includes('🔧 Corrigir arquivo'), true);
   assert.equal(labels.includes('🔍 Analisar problema'), true);
-  assert.equal(labels.includes('💬 Chat sobre o repo'), true);
+  assert.equal(labels.includes('🤖 Assistente NL (ações)'), true);
+  assert.equal(labels.includes('💬 Chat Q&A do código'), true);
   assert.equal(labels.includes('📊 Health check'), true);
+  assert.equal(labels.includes('📋 Ver relatório'), true);
   assert.equal(labels.includes('⚙️  Setup'), true);
 });
 
@@ -51,4 +53,5 @@ test('non-TTY fallback imprime comandos acionáveis', () => {
   assert.match(output, /aion fix/);
   assert.match(output, /aion setup/);
   assert.match(output, /aion audit/);
+  assert.match(output, /aion next/);
 });

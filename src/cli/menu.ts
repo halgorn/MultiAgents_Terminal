@@ -40,6 +40,22 @@ export const BUDGETS = [
   { label: 'deep',   hint: 'completo         · est. $2.00–5.00', value: 'deep' },
 ];
 
+type AuditTrack = 'bugs' | 'security' | 'perf';
+type AuditMode = 'dry-run' | 'local-only' | 'normal' | 'deep';
+
+const AUDIT_DOMAIN_ARGS: Record<AuditTrack, string> = {
+  bugs: 'bugs,error-handling,architecture,testing',
+  security: 'security,compliance,dependencies',
+  perf: 'performance,observability,resilience',
+};
+
+const AUDIT_MODE_ITEMS: Array<MenuItem<AuditMode>> = [
+  { label: '⚡ Rápido (dry-run)', hint: 'sem IA · prévia dos scanners e custo', value: 'dry-run' },
+  { label: '🧪 Local only', hint: 'sem IA · varredura local completa', value: 'local-only' },
+  { label: '🤖 IA normal', hint: 'balanceado · budget normal', value: 'normal' },
+  { label: '🧠 IA profunda', hint: 'mais cobertura e mais custo', value: 'deep' },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function resetTty(): void {
@@ -111,6 +127,37 @@ async function promptLine(question: string): Promise<string> {
   });
 }
 
+async function chooseAuditMode(track: AuditTrack): Promise<AuditMode | null> {
+  const mode = await selectOne(`Modo do audit (${track})`, AUDIT_MODE_ITEMS);
+  if (!mode) return null;
+  if (mode !== 'deep') return mode;
+
+  const confirm = await promptLine('Confirmar modo profundo? Digite DEEP');
+  if (confirm !== 'DEEP') {
+    console.log(chalk.yellow('  Audit profundo cancelado (confirmação não fornecida).'));
+    return null;
+  }
+  return mode;
+}
+
+function runAuditTrack(cwd: string, track: AuditTrack, mode: AuditMode): void {
+  const domains = AUDIT_DOMAIN_ARGS[track];
+  const args = ['--cwd', cwd, 'audit', '.', '--domains', domains];
+  if (mode === 'dry-run') {
+    run([...args, '--dry-run', '--max-files', '20']);
+    return;
+  }
+  if (mode === 'local-only') {
+    run([...args, '--local-only']);
+    return;
+  }
+  if (mode === 'normal') {
+    run([...args, '--budget', 'normal']);
+    return;
+  }
+  run([...args, '--budget', 'deep', '--force-full']);
+}
+
 // ── Capability state ──────────────────────────────────────────────────────────
 
 let _ragReady = false;
@@ -165,6 +212,7 @@ export function runMenuFallback(cwd: string): void {
   console.log(chalk.bold('  Diagnóstico: ') + chalk.cyan('aion health  · aion scan secrets  · aion report'));
   console.log(chalk.bold('  Audit:       ') + chalk.cyan('aion audit . --domains security  · aion audit . --preset quality'));
   console.log(chalk.bold('  IA:          ') + chalk.cyan('aion fix <arquivo>  · aion analyze "<problema>"  · aion chat'));
+  console.log(chalk.bold('  Fluxo guiado:') + chalk.cyan('aion next'));
   console.log(chalk.bold('  Setup:       ') + chalk.cyan('aion setup  · aion memory build  · aion index'));
   console.log('');
 }
@@ -177,9 +225,10 @@ export const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '⚡ Performance & Infra', hint: 'audit: performance, observability, resilience',       value: 'perf' },
   { label: '🔧 Corrigir arquivo',    hint: 'pede caminho → aion fix',                             value: 'fix' },
   { label: '🔍 Analisar problema',   hint: 'pede descrição → aion analyze',                       value: 'analyze' },
-  { label: '💬 Chat sobre o repo',   hint: 'modo interativo em linguagem natural',                value: 'chat' },
+  { label: '🤖 Assistente NL (ações)', hint: 'fix/analyze/audit via linguagem natural',           value: 'assistant' },
+  { label: '💬 Chat Q&A do código',   hint: 'perguntas e respostas com contexto do repositório',  value: 'chat-qa' },
   { label: '📊 Health check',        hint: 'sem IA, zero custo',                                  value: 'health' },
-  { label: '📋 Ver relatório',       hint: 'abre o último relatório HTML no navegador',            value: 'report' },
+  { label: '📋 Ver relatório',       hint: 'abre o relatório principal unificado',                 value: 'report' },
   { label: '⚙️  Setup',              hint: 'wizard inicial: config, índices e RAG',               value: 'setup' },
   { label: '', value: 'sep', separator: true },
   { label: '  Sair', value: 'quit' },
@@ -235,19 +284,22 @@ export async function runMenu(cwd: string): Promise<void> {
     if (action === 'sep' || action === '') continue;
 
     if (action === 'bugs') {
-      run(['--cwd', cwd, 'audit', '.', '--domains', 'bugs,error-handling,architecture,testing', '--force-full']);
+      const mode = await chooseAuditMode('bugs');
+      if (mode) runAuditTrack(cwd, 'bugs', mode);
       await pressEnter();
       continue;
     }
 
     if (action === 'security') {
-      run(['--cwd', cwd, 'audit', '.', '--domains', 'security,compliance,dependencies', '--force-full']);
+      const mode = await chooseAuditMode('security');
+      if (mode) runAuditTrack(cwd, 'security', mode);
       await pressEnter();
       continue;
     }
 
     if (action === 'perf') {
-      run(['--cwd', cwd, 'audit', '.', '--domains', 'performance,observability,resilience', '--force-full']);
+      const mode = await chooseAuditMode('perf');
+      if (mode) runAuditTrack(cwd, 'perf', mode);
       await pressEnter();
       continue;
     }
@@ -264,9 +316,14 @@ export async function runMenu(cwd: string): Promise<void> {
       continue;
     }
 
-    if (action === 'chat') {
+    if (action === 'assistant') {
       const { runInteractive } = await import('./interactive.js');
       await runInteractive(cwd);
+      continue;
+    }
+
+    if (action === 'chat-qa') {
+      run(['--cwd', cwd, 'chat']);
       continue;
     }
 
@@ -277,16 +334,7 @@ export async function runMenu(cwd: string): Promise<void> {
     }
 
     if (action === 'report') {
-      const { projectReportPath } = await import('../infra/project-report.js');
-      const reportPath = projectReportPath(cwd);
-      if (existsSync(reportPath)) {
-        const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
-        const child = spawnSync(cmd, [`file://${reportPath}`]);
-        void child;
-        console.log(chalk.green(`\n  ✓ Abrindo ${reportPath}`));
-      } else {
-        console.log(chalk.yellow('\n  Nenhum relatório encontrado — execute um audit primeiro.'));
-      }
+      run(['--cwd', cwd, 'report']);
       await pressEnter();
       continue;
     }
