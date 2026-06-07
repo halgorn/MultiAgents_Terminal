@@ -6,6 +6,8 @@ import { CostTracker } from '../../core/cost-tracker.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
 import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
 import { parseBudget } from '../cli-utils.js';
+import { buildAssistPlan, saveAssistPlan } from '../../infra/assist/assist-plan.js';
+import { applyArtifacts, formatArtifactSummary } from '../../infra/assist/apply-artifacts.js';
 
 const SEVERITY_LEVELS = ['critical', 'high', 'medium', 'low'] as const;
 type Severity = (typeof SEVERITY_LEVELS)[number];
@@ -27,7 +29,7 @@ function parseFailOn(v: string): Severity {
 }
 
 export function registerCi(program: Command): void {
-  program
+  const ci = program
     .command('ci [target]')
     .description('CI-mode audit: structured output + exit codes (0=clean, 1=high, 2=critical)')
     .option('--budget <budget>', 'low | normal | deep', 'low')
@@ -159,5 +161,25 @@ export function registerCi(program: Command): void {
         }
         process.exit(3);
       }
+    });
+
+  ci
+    .command('assist')
+    .description('Generate GitHub Actions CI workflow with Aion local scans')
+    .option('--dry-run', 'show planned writes only', true)
+    .option('--apply', 'write generated workflow')
+    .option('--overwrite', 'overwrite existing workflow')
+    .action((options: { dryRun?: boolean; apply?: boolean; overwrite?: boolean }) => {
+      const plan = buildAssistPlan(process.cwd(), { mode: 'ci' });
+      const ciOnly = {
+        ...plan,
+        artifacts: plan.artifacts.filter((artifact) => artifact.path.includes('aion-ci.yml') || artifact.path.endsWith('README.md')),
+        remoteSteps: [],
+      };
+      const planPath = saveAssistPlan(process.cwd(), ciOnly);
+      const result = applyArtifacts(process.cwd(), ciOnly, { dryRun: !options.apply, overwrite: options.overwrite });
+      process.stdout.write(`Assist plan: ${planPath}\n`);
+      process.stdout.write(formatArtifactSummary(result) + '\n');
+      if (!options.apply) process.stdout.write('Dry-run only. Re-run with --apply to write files.\n');
     });
 }

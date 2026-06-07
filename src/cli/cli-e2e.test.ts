@@ -1,54 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
-import { join, resolve } from 'path';
-import { tmpdir } from 'os';
-import { spawnSync } from 'child_process';
-
-const CLI = resolve('src/index.ts');
-
-function makeRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'aion-cli-e2e-'));
-  mkdirSync(join(dir, 'src'), { recursive: true });
-  writeFileSync(join(dir, 'src', 'rag.ts'), [
-    'export function retrieveContext(query: string) {',
-    '  return `semantic retrieval for ${query}`;',
-    '}',
-  ].join('\n'));
-  writeFileSync(join(dir, 'src', 'app.ts'), [
-    "import { retrieveContext } from './rag.js';",
-    'export function answerQuestion(question: string) {',
-    '  return retrieveContext(question);',
-    '}',
-  ].join('\n'));
-  writeFileSync(join(dir, 'src', 'app.test.ts'), [
-    "import { answerQuestion } from './app.js';",
-    'answerQuestion("hello");',
-  ].join('\n'));
-  return dir;
-}
-
-function runCli(repo: string, args: string[]) {
-  return spawnSync(process.execPath, ['--import', 'tsx', CLI, '--cwd', repo, ...args], {
-    cwd: resolve('.'),
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      AION_SKIP_UPDATE_CHECK: '1',
-      VOYAGE_API_KEY: '',
-      OPENAI_API_KEY: '',
-      ANTHROPIC_API_KEY: '',
-      OPENROUTER_API_KEY: '',
-      QDRANT_URL: '',
-    },
-    timeout: 30_000,
-  });
-}
+import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { embedText } from '../infra/embeddings.js';
+import { makeFixtureRepo, runSourceCli } from '../test-utils/fixtures.js';
 
 test('CLI exposes non-TTY menu fallback without hanging', () => {
-  const repo = makeRepo();
+  const repo = makeFixtureRepo('aion-cli-e2e-');
   try {
-    const result = runCli(repo, ['menu']);
+    const result = runSourceCli(repo, ['menu']);
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Run from an interactive terminal/);
@@ -59,16 +19,16 @@ test('CLI exposes non-TTY menu fallback without hanging', () => {
 });
 
 test('CLI local search and memory index work on a fixture repo', () => {
-  const repo = makeRepo();
+  const repo = makeFixtureRepo('aion-cli-e2e-');
   try {
-    const search = runCli(repo, ['search', 'semantic retrieval context', '--semantic', '--rebuild', '--limit', '3']);
+    const search = runSourceCli(repo, ['search', 'semantic retrieval context', '--semantic', '--rebuild', '--limit', '3']);
     assert.equal(search.status, 0, search.stderr);
     assert.match(search.stdout, /src\/rag\.ts/);
 
-    const index = runCli(repo, ['memory', 'index']);
+    const index = runSourceCli(repo, ['memory', 'index']);
     assert.equal(index.status, 0, index.stderr);
 
-    const query = runCli(repo, ['memory', 'query', 'answerQuestion']);
+    const query = runSourceCli(repo, ['memory', 'query', 'answerQuestion']);
     assert.equal(query.status, 0, query.stderr);
     assert.match(query.stdout, /src\/app\.ts/);
   } finally {
@@ -77,12 +37,156 @@ test('CLI local search and memory index work on a fixture repo', () => {
 });
 
 test('CLI impact-local accepts a prompted menu target equivalent without AI', () => {
-  const repo = makeRepo();
+  const repo = makeFixtureRepo('aion-cli-e2e-');
   try {
-    const result = runCli(repo, ['impact-local', 'src/rag.ts', '--rebuild', '--json']);
+    const result = runSourceCli(repo, ['impact-local', 'src/rag.ts', '--rebuild', '--json']);
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /src\/rag\.ts/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI help, version, cwd validation, and audit dry-run work without providers', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    const help = runSourceCli(repo, ['--help']);
+    assert.equal(help.status, 0, help.stderr);
+    assert.match(help.stdout, /Commands:/);
+
+    const version = runSourceCli(repo, ['--version']);
+    assert.equal(version.status, 0, version.stderr);
+    assert.match(version.stdout.trim(), /^\d+\.\d+\.\d+$/);
+
+    const invalidCwd = runSourceCli(repo, ['--cwd', '/definitely/not/a/real/path', 'health']);
+    assert.equal(invalidCwd.status, 1);
+    assert.match(invalidCwd.stderr, /directory not found/);
+
+    const dryRun = runSourceCli(repo, ['audit', '.', '--dry-run', '--max-files', '2']);
+    assert.equal(dryRun.status, 0, dryRun.stderr);
+    assert.match(dryRun.stdout, /Audit dry run/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI local subcommands smoke without API keys or internet assumptions', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    const scanSecrets = runSourceCli(repo, ['scan', 'secrets']);
+    assert.equal(scanSecrets.status, 0, scanSecrets.stderr);
+    assert.match(scanSecrets.stdout, /No hardcoded secrets detected/);
+
+    const docsAnalyze = runSourceCli(repo, ['docs', 'analyze', '--json']);
+    assert.equal(docsAnalyze.status, 0, docsAnalyze.stderr);
+    assert.match(docsAnalyze.stdout, /"score"/);
+
+    const cloudStatus = runSourceCli(repo, ['cloud', 'status']);
+    assert.equal(cloudStatus.status, 0, cloudStatus.stderr);
+    assert.match(cloudStatus.stdout, /Cloud provider detection/);
+
+    const mcpTools = runSourceCli(repo, ['mcp', 'list-tools']);
+    assert.equal(mcpTools.status, 0, mcpTools.stderr);
+    assert.match(mcpTools.stdout, /search_memory/);
+
+    const ciDryRun = runSourceCli(repo, ['ci', '.', '--dry-run']);
+    assert.equal(ciDryRun.status, 0, ciDryRun.stderr);
+    assert.match(ciDryRun.stdout, /"dryRun": true/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI reports expected errors for missing local indexes', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    const memoryQuery = runSourceCli(repo, ['memory', 'query', 'anything']);
+    assert.equal(memoryQuery.status, 1);
+    assert.match(memoryQuery.stderr, /No repo index found/);
+
+    const evalRetrieval = runSourceCli(repo, ['eval', 'retrieval']);
+    assert.equal(evalRetrieval.status, 1);
+    assert.match(evalRetrieval.stderr, /No golden set found/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI eval retrieval runs offline with local reranker and JSON output', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    mkdirSync(join(repo, '.ai-memory', 'eval'), { recursive: true });
+    mkdirSync(join(repo, '.ai-runtime'), { recursive: true });
+    writeFileSync(join(repo, '.ai-memory', 'eval', 'retrieval.json'), JSON.stringify({
+      queries: [{ query: 'semantic retrieval context', expected: ['src/rag.ts'] }],
+    }));
+    writeFileSync(join(repo, '.ai-runtime', 'vectors.json'), JSON.stringify([
+      {
+        id: 'src/rag.ts:retrieveContext',
+        vector: Array.from(embedText('semantic retrieval context retrieveContext', 500)),
+        payload: { file: 'src/rag.ts', preview: 'semantic retrieval context retrieveContext' },
+      },
+    ]));
+
+    const result = runSourceCli(repo, ['eval', 'retrieval', '--rerank', 'local', '--json']);
+
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout) as { recall3: number; rerankMode: string; results: Array<{ hitAt3: boolean }> };
+    assert.equal(report.rerankMode, 'local');
+    assert.equal(report.recall3, 1);
+    assert.equal(report.results[0]?.hitAt3, true);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI assist and deploy commands create dry-run plans without remote side effects', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    writeFileSync(join(repo, 'package.json'), JSON.stringify({
+      name: 'assist-demo',
+      scripts: {
+        build: 'tsc',
+        test: 'node --test',
+        start: 'PORT=3050 node server.js',
+      },
+    }));
+
+    const assist = runSourceCli(repo, ['assist', '--domain', 'demo.example.com']);
+    assert.equal(assist.status, 0, assist.stderr);
+    assert.match(assist.stdout, /Dry-run only/);
+    assert.match(assist.stdout, /aion-ci\.yml/);
+
+    const plan = runSourceCli(repo, ['deploy', 'plan', '--json', '--domain', 'demo.example.com']);
+    assert.equal(plan.status, 0, plan.stderr);
+    const parsed = JSON.parse(plan.stdout) as { healthcheckUrl: string; artifacts: Array<{ path: string }> };
+    assert.equal(parsed.healthcheckUrl, 'http://demo.example.com/');
+    assert.equal(parsed.artifacts.some((artifact) => artifact.path.includes('aion-deploy.yml')), true);
+
+    const deployAssist = runSourceCli(repo, ['deploy', 'assist', '--domain', 'demo.example.com']);
+    assert.equal(deployAssist.status, 0, deployAssist.stderr);
+    assert.match(deployAssist.stdout, /Assist plan:/);
+    assert.match(deployAssist.stdout, /Dry-run only/);
+
+    const apply = runSourceCli(repo, ['deploy', 'apply', '--plan', join(repo, '.ai-runtime', 'assist', 'deploy-plan.json')]);
+    assert.equal(apply.status, 0, apply.stderr);
+    assert.match(apply.stdout, /ssh \$\{SSH_USER\}@\$\{SSH_HOST\}/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI ci assist and deploy check expose safe failure modes', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    const ciAssist = runSourceCli(repo, ['ci', 'assist']);
+    assert.equal(ciAssist.status, 0, ciAssist.stderr);
+    assert.match(ciAssist.stdout, /aion-ci\.yml/);
+
+    const badCheck = runSourceCli(repo, ['deploy', 'check', 'file:///etc/passwd']);
+    assert.equal(badCheck.status, 1);
+    assert.match(badCheck.stdout, /Invalid healthcheck URL/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

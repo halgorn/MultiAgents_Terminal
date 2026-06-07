@@ -44,42 +44,15 @@ export const BUDGETS: Array<MenuItem<string>> = [
   { label: 'deep',   hint: 'thorough       · est. $2.00–5.00', value: 'deep' },
 ];
 
-// ── 5-category main menu ──────────────────────────────────────────────────────
+// ── Human-first main menu ─────────────────────────────────────────────────────
 
 export const MAIN_ITEMS: Array<MenuItem<string>> = [
-  { label: 'Inspect',   value: '', header: true },
-  { label: '💊 Health',    hint: 'composite score 0–100',              value: 'health' },
-  { label: '🔬 Scan',      hint: 'zero-token: secrets, env, api-map',  value: 'scan' },
-  { label: '📈 Churn',     hint: 'git churn + knowledge silos',        value: 'churn' },
-  { label: '🌲 Tree',      hint: 'file tree with finding hotspots',    value: 'tree' },
-  { label: '🔀 Diff',      hint: 'compare two audit runs',             value: 'diff' },
-
-  { label: 'Explore',   value: '', header: true },
-  { label: '🌐 Graph',     hint: 'interactive dependency map',         value: 'graph' },
-  { label: '🔎 Search',    hint: 'repo index: files, symbols, chunks', value: 'search' },
-  { label: '💥 Impact',    hint: 'what breaks if this file changes',   value: 'impact' },
-  { label: '🧠 Memory',    hint: 'build/search code knowledge base',   value: 'memory' },
-
-  { label: 'Audit',     value: '', header: true },
-  { label: '🔍 Audit',     hint: 'multi-persona AI deep analysis',     value: 'audit' },
-  { label: '🏗️  Patterns',  hint: 'architecture pattern detection',    value: 'patterns' },
-  { label: '🏥 Report',    hint: 'full HTML + markdown report',        value: 'report' },
-
-  { label: 'Fix',       value: '', header: true },
-  { label: '🔧 Fix',       hint: 'AI-guided fix for a bug or finding', value: 'fix' },
-  { label: '🔬 Analyze',   hint: 'investigate a bug or issue',         value: 'analyze' },
-  { label: '👁️  Review',    hint: 'review a file or diff',             value: 'review' },
-  { label: '💬 Explain',   hint: 'AI explanation + onboarding guide',  value: 'explain' },
-  { label: '💭 Chat',      hint: 'interactive AI Q&A about the repo',  value: 'chat' },
-
-  { label: 'Setup',     value: '', header: true },
-  { label: '📚 Docs',      hint: 'analyze + generate project docs',    value: 'docs' },
-  { label: '☁️  Cloud',     hint: 'read-only infra gap analysis',       value: 'cloud' },
-  { label: '🔌 MCP',       hint: 'expose aion to Claude Desktop',      value: 'mcp' },
-  { label: '📊 Eval',      hint: 'measure retrieval + agent quality',  value: 'eval' },
-  { label: '📡 Trace',     hint: 'agent run history: cost & latency',  value: 'trace' },
-  { label: '⚙️  Init',      hint: '.aionrc.json + .aionignore',         value: 'init' },
-
+  { label: 'Ver estado do projeto',       hint: 'health, scans rápidos, árvore e docs',        value: 'status' },
+  { label: 'Encontrar problemas',         hint: 'scan local, auditoria, padrões e relatórios', value: 'problems' },
+  { label: 'Buscar e entender código',    hint: 'grafo, busca, impacto e memória/RAG',         value: 'explore' },
+  { label: 'Corrigir ou revisar com IA',  hint: 'fix, analyze, review, explain e chat',        value: 'ai-help' },
+  { label: 'Publicar / operar',           hint: 'CI + deploy assistido, healthcheck e init',   value: 'publish' },
+  { label: 'Avançado',                    hint: 'churn, diff, cloud, MCP, eval e trace',       value: 'advanced' },
   { label: '', value: 'sep', separator: true },
   { label: '❯ Natural language', hint: 'type a request in any language', value: 'nl' },
   { label: '  Quit', value: 'quit' },
@@ -106,11 +79,18 @@ export const DIRECT_COMMANDS: Record<string, string[]> = {
   patterns: ['patterns'],
   report:   ['report'],
   chat:     ['chat'],
+  assist:   ['assist'],
   init:     ['init'],
   trace:    ['trace'],
 };
 
 export const MENU_ACTION_AUDIT: MenuActionAuditEntry[] = [
+  { action: 'status', submenu: 'status', cost: 'zero-token', recommendation: 'keep', note: 'Human-friendly project status submenu.' },
+  { action: 'problems', submenu: 'problems', cost: 'ai', recommendation: 'keep', note: 'Problem finding submenu with local and AI options.' },
+  { action: 'explore', submenu: 'explore', cost: 'local-side-effect', recommendation: 'keep', note: 'Code understanding submenu with graph/search/memory.' },
+  { action: 'ai-help', submenu: 'ai-help', cost: 'ai', recommendation: 'keep', note: 'AI fix/analyze/review/explain/chat submenu.' },
+  { action: 'publish', submenu: 'publish', cost: 'local-side-effect', recommendation: 'keep', note: 'CI and deploy assist submenu.' },
+  { action: 'advanced', submenu: 'advanced', cost: 'external-service', recommendation: 'keep', note: 'Advanced tools kept off the main path.' },
   { action: 'health', command: DIRECT_COMMANDS.health, cost: 'zero-token', recommendation: 'keep', note: 'Local health score smoke test.' },
   { action: 'scan', submenu: 'scan', cost: 'zero-token', recommendation: 'keep', note: 'Local static scans; each scan type is testable.' },
   { action: 'churn', command: DIRECT_COMMANDS.churn, cost: 'zero-token', recommendation: 'keep', note: 'Uses git history only.' },
@@ -129,6 +109,7 @@ export const MENU_ACTION_AUDIT: MenuActionAuditEntry[] = [
   { action: 'explain', submenu: 'explain', cost: 'ai', recommendation: 'keep', note: 'File explain uses provider; onboard is AI-powered.' },
   { action: 'chat', command: DIRECT_COMMANDS.chat, cost: 'ai', recommendation: 'keep', note: 'Interactive provider-backed chat.' },
   { action: 'docs', submenu: 'docs', cost: 'ai', recommendation: 'keep', note: 'Analyze is local; generate is AI-powered.' },
+  { action: 'assist', command: DIRECT_COMMANDS.assist, cost: 'local-side-effect', recommendation: 'keep', note: 'Guided CI/deploy setup defaults to dry-run.' },
   { action: 'cloud', submenu: 'cloud', cost: 'external-service', recommendation: 'keep', note: 'Read-only cloud CLIs and credentials.' },
   { action: 'mcp', submenu: 'mcp', cost: 'long-running', recommendation: 'hide', note: 'Serve/register are advanced setup actions.' },
   { action: 'eval', submenu: 'eval', cost: 'ai', recommendation: 'keep', note: 'Scaffold/local retrieval are cheap; LLM rerank is explicit.' },
@@ -315,6 +296,135 @@ async function runEvalMenu(cwd: string): Promise<void> {
   await pressEnter();
 }
 
+async function runStatusMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Ver estado do projeto', [
+    { label: 'Health score',       hint: 'resumo local 0-100',                       value: 'health' },
+    { label: 'Scan secrets',       hint: 'zero-token: credenciais hardcoded',        value: 'scan-secrets' },
+    { label: 'Tree hotspots',      hint: 'árvore do projeto com pontos relevantes',  value: 'tree' },
+    { label: 'Docs analyze',       hint: 'lacunas de documentação',                  value: 'docs-analyze' },
+    { label: '← Back',             value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'scan-secrets') { run(['--cwd', cwd, 'scan', 'secrets']); await pressEnter(); return; }
+  if (action === 'docs-analyze') { run(['--cwd', cwd, 'docs', 'analyze']); await pressEnter(); return; }
+  run(['--cwd', cwd, ...(DIRECT_COMMANDS[action] ?? [action])]);
+  await pressEnter();
+}
+
+async function runProblemsMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Encontrar problemas', [
+    { label: 'Scan local',        hint: 'secrets, env, api-map, sbom',        value: 'scan' },
+    { label: 'Audit com personas', hint: 'análise AI com orçamento explícito', value: 'audit' },
+    { label: 'Patterns',          hint: 'padrões arquiteturais locais',       value: 'patterns' },
+    { label: 'Report',            hint: 'relatório HTML/Markdown local',      value: 'report' },
+    { label: '← Back',            value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'scan') { await runScanMenu(cwd); return; }
+  if (action === 'audit') { await runAuditMenu(cwd); return; }
+  run(['--cwd', cwd, ...(DIRECT_COMMANDS[action] ?? [action])]);
+  await pressEnter();
+}
+
+async function runExploreMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Buscar e entender código', [
+    { label: 'Graph',        hint: 'mapa interativo de dependências', value: 'graph' },
+    { label: 'Search',       hint: 'busca no índice/repo',            value: 'search' },
+    { label: 'Impact',       hint: 'o que quebra se arquivo mudar',   value: 'impact' },
+    { label: 'Memory / RAG', hint: 'build/search/deps do índice',     value: 'memory' },
+    { label: '← Back',       value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'memory') { await runMemoryMenu(cwd); return; }
+  if (action === 'search') {
+    const q = await promptLine('Search query');
+    if (q) { run(['--cwd', cwd, 'search', q]); await pressEnter(); }
+    return;
+  }
+  if (action === 'impact') {
+    const file = await promptLine('File path for impact analysis');
+    if (file) { run(['--cwd', cwd, 'impact-local', file, '--rebuild']); await pressEnter(); }
+    return;
+  }
+  run(['--cwd', cwd, ...(DIRECT_COMMANDS[action] ?? [action])]);
+  await pressEnter();
+}
+
+async function runAiHelpMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Corrigir ou revisar com IA', [
+    { label: 'Fix',     hint: 'corrigir arquivo/bug com IA',      value: 'fix' },
+    { label: 'Analyze', hint: 'investigar bug ou comportamento',  value: 'analyze' },
+    { label: 'Review',  hint: 'revisar arquivo ou diff',          value: 'review' },
+    { label: 'Explain', hint: 'explicar arquivo/onboarding',      value: 'explain' },
+    { label: 'Chat',    hint: 'Q&A interativo sobre o repo',      value: 'chat' },
+    { label: '← Back',  value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'explain') { await runExplainMenu(cwd); return; }
+  if (action === 'chat') { run(['--cwd', cwd, 'chat']); await pressEnter(); return; }
+  if (action === 'fix') {
+    const file = await promptLine('File to fix (relative path)');
+    if (file) { run(['--cwd', cwd, 'fix', file]); await pressEnter(); }
+    return;
+  }
+  if (action === 'analyze') {
+    const target = await promptLine('Describe the bug or issue');
+    if (target) { run(['--cwd', cwd, 'analyze', target]); await pressEnter(); }
+    return;
+  }
+  if (action === 'review') {
+    const target = await promptLine('File path or diff to review');
+    if (target) { run(['--cwd', cwd, 'review', target]); await pressEnter(); }
+  }
+}
+
+async function runPublishMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Publicar / operar', [
+    { label: 'CI + Deploy assistido', hint: 'plano seguro em dry-run',              value: 'assist' },
+    { label: 'Configurar CI',         hint: 'GitHub Actions com testes e scans',    value: 'ci-assist' },
+    { label: 'Plano de deploy',       hint: 'gera .ai-runtime/assist/deploy-plan',  value: 'deploy-plan' },
+    { label: 'Deploy assistido',      hint: 'gera workflows, Nginx e healthcheck',  value: 'deploy-assist' },
+    { label: 'Aplicar plano',         hint: 'pergunta caminho do plano, dry-run',   value: 'deploy-apply' },
+    { label: 'Testar healthcheck',    hint: 'curl em URL informada',                value: 'deploy-check' },
+    { label: 'Init projeto',          hint: '.aionrc.json + .aionignore',           value: 'init' },
+    { label: '← Back',                value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'ci-assist') { run(['--cwd', cwd, 'ci', 'assist']); await pressEnter(); return; }
+  if (action === 'deploy-plan') { run(['--cwd', cwd, 'deploy', 'plan']); await pressEnter(); return; }
+  if (action === 'deploy-assist') { run(['--cwd', cwd, 'deploy', 'assist']); await pressEnter(); return; }
+  if (action === 'deploy-apply') {
+    const plan = await promptLine('Path to deploy-plan.json');
+    if (plan) { run(['--cwd', cwd, 'deploy', 'apply', '--plan', plan]); await pressEnter(); }
+    return;
+  }
+  if (action === 'deploy-check') {
+    const url = await promptLine('Healthcheck URL');
+    if (url) { run(['--cwd', cwd, 'deploy', 'check', url]); await pressEnter(); }
+    return;
+  }
+  run(['--cwd', cwd, ...(DIRECT_COMMANDS[action] ?? [action])]);
+  await pressEnter();
+}
+
+async function runAdvancedMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Avançado', [
+    { label: 'Churn', hint: 'histórico git e hotspots sociais', value: 'churn' },
+    { label: 'Diff',  hint: 'comparar relatórios de auditoria', value: 'diff' },
+    { label: 'Cloud', hint: 'infra cloud read-only',            value: 'cloud' },
+    { label: 'MCP',   hint: 'expor tools para Claude Desktop',  value: 'mcp' },
+    { label: 'Eval',  hint: 'medir retrieval e rerank',         value: 'eval' },
+    { label: 'Trace', hint: 'histórico de custo/latência',      value: 'trace' },
+    { label: '← Back', value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'cloud') { await runCloudMenu(cwd); return; }
+  if (action === 'mcp') { await runMcpMenu(cwd); return; }
+  if (action === 'eval') { await runEvalMenu(cwd); return; }
+  run(['--cwd', cwd, ...(DIRECT_COMMANDS[action] ?? [action])]);
+  await pressEnter();
+}
+
 // ── Fallback (non-TTY) ────────────────────────────────────────────────────────
 
 export function runMenuFallback(cwd: string): void {
@@ -324,11 +434,11 @@ export function runMenuFallback(cwd: string): void {
   console.log(chalk.dim('  ─────────────────────────────────────'));
   console.log(chalk.dim('  Run from an interactive terminal to get the menu.'));
   console.log('');
-  console.log(chalk.bold('  Inspect:  ') + chalk.cyan('aion health  · aion scan secrets  · aion churn'));
-  console.log(chalk.bold('  Explore:  ') + chalk.cyan('aion graph   · aion search "<q>"  · aion impact-local <file>'));
-  console.log(chalk.bold('  Audit:    ') + chalk.cyan('aion audit . --preset security  · aion audit . --budget low'));
-  console.log(chalk.bold('  Fix:      ') + chalk.cyan('aion fix <file>  · aion analyze "<bug>"  · aion review <file>'));
-  console.log(chalk.bold('  Setup:    ') + chalk.cyan('aion docs analyze  · aion cloud status  · aion mcp list-tools'));
+  console.log(chalk.bold('  Estado:   ') + chalk.cyan('aion health  · aion scan secrets  · aion tree --hotspots'));
+  console.log(chalk.bold('  Problemas:') + chalk.cyan('aion audit . --preset security  · aion report'));
+  console.log(chalk.bold('  Código:   ') + chalk.cyan('aion graph   · aion search "<q>"  · aion impact-local <file>'));
+  console.log(chalk.bold('  IA:       ') + chalk.cyan('aion fix <file>  · aion analyze "<bug>"  · aion review <file>'));
+  console.log(chalk.bold('  Operar:   ') + chalk.cyan('aion assist  · aion ci assist  · aion deploy assist'));
   console.log('');
 }
 
@@ -371,6 +481,12 @@ export async function runMenu(cwd: string): Promise<void> {
     if (action === 'sep' || action === '') continue;
 
     // Submenus
+    if (action === 'status')   { await runStatusMenu(cwd); continue; }
+    if (action === 'problems') { await runProblemsMenu(cwd); continue; }
+    if (action === 'explore')  { await runExploreMenu(cwd); continue; }
+    if (action === 'ai-help')  { await runAiHelpMenu(cwd); continue; }
+    if (action === 'publish')  { await runPublishMenu(cwd); continue; }
+    if (action === 'advanced') { await runAdvancedMenu(cwd); continue; }
     if (action === 'audit')   { await runAuditMenu(cwd); continue; }
     if (action === 'scan')    { await runScanMenu(cwd); continue; }
     if (action === 'memory')  { await runMemoryMenu(cwd); continue; }

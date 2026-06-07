@@ -31,6 +31,9 @@ import { registerMcp } from './cli/commands/mcp.js';
 import { registerImpactLocal } from './cli/commands/impact-local.js';
 import { registerDocs } from './cli/commands/docs.js';
 import { registerCloud } from './cli/commands/cloud.js';
+import { registerDeploy } from './cli/commands/deploy.js';
+import { buildAssistPlan, saveAssistPlan } from './infra/assist/assist-plan.js';
+import { applyArtifacts, formatArtifactSummary } from './infra/assist/apply-artifacts.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 
@@ -100,6 +103,30 @@ registerMcp(program);
 registerImpactLocal(program);
 registerDocs(program);
 registerCloud(program);
+registerDeploy(program);
+
+program
+  .command('assist')
+  .description('Assisted setup for CI, tests, deploy workflows, Nginx, and healthchecks')
+  .option('--apply', 'write generated artifacts')
+  .option('--overwrite', 'overwrite existing artifact files')
+  .option('--domain <domain>', 'deployment domain')
+  .option('--port <port>', 'application port')
+  .option('--deploy-path <path>', 'remote deployment path')
+  .action((options: { apply?: boolean; overwrite?: boolean; domain?: string; port?: string; deployPath?: string }) => {
+    const port = options.port ? Number(options.port) : undefined;
+    const plan = buildAssistPlan(process.cwd(), {
+      mode: 'full',
+      domain: options.domain,
+      appPort: Number.isInteger(port) ? port : undefined,
+      deployPath: options.deployPath,
+    });
+    const path = saveAssistPlan(process.cwd(), plan);
+    const result = applyArtifacts(process.cwd(), plan, { dryRun: !options.apply, overwrite: options.overwrite });
+    process.stdout.write(`Assist plan: ${path}\n`);
+    process.stdout.write(formatArtifactSummary(result) + '\n');
+    if (!options.apply) process.stdout.write('Dry-run only. Re-run with --apply to write files.\n');
+  });
 
 // Explicit menu command
 program

@@ -11,6 +11,13 @@ export interface RerankResult {
   reason?: string;
 }
 
+type AnthropicLike = Pick<Anthropic, 'messages'>;
+let clientFactoryForTest: (() => AnthropicLike) | null = null;
+
+export function setRerankerClientFactoryForTest(factory: (() => AnthropicLike) | null): void {
+  clientFactoryForTest = factory;
+}
+
 /**
  * Re-rank candidates using Claude as a cross-encoder.
  * Retrieves top-20, re-ranks to top-K. Cost: ~500 tokens per call.
@@ -48,7 +55,7 @@ ${numbered}
 JSON array (top ${topK} only):`;
 
   try {
-    const client = new Anthropic({ apiKey });
+    const client = clientFactoryForTest?.() ?? new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 100,
