@@ -1,52 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAIN_ITEMS, DIRECT_COMMANDS, MENU_ACTION_AUDIT, runMenuFallback } from './menu.js';
+import { MAIN_ITEMS, runMenuFallback } from './menu.js';
 
-test('menu action audit covers every selectable main menu item', () => {
+test('menu principal tem os 8 itens acionáveis esperados', () => {
   const selectable = MAIN_ITEMS
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
-  const audited = new Set(MENU_ACTION_AUDIT.map((entry) => entry.action));
 
-  assert.deepEqual(selectable.filter((action) => !audited.has(action)), []);
+  assert.deepEqual(selectable, ['bugs', 'security', 'perf', 'fix', 'analyze', 'chat', 'health', 'setup']);
 });
 
-test('main menu exposes simplified human workflows', () => {
+test('menu não tem submenus antigos', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
-  assert.equal(labels.includes('Diagnóstico local'), true);
-  assert.equal(labels.includes('IA — Copilot / Audit'), true);
-  assert.equal(labels.includes('Preparar / configurar'), true);
-  assert.equal(labels.includes('Publicar / operar'), true);
-  assert.equal(labels.includes('Avançado'), true);
-  // Modelo 2 e 3 colapsados em IA; NL movido para dentro do menu IA
-  assert.equal(labels.includes('Modelo 2 — Copiloto IA'), false);
-  assert.equal(labels.includes('Modelo 3 — IA + RAG obrigatório'), false);
-  assert.equal(MAIN_ITEMS.filter((i) => !i.separator && i.value !== 'sep' && i.value !== 'quit' && i.value !== '').length, 5);
+  assert.equal(labels.includes('Diagnóstico local'), false);
+  assert.equal(labels.includes('IA — Copilot / Audit'), false);
+  assert.equal(labels.includes('Avançado'), false);
+  assert.equal(labels.includes('Publicar / operar'), false);
 });
 
-test('direct menu commands map to real CLI subcommands without cwd baked in', () => {
-  assert.deepEqual(DIRECT_COMMANDS.setup, ['setup']);
-  assert.deepEqual(DIRECT_COMMANDS.health, ['health']);
-  assert.deepEqual(DIRECT_COMMANDS.tree, ['tree', '--hotspots']);
-  assert.deepEqual(DIRECT_COMMANDS.trace, ['trace']);
-  // copilot removido — chamado diretamente em runIaMenu com args explícitos
-  assert.equal(Object.hasOwn(DIRECT_COMMANDS, 'copilot'), false);
-  assert.equal(Object.hasOwn(DIRECT_COMMANDS, 'impact'), false);
+test('menu tem os labels corretos', () => {
+  const labels = MAIN_ITEMS.map((item) => item.label);
+
+  assert.equal(labels.includes('🐛 Bugs & Qualidade'), true);
+  assert.equal(labels.includes('🔐 Segurança'), true);
+  assert.equal(labels.includes('⚡ Performance & Infra'), true);
+  assert.equal(labels.includes('🔧 Corrigir arquivo'), true);
+  assert.equal(labels.includes('🔍 Analisar problema'), true);
+  assert.equal(labels.includes('💬 Chat sobre o repo'), true);
+  assert.equal(labels.includes('📊 Health check'), true);
+  assert.equal(labels.includes('⚙️  Setup'), true);
 });
 
-test('menu matrix reflete os 5 itens reais do menu principal', () => {
-  const byAction = new Map(MENU_ACTION_AUDIT.map((entry) => [entry.action, entry]));
-
-  assert.equal(byAction.get('model-local')?.cost, 'zero-token');
-  assert.equal(byAction.get('ia')?.cost, 'ai');
-  assert.equal(byAction.get('setup')?.cost, 'local-side-effect');
-  assert.equal(byAction.get('publish')?.cost, 'local-side-effect');
-  assert.equal(byAction.get('advanced')?.cost, 'external-service');
-  assert.equal(MENU_ACTION_AUDIT.length, 5);
-});
-
-test('non-TTY menu fallback prints actionable commands and exits', () => {
+test('non-TTY fallback imprime comandos acionáveis', () => {
   const originalWrite = process.stdout.write;
   let output = '';
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -62,9 +48,7 @@ test('non-TTY menu fallback prints actionable commands and exits', () => {
 
   assert.match(output, /aion — example-project/);
   assert.match(output, /aion health/);
-  assert.match(output, /aion copilot safe/);
-  assert.match(output, /aion memory build/);
+  assert.match(output, /aion fix/);
   assert.match(output, /aion setup/);
-  assert.match(output, /aion deploy assist/);
-  assert.match(output, /Diagnóstico/);
+  assert.match(output, /aion audit/);
 });
