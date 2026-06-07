@@ -96,8 +96,12 @@ async function runWithRenderer(
 export async function runInteractive(cwd: string): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
+  // Ctrl+C inside readline emits SIGINT on rl; close gracefully so the
+  // menu process survives instead of dying with an unhandled SIGINT.
+  rl.on('SIGINT', () => { process.stdout.write('\n'); rl.close(); });
+
   console.log(chalk.bold('\n🤖 AI Engineering Runtime'));
-  console.log(chalk.gray('Type your request in natural language. Ctrl+C to exit.\n'));
+  console.log(chalk.gray('Type your request in natural language. Ctrl+C or "exit" to return.\n'));
   console.log(chalk.gray('Examples:'));
   console.log(chalk.gray('  corrija o bug de autenticação'));
   console.log(chalk.gray('  analise os erros no módulo de pagamento'));

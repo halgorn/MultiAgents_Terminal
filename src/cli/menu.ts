@@ -308,8 +308,8 @@ async function ensureRagReady(cwd: string, reason: string): Promise<boolean> {
     { label: 'Cancelar', value: 'cancel' },
   ]);
   if (!action || action === 'cancel') return false;
-  if (action === 'setup-rag') run(['--cwd', cwd, 'setup', '--semantic-rag']);
-  if (action === 'memory-build') run(['--cwd', cwd, 'memory', 'build']);
+  if (action === 'setup-rag') { run(['--cwd', cwd, 'setup', '--semantic-rag']); await pressEnter(); }
+  if (action === 'memory-build') { run(['--cwd', cwd, 'memory', 'build']); await pressEnter(); }
   const after = detectRagTrainingStatus(cwd);
   if (!after.semanticVectorsReady) {
     console.log(chalk.yellow('\nRAG ainda não está pronto. Ação cancelada.\n'));
