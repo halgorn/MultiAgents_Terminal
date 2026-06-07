@@ -62,9 +62,10 @@ function renderCostSection(cost: CostSummary | undefined, durationMs: number): s
 
 function renderHistorySection(history: AuditHistoryEntry[], currentStamp: string): string {
   if (history.length === 0) return '';
-  const rows = history.slice().reverse().map((h, i) => {
+  const reversed = history.slice().reverse();
+  const rows = reversed.map((h, i) => {
     const isCurrent = h.stamp === currentStamp;
-    const prev = history[history.length - 2 - i];
+    const prev = reversed[i + 1];
     const critTrend = prev ? (h.criticalCount < prev.criticalCount ? '↓' : h.criticalCount > prev.criticalCount ? '↑' : '=') : '';
     const critClass = critTrend === '↓' ? 'sev-text-medium' : critTrend === '↑' ? 'sev-text-critical' : '';
     const link = isCurrent ? '<strong>current</strong>' : `<a href="../${esc(h.runRelDir)}/index.html">${new Date(h.createdAt).toLocaleString()}</a>`;
@@ -102,8 +103,10 @@ function renderHtml(report: FullSavedAuditReport, history: AuditHistoryEntry[]):
       </details>
     </article>`).join('');
 
-  const rows = report.findings.map((f) => `
+  const sortedFindings = [...report.findings].sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0));
+  const rows = sortedFindings.map((f, idx) => `
     <tr data-severity="${esc(f.severity)}" data-category="${esc(f.category)}" data-persona="${esc(f.persona ?? 'local')}" data-file="${esc(f.file)}">
+      <td class="muted" style="font-size:11px;width:30px">#${idx + 1}</td>
       <td><span class="badge sev-${esc(f.severity)}">${esc(f.severity)}</span></td><td>${esc(f.category)}</td><td>${esc(f.persona ?? 'local')}</td>
       <td><code>${esc(markdownLocation(f))}</code></td><td>${esc(f.finding)}<div class="recommendation">${esc(f.recommendation)}</div></td>
     </tr>`).join('');
@@ -175,7 +178,7 @@ ${renderCostSection(report.costSummary, report.durationMs)}
     <select id="persona"><option value="">All personas</option>${filterOptions(byPersona)}</select>
     <select id="category"><option value="">All categories</option>${filterOptions(byCategory)}</select>
   </div>
-  <table id="findingsTable"><thead><tr><th>Severity</th><th>Category</th><th>Persona</th><th>Location</th><th>Finding</th></tr></thead><tbody>${rows}</tbody></table>
+  <table id="findingsTable"><thead><tr><th>#</th><th>Severity</th><th>Category</th><th>Persona</th><th>Location</th><th>Finding</th></tr></thead><tbody>${rows}</tbody></table>
 </section>
 
 <section id="personas"><h2>Personas &amp; Categories</h2>
