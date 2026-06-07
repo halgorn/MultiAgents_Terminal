@@ -61,6 +61,13 @@ function isNewer(a: string, b: string): boolean {
   return false;
 }
 
+export function shouldRefreshUpdateCache(cache: UpdateCache | null, current: string, now = Date.now()): boolean {
+  if (!cache) return true;
+  if (cache.currentVersion !== current) return true;
+  if (isNewer(current, cache.latestVersion)) return true;
+  return now - cache.checkedAt > CHECK_INTERVAL_MS;
+}
+
 function blockOnUpdate(current: string, latest: string): never {
   console.error(
     '\n' +
@@ -88,7 +95,7 @@ export async function checkForUpdate(): Promise<void> {
     blockOnUpdate(current, cache.latestVersion);
   }
 
-  const stale = !cache || now - cache.checkedAt > CHECK_INTERVAL_MS;
+  const stale = shouldRefreshUpdateCache(cache, current, now);
   if (stale) {
     // Always await (up to 2s) so updates are caught on first run too
     const latest = await Promise.race([
