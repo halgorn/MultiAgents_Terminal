@@ -22,6 +22,7 @@ interface SetupRunOptions {
   domain?: string;
   scanners?: number;
   skipSemanticRag?: boolean;
+  semanticRag?: boolean;
 }
 
 interface SetupWizardResult {
@@ -39,6 +40,32 @@ function runSelfCommand(cwd: string, args: string[]): boolean {
     env: process.env,
   });
   return (result.status ?? 1) === 0;
+}
+
+function runSelfCommandWithEnv(cwd: string, args: string[], env: NodeJS.ProcessEnv): boolean {
+  const result = spawnSync(process.execPath, [process.argv[1]!, '--cwd', cwd, ...args], {
+    stdio: 'inherit',
+    env,
+  });
+  return (result.status ?? 1) === 0;
+}
+
+function runMemoryBuildWithFallback(cwd: string): boolean {
+  const firstAttempt = runSelfCommand(cwd, ['memory', 'build']);
+  if (firstAttempt) return true;
+
+  const hadRemoteEmbeddingEnv = Boolean(process.env['OPENAI_API_KEY'] || process.env['VOYAGE_API_KEY']);
+  if (!hadRemoteEmbeddingEnv) return false;
+
+  process.stdout.write(
+    chalk.yellow('\nEmbeddings remotos falharam. Tentando fallback local (hash-384d, sem API)...\n'),
+  );
+  const fallbackEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    OPENAI_API_KEY: '',
+    VOYAGE_API_KEY: '',
+  };
+  return runSelfCommandWithEnv(cwd, ['memory', 'build'], fallbackEnv);
 }
 
 function parseBudget(v: string | undefined): 'low' | 'normal' | 'deep' {
@@ -65,8 +92,8 @@ async function chooseDomain(): Promise<string> {
 
 async function chooseSemanticRag(): Promise<boolean> {
   const picked = await selectOne('Construir RAG semântico agora?', [
-    { label: 'Sim', hint: 'faz embeddings agora (mais lento/custo potencial)', value: 'yes' },
     { label: 'Não', hint: 'pular por agora e continuar setup rápido', value: 'no' },
+    { label: 'Sim', hint: 'faz embeddings agora (mais lento/custo potencial)', value: 'yes' },
   ], 'Opcional: você pode rodar depois com `aion memory build`');
   return picked === 'yes';
 }
@@ -92,11 +119,13 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
 
   const shouldBuildSemanticRag = options.skipSemanticRag
     ? false
+    : options.semanticRag
+      ? true
     : process.stdin.isTTY ? await chooseSemanticRag() : false;
 
   let semanticRagBuilt = false;
   if (shouldBuildSemanticRag) {
-    semanticRagBuilt = runSelfCommand(cwd, ['memory', 'build']);
+    semanticRagBuilt = runMemoryBuildWithFallback(cwd);
   }
 
   const state = createSetupState(cwd, {
@@ -125,6 +154,7 @@ export function registerSetup(program: Command): void {
     .option('--domain <domain>', 'default audit domain (e.g. bugs, security)')
     .option('--budget <budget>', 'default budget: low | normal | deep')
     .option('--scanners <n>', 'default scanner count (capped at 2 for onboarding)')
+    .option('--semantic-rag', 'build semantic embeddings during setup (may use remote API)')
     .option('--skip-semantic-rag', 'skip semantic embeddings step')
     .action(async (options: {
       status?: boolean;
@@ -132,6 +162,7 @@ export function registerSetup(program: Command): void {
       domain?: string;
       budget?: 'low' | 'normal' | 'deep';
       scanners?: string;
+      semanticRag?: boolean;
       skipSemanticRag?: boolean;
     }) => {
       const cwd = process.cwd();
@@ -156,6 +187,7 @@ export function registerSetup(program: Command): void {
         budget: parseBudget(options.budget),
         domain: options.domain,
         scanners: Number.isFinite(scanners) ? scanners : undefined,
+        semanticRag: options.semanticRag,
         skipSemanticRag: options.skipSemanticRag,
       });
 

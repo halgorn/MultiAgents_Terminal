@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { spawnSync } from 'child_process';
 import { embedText } from '../infra/embeddings.js';
-import { makeFixtureRepo, runSourceCli } from '../test-utils/fixtures.js';
+import { makeFixtureRepo, runSourceCli, SOURCE_CLI, WORKSPACE_ROOT, isolatedEnv } from '../test-utils/fixtures.js';
 
 test('CLI exposes non-TTY menu fallback without hanging', () => {
   const repo = makeFixtureRepo('aion-cli-e2e-');
@@ -215,6 +216,27 @@ test('CLI setup command prepares project and can be reset', () => {
     const statusAfterReset = runSourceCli(repo, ['setup', '--status']);
     assert.equal(statusAfterReset.status, 0, statusAfterReset.stderr);
     assert.match(statusAfterReset.stdout, /"prepared": false/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI setup with semantic rag falls back to local embeddings when remote key is invalid', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    const result = spawnSync(process.execPath, ['--import', 'tsx', SOURCE_CLI, '--cwd', repo, 'setup', '--domain', 'bugs', '--budget', 'low', '--semantic-rag'], {
+      cwd: WORKSPACE_ROOT,
+      encoding: 'utf8',
+      timeout: 60_000,
+      env: isolatedEnv({ OPENAI_API_KEY: 'ollama' }),
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /fallback local/i);
+
+    const status = runSourceCli(repo, ['setup', '--status']);
+    assert.equal(status.status, 0, status.stderr);
+    assert.match(status.stdout, /"prepared": true/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
