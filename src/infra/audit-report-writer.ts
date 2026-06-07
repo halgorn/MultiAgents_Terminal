@@ -424,6 +424,16 @@ export function saveAuditReport(
   writeFileSync(paths.aiContext, renderAiContext(fullReport, aiContextBudget), 'utf8');
   writeFileSync(paths.html, renderHtml(fullReport, history), 'utf8');
   writeFileSync(join(dir, 'index.html'), renderDashboardHtml(history), 'utf8');
+  writeFileSync(join(dir, 'latest-audit.json'), JSON.stringify({
+    runDir: paths.runDir,
+    html: paths.html,
+    digest: paths.digest,
+    aiContext: paths.aiContext,
+    report: paths.report,
+    dashboard: paths.dashboard,
+    project: paths.project,
+    createdAt,
+  }, null, 2), 'utf8');
   saveDomainSnapshot(cwd, report);
   return { ...paths, project: projectReportPath(cwd) };
 }

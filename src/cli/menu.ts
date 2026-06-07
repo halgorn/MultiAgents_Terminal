@@ -272,11 +272,7 @@ export async function runMenu(cwd: string): Promise<void> {
     if (action === 'sep') continue;
 
     if (action === 'local-check') {
-      run(['--cwd', cwd, 'health']);
-      run(['--cwd', cwd, 'scan', 'secrets']);
-      run(['--cwd', cwd, 'scan', 'env-audit']);
-      run(['--cwd', cwd, 'scan', 'sbom', '--unpinned-only']);
-      run(['--cwd', cwd, 'scan', 'cognitive-load', '--top', '10']);
+      run(['--cwd', cwd, 'report', '--diagnostics']);
       await pressEnter();
       continue;
     }

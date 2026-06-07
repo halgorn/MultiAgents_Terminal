@@ -17,8 +17,32 @@ function esc(s: unknown): string {
 
 export function latestAuditPointer(cwd: string): { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string } | null {
   try {
-    const path = join(cwd, '.ai-runtime', 'reports', 'latest-audit.json');
-    return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+    const reportsDir = join(cwd, '.ai-runtime', 'reports');
+    const pointerPath = join(reportsDir, 'latest-audit.json');
+    const pointer = existsSync(pointerPath)
+      ? JSON.parse(readFileSync(pointerPath, 'utf8')) as { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string }
+      : null;
+    const historyPath = join(reportsDir, 'audit-history.json');
+    if (!existsSync(historyPath)) return pointer;
+
+    const history = JSON.parse(readFileSync(historyPath, 'utf8')) as Array<{ createdAt: string; runRelDir: string }>;
+    const last = history
+      .filter((entry) => entry.createdAt && entry.runRelDir)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    if (!last) return pointer;
+    if (pointer?.createdAt && new Date(pointer.createdAt).getTime() >= new Date(last.createdAt).getTime()) return pointer;
+
+    const runDir = join(reportsDir, last.runRelDir);
+    return {
+      runDir,
+      html: join(runDir, 'index.html'),
+      summary: join(runDir, 'summary.md'),
+      digest: join(runDir, 'digest.md'),
+      aiContext: join(runDir, 'ai-context.md'),
+      actionPlan: join(runDir, 'action-plan.md'),
+      report: join(runDir, 'report.json'),
+      createdAt: last.createdAt,
+    } as { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string };
   } catch {
     return null;
   }
@@ -36,12 +60,14 @@ export function loadLatestAudit(cwd: string): AuditReport | null {
   } catch { return null; }
 }
 
-export async function buildProjectReportData(cwd: string, days: number) {
+export async function buildProjectReportData(cwd: string, days: number, onProgress?: (message: string) => void) {
   const projectName = cwd.split('/').pop() ?? 'project';
+  onProgress?.('indexando arquivos e símbolos');
   const graph = new GraphAgent(cwd);
   const index = await graph.ensureIndex();
   let hotspots: Array<{ file: string; fanIn: number; fanOut: number }> = [];
   let cycles = 0;
+  onProgress?.('calculando dependências e hotspots');
   try {
     const { detectLang } = await import('./lang-detect.js');
     const { buildDepGraphAuto } = await import('./dep-graph.js');
@@ -50,14 +76,19 @@ export async function buildProjectReportData(cwd: string, days: number) {
     hotspots = dep.hotspots;
     cycles = dep.cycles.length;
   } catch { /* best-effort */ }
+  onProgress?.('carregando auditoria mais recente');
   const audit = loadLatestAudit(cwd);
+  onProgress?.('analisando churn e bus factor');
   const churn = buildChurnReport(cwd, hotspots.map((h) => h.file), days);
+  onProgress?.('detectando padrões e complexidade');
   const patterns = detectPatterns(cwd, hotspots);
   const cognitive = measureCognitiveLoad(cwd, 30);
+  onProgress?.('executando scanners locais zero-token');
   const apiEndpoints = buildApiMap(cwd);
   const envAudit = auditEnvVars(cwd);
   const secrets = scanCurrentSecrets(cwd);
   const sbom = buildSbom(cwd);
+  onProgress?.('calculando health score');
   const health = computeHealthScore({
     totalFiles: index.stats.files,
     totalSymbols: index.stats.symbols,
@@ -71,6 +102,7 @@ export async function buildProjectReportData(cwd: string, days: number) {
     auditCriticals: audit?.criticalCount,
     auditHighs: audit?.highCount,
   });
+  onProgress?.('gerando relatório HTML');
   return { projectName, health, audit, churn, patterns, cognitive, generatedAt: new Date().toLocaleString(),
     totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, apiEndpoints, envAudit, secrets, sbom };
 }
@@ -136,11 +168,24 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const churnRows = data.churn.churn.slice(0, 20).map((c) => `<tr><td class="mono">${esc(c.file)}</td><td>${c.commits}</td><td>${c.authors}</td><td>${esc(c.risk)}</td></tr>`).join('');
   const cogRows = data.cognitive.slice(0, 15).map((c) => `<tr><td class="mono">${esc(c.file)}</td><td>${c.score}</td><td>${c.maxNesting}</td><td>${c.longFunctions}</td><td>${c.loc}</td></tr>`).join('');
   const dimBars = data.health.dimensions.map((d) => `<div class="dim-row"><div>${esc(d.name)}</div><div class="bar"><div style="width:${d.score}%;background:${d.score >= 80 ? '#3fb950' : d.score >= 60 ? '#e3b341' : '#f85149'}"></div></div><strong>${d.score}</strong><small>${esc(d.detail)}</small></div>`).join('');
+  const riskRows = data.health.topRisks.map((r) => `<li>${esc(r)}</li>`).join('');
+  const secretRows = data.secrets.length
+    ? data.secrets.map((s) => `<tr><td class="mono">${esc(s.file)}:${s.line}</td><td>${esc(s.pattern)}</td><td class="mono">${esc(s.preview)}</td></tr>`).join('')
+    : '<tr><td colspan="3">No hardcoded secrets detected.</td></tr>';
+  const envRows = data.envAudit.vars.slice(0, 50).map((v) => `<tr><td>${v.documented ? 'yes' : 'no'}</td><td class="mono">${esc(v.name)}</td><td class="mono">${esc(v.file)}:${v.line}</td></tr>`).join('');
+  const sbomRows = data.sbom.unpinned.slice(0, 50).map((p) => `<tr><td>${esc(p.lang)}</td><td class="mono">${esc(p.name)}</td><td>${esc(p.version)}</td></tr>`).join('');
+  const apiRows = data.apiEndpoints.slice(0, 50).map((ep) => `<tr><td>${esc(ep.method)}</td><td class="mono">${esc(ep.path)}</td><td>${ep.hasAuth ? 'yes' : 'no'}</td><td>${ep.hasRateLimit ? 'yes' : 'no'}</td><td class="mono">${esc(ep.file)}:${ep.line}</td></tr>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>
-body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{font-size:56px;font-weight:700;color:${gradeColor}}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}@media(max-width:800px){.grid,.dim-row{grid-template-columns:1fr}.header{display:block}}
-</style></head><body><nav><a href="#health">Health</a><a href="#audit">Audit</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="graph.html">Graph</a>' : ''}</nav><main class="container">
+body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px;flex-wrap:wrap}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{font-size:56px;font-weight:700;color:${gradeColor}}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.card strong{font-size:24px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}.muted{color:#8b949e}.warn{color:#e3b341}.ok{color:#3fb950}@media(max-width:800px){.grid,.dim-row{grid-template-columns:1fr}.header{display:block}}
+</style></head><body><nav><a href="#health">Health</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="graph.html">Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score">${data.health.total} ${data.health.grade}</div></section>
-<section id="health"><h2>Health</h2>${dimBars}</section>
+<section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
+<section id="diagnostics"><h2>Local Diagnostics <span class="muted">(zero token)</span></h2><div class="grid"><div class="card"><strong class="${data.secrets.length ? 'warn' : 'ok'}">${data.secrets.length}</strong><br>Secrets</div><div class="card"><strong>${data.envAudit.vars.length}</strong><br>Env vars</div><div class="card"><strong class="${data.sbom.unpinned.length ? 'warn' : 'ok'}">${data.sbom.unpinned.length}</strong><br>Unpinned deps</div><div class="card"><strong>${data.apiEndpoints.length}</strong><br>API endpoints</div></div>
+<h3>Secrets</h3><table><tr><th>Location</th><th>Pattern</th><th>Preview</th></tr>${secretRows}</table>
+<h3>Environment Variables</h3><table><tr><th>Documented</th><th>Name</th><th>Location</th></tr>${envRows || '<tr><td colspan="3">No environment variables detected.</td></tr>'}</table>
+<h3>Unpinned Dependencies</h3><table><tr><th>Lang</th><th>Name</th><th>Version</th></tr>${sbomRows || '<tr><td colspan="3">No unpinned dependencies detected.</td></tr>'}</table>
+${apiRows ? `<h3>API Map</h3><table><tr><th>Method</th><th>Path</th><th>Auth</th><th>Rate limit</th><th>Location</th></tr>${apiRows}</table>` : ''}
+</section>
 ${data.audit ? `<section id="audit"><h2>Audit</h2><div class="grid"><div class="card"><strong>${data.audit.findings.length}</strong><br>Findings</div><div class="card"><strong>${data.audit.criticalCount}</strong><br>Critical</div><div class="card"><strong>${data.audit.highCount}</strong><br>High</div></div><p>${esc(data.audit.summary)}</p><table><tr><th>Severity</th><th>Location</th><th>Category</th><th>Finding</th></tr>${findingRows}</table></section>` : ''}
 ${data.churn.churn.length ? `<section id="churn"><h2>Churn</h2><table><tr><th>File</th><th>Commits</th><th>Authors</th><th>Risk</th></tr>${churnRows}</table></section>` : ''}
 ${data.cognitive.length ? `<section id="complexity"><h2>Complexity</h2><table><tr><th>File</th><th>Score</th><th>Nesting</th><th>Long Functions</th><th>LOC</th></tr>${cogRows}</table></section>` : ''}

@@ -1,12 +1,19 @@
 import type { Command } from 'commander';
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { buildProjectReportData, latestAuditPointer, projectReportPath, writeProjectReport } from '../../infra/project-report.js';
 
 function openFile(path: string): void {
   const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
-  const args = process.platform === 'win32' ? ['/c', 'start', '', path] : [path];
-  spawnSync(opener, args, { stdio: 'ignore', timeout: 5000 });
+  const target = process.platform === 'win32' ? path : `file://${path}`;
+  const args = process.platform === 'win32' ? ['/c', 'start', '', path] : [target];
+  const child = spawn(opener, args, { detached: true, stdio: 'ignore' });
+  child.unref();
+}
+
+function terminalLink(label: string, path: string): string {
+  const url = `file://${path}`;
+  return `\x1b]8;;${url}\x1b\\${label}\x1b]8;;\x1b\\`;
 }
 
 function ensureUnifiedReport(cwd: string): string {
@@ -63,11 +70,12 @@ export function registerReport(program: Command): void {
   report
     .option('--no-open', 'generate without opening browser')
     .option('--md', 'generate only Markdown (AI-ready context file)')
+    .option('--diagnostics', 'force a fresh zero-token local diagnostics HTML report')
     .option('--days <n>', 'git lookback for churn analysis', '90')
-    .action(async (options: { open: boolean; md?: boolean; days: string }) => {
+    .action(async (options: { open: boolean; md?: boolean; diagnostics?: boolean; days: string }) => {
       const cwd = process.cwd();
       const latest = latestAuditPointer(cwd);
-      if (latest) {
+      if (latest && !options.diagnostics) {
         const unified = projectReportPath(cwd);
         console.log(`Unified HTML: ${unified}`);
         console.log(`Latest run:    ${latest.html ?? latest.runDir ?? 'n/a'}`);
@@ -76,12 +84,16 @@ export function registerReport(program: Command): void {
       }
 
       const days = parseInt(options.days, 10) || 90;
-      console.log(`Building report for ${cwd.split('/').pop() ?? 'project'}...`);
-      const data = await buildProjectReportData(cwd, days);
+      const label = options.diagnostics ? 'diagnostics report' : 'report';
+      console.log(chalk.bold.cyan(`\nBuilding ${label} for ${cwd.split('/').pop() ?? 'project'}\n`));
+      const data = await buildProjectReportData(cwd, days, (message) => {
+        console.log(chalk.gray(`  • ${message}`));
+      });
       const written = writeProjectReport(cwd, data, Boolean(options.md));
       console.log(`Markdown: ${written.mdFile}`);
       if (written.htmlFile) {
         console.log(`HTML:     ${written.htmlFile}`);
+        console.log('\n' + chalk.bold.cyan('📊 ') + terminalLink(chalk.bold.cyan('Abrir relatório no navegador →'), written.htmlFile));
         if (options.open !== false) openFile(written.htmlFile);
       }
       console.log(`  Health: ${data.health.badge}`);

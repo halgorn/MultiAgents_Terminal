@@ -1,31 +1,12 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { computeHealthScore } from '../../infra/health-score.js';
 import { buildChurnReport } from '../../infra/git-analysis.js';
 import { measureCognitiveLoad } from '../../infra/code-metrics.js';
 import { detectPatterns } from '../../infra/pattern-detect.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { appendTrend, loadTrend, renderTrendChart } from '../../infra/audit-trend.js';
-
-interface LatestAudit {
-  criticalCount: number;
-  highCount: number;
-  totalFiles: number;
-}
-
-function loadLatestAudit(cwd: string): LatestAudit | null {
-  const dir = join(cwd, '.ai-runtime', 'reports');
-  if (!existsSync(dir)) return null;
-  try {
-    const files = readdirSync(dir).filter((f) => f.startsWith('audit-') && f.endsWith('.json')).sort().reverse();
-    if (files.length === 0) return null;
-    const content = readFileSync(join(dir, files[0]!), 'utf8');
-    const parsed = JSON.parse(content) as LatestAudit;
-    return { criticalCount: parsed.criticalCount ?? 0, highCount: parsed.highCount ?? 0, totalFiles: parsed.totalFiles ?? 0 };
-  } catch { return null; }
-}
+import { loadLatestAudit } from '../../infra/project-report.js';
 
 export function registerHealth(program: Command): void {
   program
