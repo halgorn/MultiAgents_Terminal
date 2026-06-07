@@ -48,6 +48,7 @@ export const BUDGETS: Array<MenuItem<string>> = [
 
 export const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: 'Preparar / configurar projeto', hint: 'wizard inicial: setup, índices e RAG opcional', value: 'setup' },
+  { label: 'Copiloto de workflows IA',      hint: 'quick, safe e release guard',                    value: 'copilot' },
   { label: 'Ver estado do projeto',       hint: 'health, scans rápidos, árvore e docs',        value: 'status' },
   { label: 'Encontrar problemas',         hint: 'scan local, auditoria, padrões e relatórios', value: 'problems' },
   { label: 'Buscar e entender código',    hint: 'grafo, busca, impacto e memória/RAG',         value: 'explore' },
@@ -73,6 +74,7 @@ export interface MenuActionAuditEntry {
 
 export const DIRECT_COMMANDS: Record<string, string[]> = {
   setup:    ['setup'],
+  copilot:  ['copilot', 'safe'],
   health:   ['health'],
   churn:    ['churn'],
   tree:     ['tree', '--hotspots'],
@@ -88,6 +90,7 @@ export const DIRECT_COMMANDS: Record<string, string[]> = {
 
 export const MENU_ACTION_AUDIT: MenuActionAuditEntry[] = [
   { action: 'setup', command: DIRECT_COMMANDS.setup, cost: 'local-side-effect', recommendation: 'keep', note: 'Onboarding wizard for config/index setup.' },
+  { action: 'copilot', submenu: 'copilot', cost: 'local-side-effect', recommendation: 'keep', note: 'Workflow runner for quick/safe/release validation.' },
   { action: 'status', submenu: 'status', cost: 'zero-token', recommendation: 'keep', note: 'Human-friendly project status submenu.' },
   { action: 'problems', submenu: 'problems', cost: 'ai', recommendation: 'keep', note: 'Problem finding submenu with local and AI options.' },
   { action: 'explore', submenu: 'explore', cost: 'local-side-effect', recommendation: 'keep', note: 'Code understanding submenu with graph/search/memory.' },
@@ -314,17 +317,40 @@ async function runStatusMenu(cwd: string): Promise<void> {
   await pressEnter();
 }
 
+async function runCopilotMenu(cwd: string): Promise<void> {
+  const action = await selectOne('Copiloto de workflows IA', [
+    { label: 'Quick guard',   hint: 'checks rápidos sem IA cara', value: 'quick' },
+    { label: 'Safe guard',    hint: 'validação com IA em escopo controlado', value: 'safe' },
+    { label: 'Release guard', hint: 'pipeline pré-release', value: 'release' },
+    { label: 'Dry-run safe',  hint: 'mostra os passos sem executar', value: 'safe-dry' },
+    { label: '← Back', value: 'back' },
+  ]);
+  if (!action || action === 'back') return;
+  if (action === 'safe-dry') { run(['--cwd', cwd, 'copilot', 'safe', '--dry-run']); await pressEnter(); return; }
+  run(['--cwd', cwd, 'copilot', action]);
+  await pressEnter();
+}
+
 async function runProblemsMenu(cwd: string): Promise<void> {
   const action = await selectOne('Encontrar problemas', [
-    { label: 'Scan local',        hint: 'secrets, env, api-map, sbom',        value: 'scan' },
-    { label: 'Audit rápida', hint: 'usa defaults do setup (baixo custo)', value: 'audit-quick' },
-    { label: 'Patterns',          hint: 'padrões arquiteturais locais',       value: 'patterns' },
-    { label: 'Report',            hint: 'relatório HTML/Markdown local',      value: 'report' },
+    { label: 'Segurança',        hint: 'audit focada em security',             value: 'audit-security' },
+    { label: 'Bugs',             hint: 'audit focada em bugs',                 value: 'audit-bugs' },
+    { label: 'Arquitetura',      hint: 'audit focada em architecture',         value: 'audit-architecture' },
+    { label: 'Performance',      hint: 'audit focada em performance',          value: 'audit-performance' },
+    { label: 'Observabilidade',  hint: 'audit focada em observability',        value: 'audit-observability' },
+    { label: 'Dependências',     hint: 'audit focada em dependencies',         value: 'audit-dependencies' },
+    { label: 'Scan local',       hint: 'secrets, env, api-map, sbom',          value: 'scan' },
+    { label: 'Report',           hint: 'relatório HTML/Markdown local',        value: 'report' },
     { label: '← Back',            value: 'back' },
   ]);
   if (!action || action === 'back') return;
   if (action === 'scan') { await runScanMenu(cwd); return; }
-  if (action === 'audit-quick') { run(['--cwd', cwd, 'audit', '.']); await pressEnter(); return; }
+  if (action === 'audit-security') { run(['--cwd', cwd, 'audit', '.', '--domains', 'security', '--scanners', '1']); await pressEnter(); return; }
+  if (action === 'audit-bugs') { run(['--cwd', cwd, 'audit', '.', '--domains', 'bugs', '--scanners', '1']); await pressEnter(); return; }
+  if (action === 'audit-architecture') { run(['--cwd', cwd, 'audit', '.', '--domains', 'architecture', '--scanners', '1']); await pressEnter(); return; }
+  if (action === 'audit-performance') { run(['--cwd', cwd, 'audit', '.', '--domains', 'performance', '--scanners', '1']); await pressEnter(); return; }
+  if (action === 'audit-observability') { run(['--cwd', cwd, 'audit', '.', '--domains', 'observability', '--scanners', '1']); await pressEnter(); return; }
+  if (action === 'audit-dependencies') { run(['--cwd', cwd, 'audit', '.', '--domains', 'dependencies', '--scanners', '1']); await pressEnter(); return; }
   run(['--cwd', cwd, ...(DIRECT_COMMANDS[action] ?? [action])]);
   await pressEnter();
 }
@@ -441,7 +467,8 @@ export function runMenuFallback(cwd: string): void {
   console.log('');
   console.log(chalk.bold('  Estado:   ') + chalk.cyan('aion health  · aion scan secrets  · aion tree --hotspots'));
   console.log(chalk.bold('  Setup:    ') + chalk.cyan('aion setup'));
-  console.log(chalk.bold('  Problemas:') + chalk.cyan('aion audit . --domains bugs --scanners 1  · aion report'));
+  console.log(chalk.bold('  Copilot:  ') + chalk.cyan('aion copilot quick  · aion copilot safe  · aion copilot release'));
+  console.log(chalk.bold('  Problemas:') + chalk.cyan('aion audit . --domains security --scanners 1  · aion audit . --domains bugs --scanners 1'));
   console.log(chalk.bold('  Código:   ') + chalk.cyan('aion graph   · aion search "<q>"  · aion impact-local <file>'));
   console.log(chalk.bold('  IA:       ') + chalk.cyan('aion fix <file>  · aion analyze "<bug>"  · aion review <file>'));
   console.log(chalk.bold('  Operar:   ') + chalk.cyan('aion assist  · aion ci assist  · aion deploy assist'));
@@ -489,6 +516,7 @@ export async function runMenu(cwd: string): Promise<void> {
     // Submenus
     if (action === 'status')   { await runStatusMenu(cwd); continue; }
     if (action === 'setup')    { run(['--cwd', cwd, 'setup']); await pressEnter(); continue; }
+    if (action === 'copilot')  { await runCopilotMenu(cwd); continue; }
     if (action === 'problems') { await runProblemsMenu(cwd); continue; }
     if (action === 'explore')  { await runExploreMenu(cwd); continue; }
     if (action === 'ai-help')  { await runAiHelpMenu(cwd); continue; }

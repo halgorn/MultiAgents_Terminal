@@ -11,6 +11,7 @@ import { loadAionConfig, writeAionConfig, writeDefaultConfig } from '../../infra
 import {
   clearSetupState,
   createSetupState,
+  detectRagTrainingStatus,
   isProjectPrepared,
   mergeSetupDefaultsIntoConfig,
   readSetupState,
@@ -102,6 +103,7 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
   const budget = options.budget ?? (process.stdin.isTTY ? await chooseBudget() : 'low');
   const domain = options.domain ?? (process.stdin.isTTY ? await chooseDomain() : 'bugs');
   const scanners = Math.max(1, Math.min(2, options.scanners ?? (budget === 'normal' ? 2 : 1)));
+  const preSetupRagStatus = detectRagTrainingStatus(cwd);
 
   const hadConfig = existsSync(join(cwd, '.aionrc.json'));
   if (!hadConfig) writeDefaultConfig(cwd);
@@ -117,7 +119,9 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
   mkdirSync(join(cwd, '.ai-memory', 'architecture'), { recursive: true });
   writeFileSync(join(cwd, '.ai-memory', 'architecture', 'dep-graph.md'), formatDepReport(deps), 'utf8');
 
-  const shouldBuildSemanticRag = options.skipSemanticRag
+  const shouldBuildSemanticRag = preSetupRagStatus.semanticVectorsReady
+    ? false
+    : options.skipSemanticRag
     ? false
     : options.semanticRag
       ? true
@@ -199,5 +203,8 @@ export function registerSetup(program: Command): void {
       if (!result.semanticRagBuilt) {
         process.stdout.write('  run `aion memory build` later to enable semantic retrieval.\n');
       }
+
+      const rag = detectRagTrainingStatus(cwd);
+      process.stdout.write(`  rag status: repo-index=${rag.repoIndexReady ? 'ok' : 'missing'}, vectors=${rag.semanticVectorsReady ? 'ok' : 'missing'}\n`);
     });
 }

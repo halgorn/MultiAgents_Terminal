@@ -33,6 +33,7 @@ import { registerDocs } from './cli/commands/docs.js';
 import { registerCloud } from './cli/commands/cloud.js';
 import { registerDeploy } from './cli/commands/deploy.js';
 import { registerSetup, runProjectSetupWizard } from './cli/commands/setup.js';
+import { registerCopilot } from './cli/commands/copilot.js';
 import { buildAssistPlan, saveAssistPlan } from './infra/assist/assist-plan.js';
 import { applyArtifacts, formatArtifactSummary } from './infra/assist/apply-artifacts.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
@@ -110,6 +111,7 @@ registerDocs(program);
 registerCloud(program);
 registerDeploy(program);
 registerSetup(program);
+registerCopilot(program);
 
 program
   .command('assist')

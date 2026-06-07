@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
   clearSetupState,
   createSetupState,
+  detectRagTrainingStatus,
+  hasTrainedProjectRag,
   isProjectPrepared,
   mergeSetupDefaultsIntoConfig,
   readSetupState,
@@ -96,4 +98,23 @@ test('setup defaults merge without overriding existing user config', () => {
   assert.equal(merged.provider, 'openrouter');
   assert.equal(merged.budget, 'low');
   assert.equal(merged.scanners, 2);
+});
+
+test('detectRagTrainingStatus identifies trained rag artifacts', () => {
+  const dir = tempProject();
+  try {
+    mkdirSync(join(dir, '.ai-runtime'), { recursive: true });
+    mkdirSync(join(dir, '.ai-memory', 'architecture'), { recursive: true });
+    writeFileSync(join(dir, '.ai-runtime', 'repo-index.json'), '{"ok":true}');
+    writeFileSync(join(dir, '.ai-runtime', 'vectors.json'), '[{"id":"a"}]');
+    writeFileSync(join(dir, '.ai-memory', 'architecture', 'dep-graph.md'), '# dep graph');
+
+    const status = detectRagTrainingStatus(dir);
+    assert.equal(status.repoIndexReady, true);
+    assert.equal(status.semanticVectorsReady, true);
+    assert.equal(status.dependencyKnowledgeReady, true);
+    assert.equal(hasTrainedProjectRag(dir), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -98,6 +98,11 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     const setupStatus = runSourceCli(repo, ['setup', '--status']);
     assert.equal(setupStatus.status, 0, setupStatus.stderr);
     assert.match(setupStatus.stdout, /"prepared": false/);
+
+    const copilotDry = runSourceCli(repo, ['copilot', 'safe', '--dry-run']);
+    assert.equal(copilotDry.status, 0, copilotDry.stderr);
+    assert.match(copilotDry.stdout, /Copilot workflow: Safe AI Guard/);
+    assert.match(copilotDry.stdout, /aion audit \. --domains security,bugs --scanners 2/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

@@ -79,6 +79,34 @@ export function shouldRunInitialWizard(cwd: string, isTty: boolean): boolean {
   return !isProjectPrepared(cwd);
 }
 
+export interface RagTrainingStatus {
+  repoIndexReady: boolean;
+  dependencyKnowledgeReady: boolean;
+  semanticVectorsReady: boolean;
+}
+
+function hasJsonArrayEntries(path: string): boolean {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export function detectRagTrainingStatus(cwd: string): RagTrainingStatus {
+  const repoIndexReady = existsSync(join(cwd, '.ai-runtime', 'repo-index.json'));
+  const dependencyKnowledgeReady = existsSync(join(cwd, '.ai-memory', 'architecture', 'dep-graph.md'));
+  const semanticVectorsReady = hasJsonArrayEntries(join(cwd, '.ai-runtime', 'vectors.json'))
+    || existsSync(join(cwd, '.ai-memory', '.embeddings'));
+  return { repoIndexReady, dependencyKnowledgeReady, semanticVectorsReady };
+}
+
+export function hasTrainedProjectRag(cwd: string): boolean {
+  const status = detectRagTrainingStatus(cwd);
+  return status.repoIndexReady && (status.semanticVectorsReady || status.dependencyKnowledgeReady);
+}
+
 export function mergeSetupDefaultsIntoConfig(existing: AionConfig, input: {
   domain: string;
   budget: 'low' | 'normal' | 'deep';
