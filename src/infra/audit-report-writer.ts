@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { AuditFinding, AuditReport } from '../schemas/audit.js';
+import { saveDomainSnapshot, projectReportPath } from './project-report.js';
 import {
   buildActionItems,
   buildFileHotspots,
@@ -303,6 +304,7 @@ export function saveAuditReport(
     aiContext: join(runDir, 'ai-context.md'),
     report: join(runDir, 'report.json'),
     dashboard: join(dir, 'index.html'),
+    project: projectReportPath(cwd),
   };
 
   const history = updateAuditHistory(dir, {
@@ -321,5 +323,6 @@ export function saveAuditReport(
   writeFileSync(paths.aiContext, renderAiContext(fullReport, aiContextBudget), 'utf8');
   writeFileSync(paths.html, renderHtml(fullReport, history), 'utf8');
   writeFileSync(join(dir, 'index.html'), renderDashboardHtml(history), 'utf8');
-  return paths;
+  saveDomainSnapshot(cwd, report);
+  return { ...paths, project: projectReportPath(cwd) };
 }

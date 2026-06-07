@@ -235,6 +235,7 @@ export function registerAudit(program: Command): void {
         };
         const saved = saveAuditReport(process.cwd(), report, durationMs, parsePositiveInt(mergedOptions.aiContextBudget, 8000, 100000), costSummary);
         console.log(chalk.gray(`\nhtml: ${saved.html}`));
+        console.log(chalk.bold.cyan(`project: ${saved.project}`));
         console.log(chalk.gray(`dashboard: ${saved.dashboard}`));
         console.log(chalk.dim(orch.costs.summary()));
         orch.flushTrace();

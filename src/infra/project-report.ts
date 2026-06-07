@@ -6,11 +6,14 @@ import { buildChurnReport } from './git-analysis.js';
 import { detectPatterns } from './pattern-detect.js';
 import { computeHealthScore } from './health-score.js';
 import { GraphAgent } from '../agents/graph-agent.js';
-import type { AuditReport } from '../schemas/audit.js';
+import type { AuditFinding, AuditReport } from '../schemas/audit.js';
+import { SEVERITY_RANK } from './audit-model.js';
 
-function esc(s: string): string {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function esc(s: unknown): string {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ── Original report functions ─────────────────────────────────────────────────
 
 export function latestAuditPointer(cwd: string): { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string } | null {
   try {
@@ -42,7 +45,6 @@ export async function buildProjectReportData(cwd: string, days: number) {
   try {
     const { detectLang } = await import('./lang-detect.js');
     const { buildDepGraphAuto } = await import('./dep-graph.js');
-    
     const lang = detectLang(cwd);
     const dep = buildDepGraphAuto(cwd, lang.lang);
     hotspots = dep.hotspots;
@@ -155,4 +157,184 @@ export function writeProjectReport(cwd: string, data: Awaited<ReturnType<typeof 
   const htmlFile = join(outDir, 'report.html');
   writeFileSync(htmlFile, renderProjectHtml(data, existsSync(join(outDir, 'graph.html'))), 'utf8');
   return { mdFile, htmlFile, md };
+}
+
+// ── Accumulated project audit report (tabs por domínio) ───────────────────────
+
+export interface DomainSnapshot {
+  domain: string;
+  scannedAt: string;
+  findings: AuditFinding[];
+  summary: string;
+  totalFiles: number;
+}
+
+function domainsDir(cwd: string): string {
+  return join(cwd, '.ai-runtime', 'reports', 'domains');
+}
+
+export function projectReportPath(cwd: string): string {
+  return join(cwd, '.ai-runtime', 'reports', 'project.html');
+}
+
+export function saveDomainSnapshot(cwd: string, report: AuditReport): void {
+  const dir = domainsDir(cwd);
+  mkdirSync(dir, { recursive: true });
+  const sections = report.sections ?? [];
+  const now = new Date().toISOString();
+
+  if (sections.length > 0) {
+    for (const section of sections) {
+      const snapshot: DomainSnapshot = {
+        domain: section.domain,
+        scannedAt: now,
+        findings: section.findings,
+        summary: section.summary,
+        totalFiles: report.totalFiles,
+      };
+      writeFileSync(join(dir, `${section.domain}.json`), JSON.stringify(snapshot, null, 2), 'utf8');
+    }
+  } else {
+    const byCategory = new Map<string, AuditFinding[]>();
+    for (const f of report.findings) {
+      if (!byCategory.has(f.category)) byCategory.set(f.category, []);
+      byCategory.get(f.category)!.push(f);
+    }
+    for (const [cat, findings] of byCategory) {
+      const snapshot: DomainSnapshot = { domain: cat, scannedAt: now, findings, summary: report.summary, totalFiles: report.totalFiles };
+      writeFileSync(join(dir, `${cat}.json`), JSON.stringify(snapshot, null, 2), 'utf8');
+    }
+  }
+
+  rebuildProjectHtml(cwd);
+}
+
+function loadAllDomains(cwd: string): DomainSnapshot[] {
+  const dir = domainsDir(cwd);
+  if (!existsSync(dir)) return [];
+  try {
+    return readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => { try { return JSON.parse(readFileSync(join(dir, f), 'utf8')) as DomainSnapshot; } catch { return null; } })
+      .filter((d): d is DomainSnapshot => d !== null)
+      .sort((a, b) => a.domain.localeCompare(b.domain));
+  } catch { return []; }
+}
+
+const DOMAIN_LABELS: Record<string, string> = {
+  security: '🔐 Segurança',
+  bugs: '🐛 Bugs',
+  'error-handling': '⚠️ Error Handling',
+  architecture: '🏗️ Arquitetura',
+  testing: '🧪 Testes',
+  performance: '⚡ Performance',
+  observability: '📊 Observabilidade',
+  resilience: '🛡️ Resiliência',
+  compliance: '📋 Compliance',
+  dependencies: '📦 Dependências',
+  infrastructure: '🛠️ Infraestrutura',
+  data: '🗄️ Dados',
+  multitenancy: '🏢 Multitenancy',
+  redundancy: '♻️ Redundância',
+  'prompt-audit': '🤖 Prompt Audit',
+};
+
+function severityBadge(sev: string): string {
+  return `<span class="badge sev-${esc(sev)}">${esc(sev)}</span>`;
+}
+
+function renderDomainTab(snap: DomainSnapshot, index: number): string {
+  const sorted = [...snap.findings].sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0));
+  const critical = sorted.filter((f) => f.severity === 'critical').length;
+  const high = sorted.filter((f) => f.severity === 'high').length;
+  const ago = Math.round((Date.now() - new Date(snap.scannedAt).getTime()) / 60000);
+  const agoStr = ago < 60 ? `${ago}m atrás` : `${Math.round(ago / 60)}h atrás`;
+
+  const rows = sorted.map((f, i) => `
+    <tr>
+      <td class="idx">#${i + 1}</td>
+      <td>${severityBadge(f.severity)}</td>
+      <td><code class="loc">${esc(f.file)}${f.line ? `:${f.line}` : ''}</code></td>
+      <td>${esc(f.finding)}<div class="rec">${esc(f.recommendation)}</div></td>
+    </tr>`).join('');
+
+  return `<div class="tab-panel" id="panel-${index}" role="tabpanel">
+  <div class="domain-meta">
+    <span class="muted">Escaneado ${esc(agoStr)} · ${snap.totalFiles} arquivos · ${sorted.length} finding${sorted.length !== 1 ? 's' : ''}</span>
+    ${critical > 0 ? `${severityBadge('critical')} ${critical}` : ''}
+    ${high > 0 ? `${severityBadge('high')} ${high}` : ''}
+  </div>
+  <p class="summary muted">${esc(snap.summary)}</p>
+  ${sorted.length === 0
+    ? '<p class="muted">Nenhum finding neste domínio. ✓</p>'
+    : `<table><thead><tr><th>#</th><th>Severity</th><th>Localização</th><th>Finding &amp; Recomendação</th></tr></thead><tbody>${rows}</tbody></table>`}
+</div>`;
+}
+
+export function rebuildProjectHtml(cwd: string): void {
+  const domains = loadAllDomains(cwd);
+  const projectName = cwd.split('/').pop() ?? cwd;
+
+  const tabButtons = domains.map((snap, i) => {
+    const label = DOMAIN_LABELS[snap.domain] ?? snap.domain;
+    const critical = snap.findings.filter((f) => f.severity === 'critical').length;
+    const high = snap.findings.filter((f) => f.severity === 'high').length;
+    const badge = critical > 0
+      ? `<span class="tbadge tcrit">${critical}</span>`
+      : high > 0 ? `<span class="tbadge thigh">${high}</span>` : '';
+    return `<button class="tab-btn${i === 0 ? ' active' : ''}" onclick="switchTab(${i})">${esc(label)}${badge}</button>`;
+  }).join('');
+
+  const panels = domains.map((snap, i) => renderDomainTab(snap, i)).join('');
+  const totalCrit = domains.reduce((s, d) => s + d.findings.filter((f) => f.severity === 'critical').length, 0);
+  const totalHigh = domains.reduce((s, d) => s + d.findings.filter((f) => f.severity === 'high').length, 0);
+  const totalFindings = domains.reduce((s, d) => s + d.findings.length, 0);
+
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aion · ${esc(projectName)}</title><style>
+:root{color-scheme:dark;--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#e6edf3;--muted:#8b949e;--blue:#79c0ff;--yellow:#e3b341;--red:#f85149;--green:#3fb950}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,sans-serif}
+a{color:var(--blue)}code{font-family:ui-monospace,Menlo,monospace}
+.header{padding:16px 28px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.header h1{margin:0;font-size:16px}.muted{color:var(--muted);font-size:12px}
+.stats{display:flex;gap:20px}.stat .num{font-size:20px;font-weight:700;line-height:1}.stat .lbl{font-size:11px;color:var(--muted)}
+.badge{display:inline-flex;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;text-transform:uppercase}
+.sev-critical{background:#f8514920;color:var(--red)}.sev-high{background:#e3b34120;color:var(--yellow)}
+.sev-medium{background:#79c0ff20;color:var(--blue)}.sev-low,.sev-info{background:#8b949e20;color:var(--muted)}
+.tabs{display:flex;gap:2px;padding:12px 28px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab-btn{background:none;border:1px solid transparent;color:var(--muted);padding:7px 13px;cursor:pointer;border-radius:6px 6px 0 0;font-size:13px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.tab-btn:hover{color:var(--text)}.tab-btn.active{color:var(--blue);background:var(--panel);border-color:var(--line);border-bottom-color:var(--panel);margin-bottom:-1px}
+.tbadge{border-radius:9px;padding:1px 5px;font-size:10px;font-weight:700;color:#fff}.tcrit{background:var(--red)}.thigh{background:var(--yellow);color:#000}
+.tab-panel{display:none;padding:20px 28px}.tab-panel.active{display:block}
+.domain-meta{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.summary{margin:0 0 14px;max-width:900px}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+th,td{text-align:left;vertical-align:top;border-bottom:1px solid #21262d;padding:8px 10px}th{color:var(--muted);font-size:12px}
+.idx{font-size:11px;width:30px;color:var(--muted)}.loc{font-size:11px}.rec{color:var(--muted);font-size:12px;margin-top:3px}
+.empty{padding:60px 28px;color:var(--muted);text-align:center;font-size:15px}
+</style></head><body>
+<div class="header">
+  <div>
+    <h1>🤖 Aion &nbsp;·&nbsp; ${esc(projectName)}</h1>
+    <span class="muted">${domains.length} domínio${domains.length !== 1 ? 's' : ''} escaneado${domains.length !== 1 ? 's' : ''} · atualizado ${new Date().toLocaleString('pt-BR')}</span>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num" style="color:var(--red)">${totalCrit}</div><div class="lbl">Critical</div></div>
+    <div class="stat"><div class="num" style="color:var(--yellow)">${totalHigh}</div><div class="lbl">High</div></div>
+    <div class="stat"><div class="num">${totalFindings}</div><div class="lbl">Findings</div></div>
+    <div class="stat"><div class="num">${domains.length}</div><div class="lbl">Domínios</div></div>
+  </div>
+</div>
+${domains.length === 0
+  ? '<div class="empty">Nenhum scan realizado ainda.<br><br><code>aion</code> → escolha uma categoria para começar.</div>'
+  : `<div class="tabs">${tabButtons}</div>${panels}`}
+<script>
+function switchTab(i){
+  document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',j===i));
+  document.querySelectorAll('.tab-panel').forEach((p,j)=>p.classList.toggle('active',j===i));
+}
+var first=document.querySelector('.tab-panel');if(first)first.classList.add('active');
+</script></body></html>`;
+
+  writeFileSync(projectReportPath(cwd), html, 'utf8');
 }

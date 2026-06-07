@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'f
 import { dirname, join, relative } from 'path';
 import { chunkFile } from './chunker.js';
 
-const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs']);
+const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.cs', '.php', '.kt', '.swift', '.c', '.cpp', '.h']);
 const IGNORE_DIRS = new Set([
   'node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage',
   '.next', '__pycache__', 'vendor', 'target', '.gradle', '.cache',
