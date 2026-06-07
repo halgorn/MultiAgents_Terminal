@@ -1,0 +1,15 @@
+{
+  "domains": [
+    "bugs"
+  ],
+  "budget": "low",
+  "scanners": 1,
+  "provider": "claude",
+  "ignore": [
+    "**/fixtures/**",
+    "**/testdata/**",
+    "**/*.generated.*"
+  ],
+  "fixMax": 5,
+  "fixMinSeverity": "high"
+}
