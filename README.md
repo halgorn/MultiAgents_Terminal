@@ -76,6 +76,14 @@ When enabled, Aion emits observation traces for agent runs and cost lifecycle ev
 export AI_RUNTIME_CODEX_MODEL="gpt-5-codex"
 ```
 
+### LangGraph (optional orchestration adapter)
+
+```bash
+export AION_ORCHESTRATOR="langgraph"
+```
+
+When set, `analyze`, `fix`, and `review` run through a LangGraph wrapper while preserving existing pipeline behavior.
+
 ## Usage
 
 ```bash
@@ -195,6 +203,14 @@ aion graph
 aion churn
 aion patterns
 aion trace
+```
+
+### DeepEval
+
+```bash
+aion deepeval init
+python3 -m pip install -r .ai-runtime/eval/deepeval/requirements.txt
+aion deepeval run
 ```
 
 ### Explain And Onboard
