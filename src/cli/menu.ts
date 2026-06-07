@@ -179,6 +179,7 @@ export const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '🔍 Analisar problema',   hint: 'pede descrição → aion analyze',                       value: 'analyze' },
   { label: '💬 Chat sobre o repo',   hint: 'modo interativo em linguagem natural',                value: 'chat' },
   { label: '📊 Health check',        hint: 'sem IA, zero custo',                                  value: 'health' },
+  { label: '📋 Ver relatório',       hint: 'abre o último relatório HTML no navegador',            value: 'report' },
   { label: '⚙️  Setup',              hint: 'wizard inicial: config, índices e RAG',               value: 'setup' },
   { label: '', value: 'sep', separator: true },
   { label: '  Sair', value: 'quit' },
@@ -271,6 +272,21 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'health') {
       run(['--cwd', cwd, 'health']);
+      await pressEnter();
+      continue;
+    }
+
+    if (action === 'report') {
+      const { projectReportPath } = await import('../infra/project-report.js');
+      const reportPath = projectReportPath(cwd);
+      if (existsSync(reportPath)) {
+        const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+        const child = spawnSync(cmd, [`file://${reportPath}`]);
+        void child;
+        console.log(chalk.green(`\n  ✓ Abrindo ${reportPath}`));
+      } else {
+        console.log(chalk.yellow('\n  Nenhum relatório encontrado — execute um audit primeiro.'));
+      }
       await pressEnter();
       continue;
     }
