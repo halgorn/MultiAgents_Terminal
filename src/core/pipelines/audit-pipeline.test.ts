@@ -143,3 +143,30 @@ test('fallbackAuditReport deduplicates and ranks findings locally', () => {
   assert.equal(report.criticalCount, 1);
   assert.equal(report.highCount, 0);
 });
+
+test('fallbackAuditReport preserves distinct null-line findings in same file and category', () => {
+  const report = fallbackAuditReport([{
+    filesScanned: ['a.ts'],
+    summary: 'null-line',
+    findings: [
+      {
+        file: 'a.ts',
+        line: null,
+        severity: 'medium',
+        category: 'bugs',
+        finding: 'first file-level issue',
+        recommendation: 'fix first',
+      },
+      {
+        file: 'a.ts',
+        line: null,
+        severity: 'medium',
+        category: 'bugs',
+        finding: 'second file-level issue',
+        recommendation: 'fix second',
+      },
+    ],
+  }], 1);
+
+  assert.equal(report.findings.length, 2);
+});

@@ -373,8 +373,10 @@ export class AuditPipeline {
   private deduplicateFindings(findings: AuditFinding[]): AuditFinding[] {
     const seen = new Map<string, AuditFinding>();
     for (const f of findings) {
-      // Key: file + line + category (not finding text — same issue found by multiple personas)
-      const key = `${f.file}:${f.line ?? ''}:${f.category}`;
+      // Key by precise location when available; include text for null-line findings
+      // so distinct file-level issues are not collapsed.
+      const lineKey = f.line ?? `file:${f.finding.slice(0, 80)}`;
+      const key = `${f.file}:${lineKey}:${f.category}`;
       const existing = seen.get(key);
       if (!existing) {
         seen.set(key, f);

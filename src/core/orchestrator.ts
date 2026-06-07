@@ -50,10 +50,10 @@ export class Orchestrator extends EventEmitter {
   private onChunk = (agentName: string, text: string): void => {
     const match = Orchestrator.TOKEN_RE.exec(text);
     if (match) {
-      const input = parseInt(match[1]!);
-      const output = parseInt(match[2]!);
-      const cacheRead = parseInt(match[3]!);
-      const cacheWrite = parseInt(match[4]!);
+      const input = parseInt(match[1]!, 10);
+      const output = parseInt(match[2]!, 10);
+      const cacheRead = parseInt(match[3]!, 10);
+      const cacheWrite = parseInt(match[4]!, 10);
       this.costs.record(agentName, this.policy.claudeModel, {
         inputTokens: input, outputTokens: output,
         cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite,

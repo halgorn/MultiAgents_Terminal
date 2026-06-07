@@ -54,6 +54,8 @@ function runProcess(
   onChunk?: (agentName: string, text: string) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
+    // command is selected by provider code (claude/codex) and args are passed without a shell.
     const proc = spawn(command, args, {
       cwd,
       env: safeProcessEnv(),

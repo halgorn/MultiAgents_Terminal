@@ -77,6 +77,8 @@ function blockOnUpdate(current: string, latest: string): never {
 }
 
 export async function checkForUpdate(): Promise<void> {
+  if (process.env['AION_SKIP_UPDATE_CHECK'] === '1') return;
+
   const current = getCurrentVersion();
   const cache = readCache();
   const now = Date.now();

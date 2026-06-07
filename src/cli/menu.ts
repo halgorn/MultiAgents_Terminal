@@ -7,7 +7,7 @@ import type { ScanDomain } from '../prompts/scanner.js';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-const ALL_DOMAINS: Array<MenuItem<ScanDomain>> = [
+export const ALL_DOMAINS: Array<MenuItem<ScanDomain>> = [
   { label: 'security',       hint: 'pentester finding attack vectors',                     value: 'security' },
   { label: 'bugs',           hint: 'QA hunting logic failures & null dereferences',        value: 'bugs' },
   { label: 'redundancy',     hint: 'architect eliminating dead/duplicate code',            value: 'redundancy' },
@@ -25,7 +25,7 @@ const ALL_DOMAINS: Array<MenuItem<ScanDomain>> = [
   { label: 'prompt-audit',   hint: 'AI eng auditing LLM prompts & injection',             value: 'prompt-audit' },
 ];
 
-const PRESETS: Array<MenuItem<string>> = [
+export const PRESETS: Array<MenuItem<string>> = [
   { label: '🔐 Security',  hint: 'security, compliance, dependencies, multitenancy',               value: 'security' },
   { label: '🤖 AI/LLM',   hint: 'prompt-audit, security, resilience, observability, data',        value: 'ai' },
   { label: '⚙️  Backend',  hint: 'security, data, error-handling, resilience, performance',        value: 'backend' },
@@ -38,7 +38,7 @@ const PRESETS: Array<MenuItem<string>> = [
   { label: '← Back',     value: 'back' },
 ];
 
-const BUDGETS: Array<MenuItem<string>> = [
+export const BUDGETS: Array<MenuItem<string>> = [
   { label: 'low',    hint: 'fast & cheap   · est. $0.10–0.50', value: 'low' },
   { label: 'normal', hint: 'balanced       · est. $0.50–2.00', value: 'normal' },
   { label: 'deep',   hint: 'thorough       · est. $2.00–5.00', value: 'deep' },
@@ -46,7 +46,7 @@ const BUDGETS: Array<MenuItem<string>> = [
 
 // ── 5-category main menu ──────────────────────────────────────────────────────
 
-const MAIN_ITEMS: Array<MenuItem<string>> = [
+export const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: 'Inspect',   value: '', header: true },
   { label: '💊 Health',    hint: 'composite score 0–100',              value: 'health' },
   { label: '🔬 Scan',      hint: 'zero-token: secrets, env, api-map',  value: 'scan' },
@@ -83,6 +83,58 @@ const MAIN_ITEMS: Array<MenuItem<string>> = [
   { label: '', value: 'sep', separator: true },
   { label: '❯ Natural language', hint: 'type a request in any language', value: 'nl' },
   { label: '  Quit', value: 'quit' },
+];
+
+export type MenuActionDisposition = 'keep' | 'fix' | 'hide' | 'remove';
+export type MenuActionCost = 'zero-token' | 'local-side-effect' | 'ai' | 'external-service' | 'long-running';
+
+export interface MenuActionAuditEntry {
+  action: string;
+  command?: string[];
+  submenu?: string;
+  cost: MenuActionCost;
+  recommendation: MenuActionDisposition;
+  note: string;
+}
+
+export const DIRECT_COMMANDS: Record<string, string[]> = {
+  health:   ['health'],
+  churn:    ['churn'],
+  tree:     ['tree', '--hotspots'],
+  diff:     ['diff'],
+  graph:    ['graph'],
+  patterns: ['patterns'],
+  report:   ['report'],
+  chat:     ['chat'],
+  init:     ['init'],
+  trace:    ['trace'],
+};
+
+export const MENU_ACTION_AUDIT: MenuActionAuditEntry[] = [
+  { action: 'health', command: DIRECT_COMMANDS.health, cost: 'zero-token', recommendation: 'keep', note: 'Local health score smoke test.' },
+  { action: 'scan', submenu: 'scan', cost: 'zero-token', recommendation: 'keep', note: 'Local static scans; each scan type is testable.' },
+  { action: 'churn', command: DIRECT_COMMANDS.churn, cost: 'zero-token', recommendation: 'keep', note: 'Uses git history only.' },
+  { action: 'tree', command: DIRECT_COMMANDS.tree, cost: 'zero-token', recommendation: 'keep', note: 'Uses repository index and audit history.' },
+  { action: 'diff', command: DIRECT_COMMANDS.diff, cost: 'zero-token', recommendation: 'keep', note: 'Requires previous audit reports for useful output.' },
+  { action: 'graph', command: DIRECT_COMMANDS.graph, cost: 'local-side-effect', recommendation: 'keep', note: 'Writes graph artifacts under .ai-runtime.' },
+  { action: 'search', submenu: 'prompt', cost: 'zero-token', recommendation: 'keep', note: 'Prompts for query and runs local repo search.' },
+  { action: 'impact', submenu: 'prompt', cost: 'zero-token', recommendation: 'keep', note: 'Prompts for a file before running impact-local.' },
+  { action: 'memory', submenu: 'memory', cost: 'local-side-effect', recommendation: 'keep', note: 'Build/search/deps may write .ai-memory and vector files.' },
+  { action: 'audit', submenu: 'audit', cost: 'ai', recommendation: 'keep', note: 'Budget and full-audit guardrails are handled by audit command.' },
+  { action: 'patterns', command: DIRECT_COMMANDS.patterns, cost: 'zero-token', recommendation: 'keep', note: 'Local pattern detection.' },
+  { action: 'report', command: DIRECT_COMMANDS.report, cost: 'local-side-effect', recommendation: 'keep', note: 'Generates local reports.' },
+  { action: 'fix', submenu: 'prompt', cost: 'ai', recommendation: 'keep', note: 'Prompts before AI fix pipeline.' },
+  { action: 'analyze', submenu: 'prompt', cost: 'ai', recommendation: 'keep', note: 'Prompts before AI analysis pipeline.' },
+  { action: 'review', submenu: 'prompt', cost: 'ai', recommendation: 'keep', note: 'Prompts before AI review pipeline.' },
+  { action: 'explain', submenu: 'explain', cost: 'ai', recommendation: 'keep', note: 'File explain uses provider; onboard is AI-powered.' },
+  { action: 'chat', command: DIRECT_COMMANDS.chat, cost: 'ai', recommendation: 'keep', note: 'Interactive provider-backed chat.' },
+  { action: 'docs', submenu: 'docs', cost: 'ai', recommendation: 'keep', note: 'Analyze is local; generate is AI-powered.' },
+  { action: 'cloud', submenu: 'cloud', cost: 'external-service', recommendation: 'keep', note: 'Read-only cloud CLIs and credentials.' },
+  { action: 'mcp', submenu: 'mcp', cost: 'long-running', recommendation: 'hide', note: 'Serve/register are advanced setup actions.' },
+  { action: 'eval', submenu: 'eval', cost: 'ai', recommendation: 'keep', note: 'Scaffold/local retrieval are cheap; LLM rerank is explicit.' },
+  { action: 'trace', command: DIRECT_COMMANDS.trace, cost: 'zero-token', recommendation: 'keep', note: 'Reads local trace history.' },
+  { action: 'init', command: DIRECT_COMMANDS.init, cost: 'local-side-effect', recommendation: 'keep', note: 'Creates project config files.' },
+  { action: 'nl', submenu: 'interactive', cost: 'ai', recommendation: 'keep', note: 'Natural language mode may route to AI pipelines.' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -265,7 +317,7 @@ async function runEvalMenu(cwd: string): Promise<void> {
 
 // ── Fallback (non-TTY) ────────────────────────────────────────────────────────
 
-function runMenuFallback(cwd: string): void {
+export function runMenuFallback(cwd: string): void {
   const projectName = cwd.split('/').pop() ?? cwd;
   console.log('');
   console.log(chalk.bold.cyan(`  🤖 aion — ${projectName}`));
@@ -310,20 +362,6 @@ export async function runMenu(cwd: string): Promise<void> {
     }
   } catch { /* best-effort */ }
 
-  const directCmds: Record<string, string[]> = {
-    health:   ['--cwd', cwd, 'health'],
-    churn:    ['--cwd', cwd, 'churn'],
-    tree:     ['--cwd', cwd, 'tree', '--hotspots'],
-    diff:     ['--cwd', cwd, 'diff'],
-    graph:    ['--cwd', cwd, 'graph'],
-    patterns: ['--cwd', cwd, 'patterns'],
-    report:   ['--cwd', cwd, 'report'],
-    chat:     ['--cwd', cwd, 'chat'],
-    init:     ['--cwd', cwd, 'init'],
-    impact:   ['--cwd', cwd, 'impact-local', '--rebuild'],
-    trace:    ['--cwd', cwd, 'trace'],
-  };
-
   while (true) {
     console.log('');
     printHeader(cwd.split('/').pop() ?? cwd, info);
@@ -363,6 +401,11 @@ export async function runMenu(cwd: string): Promise<void> {
       if (q) { run(['--cwd', cwd, 'search', q]); await pressEnter(); }
       continue;
     }
+    if (action === 'impact') {
+      const file = await promptLine('File path for impact analysis');
+      if (file) { run(['--cwd', cwd, 'impact-local', file, '--rebuild']); await pressEnter(); }
+      continue;
+    }
     if (action === 'nl') {
       const { runInteractive } = await import('./interactive.js');
       await runInteractive(cwd);
@@ -370,7 +413,8 @@ export async function runMenu(cwd: string): Promise<void> {
     }
 
     // Direct commands
-    const args = directCmds[action];
+    const command = DIRECT_COMMANDS[action];
+    const args = command ? ['--cwd', cwd, ...command] : undefined;
     if (args) {
       console.log(chalk.bold.cyan(`\nRunning ${action}…\n`));
       run(args);

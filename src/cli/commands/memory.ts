@@ -63,11 +63,16 @@ export function registerMemory(program: Command): void {
           const vectorStore = createVectorStore(cwd);
           const texts = allChunks.map((c) => c.content);
           const vectors = await embedBatch(texts);
+          if (vectors.length !== allChunks.length) {
+            throw new Error(`Embedding provider returned ${vectors.length} vector(s) for ${allChunks.length} chunk(s).`);
+          }
 
           spinner.text = `Saving ${srcCount} chunks to ${backend}...`;
           for (let i = 0; i < allChunks.length; i++) {
             const c = allChunks[i]!;
-            await vectorStore.upsert(c.id, vectors[i]!, {
+            const vector = vectors[i];
+            if (!vector) throw new Error(`Missing embedding vector for chunk ${c.id}.`);
+            await vectorStore.upsert(c.id, vector, {
               file: c.file, name: c.name, startLine: c.startLine, endLine: c.endLine,
               preview: c.content.slice(0, 200),
             });

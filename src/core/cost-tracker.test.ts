@@ -42,3 +42,19 @@ test('real usage clears unavailable marker for the same agent', () => {
   assert.equal(costs.usageAvailable(), true);
   assert.doesNotMatch(costs.summary(), /usage unavailable/);
 });
+
+test('mixed real and unavailable usage remains unavailable', () => {
+  const costs = new CostTracker();
+
+  costs.record('scanner-security', 'claude-haiku-4-5', {
+    inputTokens: 1,
+    outputTokens: 1,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  }, 1);
+  costs.recordUnavailable('scanner-bugs');
+
+  assert.equal(costs.usageAvailable(), false);
+  assert.match(costs.summary(), /cost: unavailable/);
+  assert.match(costs.summary(), /usage unavailable: scanner-bugs/);
+});

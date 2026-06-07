@@ -34,6 +34,8 @@ function parseCommand(command: string): { bin: string; args: string[] } {
 
 function runCommand(cwd: string, command: string, maxOutputChars: number): { ok: boolean; output: string } {
   const { bin, args } = parseCommand(command);
+  // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
+  // command is sanitized through ALLOWED_COMMANDS and shell execution is disabled.
   const result = spawnSync(bin, args, {
     cwd,
     shell: false,

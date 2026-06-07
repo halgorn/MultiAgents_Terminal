@@ -56,7 +56,7 @@ export class CostTracker {
   }
 
   usageAvailable(): boolean {
-    return this.entries.length > 0 || this.unavailableAgents.size === 0;
+    return this.entries.length > 0 && this.unavailableAgents.size === 0;
   }
 
   totalUsd(): number {
