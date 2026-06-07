@@ -234,19 +234,19 @@ export async function runMenu(cwd: string): Promise<void> {
     if (action === 'sep' || action === '') continue;
 
     if (action === 'bugs') {
-      run(['--cwd', cwd, 'audit', '.', '--domains', 'bugs,error-handling,architecture,testing']);
+      run(['--cwd', cwd, 'audit', '.', '--domains', 'bugs,error-handling,architecture,testing', '--force-full']);
       await pressEnter();
       continue;
     }
 
     if (action === 'security') {
-      run(['--cwd', cwd, 'audit', '.', '--domains', 'security,compliance,dependencies']);
+      run(['--cwd', cwd, 'audit', '.', '--domains', 'security,compliance,dependencies', '--force-full']);
       await pressEnter();
       continue;
     }
 
     if (action === 'perf') {
-      run(['--cwd', cwd, 'audit', '.', '--domains', 'performance,observability,resilience']);
+      run(['--cwd', cwd, 'audit', '.', '--domains', 'performance,observability,resilience', '--force-full']);
       await pressEnter();
       continue;
     }
