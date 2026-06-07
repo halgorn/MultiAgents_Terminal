@@ -1,7 +1,14 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { buildApiMap, auditEnvVars, measureCognitiveLoad, scanCurrentSecrets } from '../../infra/code-metrics.js';
-import { buildSbom, formatSbomReport } from '../../infra/sbom.js';
+import { buildSbom } from '../../infra/sbom.js';
+import { refreshUnifiedReport } from '../../infra/report-refresh.js';
+
+async function refreshScanDashboard(cwd: string, scanName: string): Promise<void> {
+  await refreshUnifiedReport(cwd, {
+    reason: `Atualizando dashboard após ${scanName}`,
+  });
+}
 
 export function registerScan(program: Command): void {
   const scan = program
@@ -12,13 +19,14 @@ export function registerScan(program: Command): void {
   scan
     .command('api-map')
     .description('Extract all API endpoints with auth and rate-limit status')
-    .action(() => {
+    .action(async () => {
       const cwd = process.cwd();
       console.log(chalk.bold.cyan('\nAPI Map\n'));
       const endpoints = buildApiMap(cwd);
 
       if (endpoints.length === 0) {
         console.log(chalk.yellow('No API endpoints detected. Supports FastAPI, Flask, Django, Express.'));
+        await refreshScanDashboard(cwd, 'scan api-map');
         return;
       }
 
@@ -39,19 +47,21 @@ export function registerScan(program: Command): void {
       console.log(chalk.bold(`\nSummary: ${endpoints.length} endpoints`));
       if (noAuth.length > 0) console.log(chalk.red(`  🔓 ${noAuth.length} without auth`));
       if (noRateLimit.length > 0) console.log(chalk.yellow(`  ⏱  ${noRateLimit.length} without rate limiting`));
+      await refreshScanDashboard(cwd, 'scan api-map');
     });
 
   // ── env-audit ──────────────────────────────────────────────────────────────
   scan
     .command('env-audit')
     .description('Find all environment variables used and check if they are documented')
-    .action(() => {
+    .action(async () => {
       const cwd = process.cwd();
       console.log(chalk.bold.cyan('\nEnvironment Variables Audit\n'));
       const result = auditEnvVars(cwd);
 
       if (result.vars.length === 0) {
         console.log(chalk.yellow('No environment variables detected.'));
+        await refreshScanDashboard(cwd, 'scan env-audit');
         return;
       }
 
@@ -68,6 +78,7 @@ export function registerScan(program: Command): void {
       if (result.undocumented.length > 0) {
         console.log(chalk.red(`  ${result.undocumented.length} undocumented: ${result.undocumented.slice(0, 5).join(', ')}${result.undocumented.length > 5 ? '...' : ''}`));
       }
+      await refreshScanDashboard(cwd, 'scan env-audit');
     });
 
   // ── cognitive-load ─────────────────────────────────────────────────────────
@@ -75,7 +86,7 @@ export function registerScan(program: Command): void {
     .command('cognitive-load')
     .description('Measure cognitive difficulty per file: nesting, magic numbers, long functions')
     .option('--top <n>', 'number of files to show', '20')
-    .action((options: { top: string }) => {
+    .action(async (options: { top: string }) => {
       const cwd = process.cwd();
       const top = parseInt(options.top, 10) || 20;
       console.log(chalk.bold.cyan('\nCognitive Load Analysis\n'));
@@ -83,6 +94,7 @@ export function registerScan(program: Command): void {
 
       if (entries.length === 0) {
         console.log(chalk.yellow('No source files found.'));
+        await refreshScanDashboard(cwd, 'scan cognitive-load');
         return;
       }
 
@@ -98,19 +110,21 @@ export function registerScan(program: Command): void {
       const avgScore = Math.round(entries.reduce((s, e) => s + e.score, 0) / entries.length);
       console.log(chalk.bold(`\nAvg score: ${avgScore} · Top ${entries.length} files shown`));
       console.log(chalk.dim('Score = nesting×3 + long-functions×5 + magic-numbers/3 + long-lines penalty'));
+      await refreshScanDashboard(cwd, 'scan cognitive-load');
     });
 
   // ── secrets ────────────────────────────────────────────────────────────────
   scan
     .command('secrets')
     .description('Scan current files for hardcoded secrets and credentials')
-    .action(() => {
+    .action(async () => {
       const cwd = process.cwd();
       console.log(chalk.bold.cyan('\nSecrets Scan (current files)\n'));
       const hits = scanCurrentSecrets(cwd);
 
       if (hits.length === 0) {
         console.log(chalk.green('✓ No hardcoded secrets detected in current files'));
+        await refreshScanDashboard(cwd, 'scan secrets');
         return;
       }
 
@@ -121,6 +135,7 @@ export function registerScan(program: Command): void {
       });
 
       console.log(chalk.yellow('\nNote: also check git history for previously committed secrets'));
+      await refreshScanDashboard(cwd, 'scan secrets');
     });
 
   // ── sbom ───────────────────────────────────────────────────────────────────
@@ -128,13 +143,14 @@ export function registerScan(program: Command): void {
     .command('sbom')
     .description('Software Bill of Materials: all dependencies with versions and pin status')
     .option('--unpinned-only', 'show only unpinned dependencies')
-    .action((options: { unpinnedOnly?: boolean }) => {
+    .action(async (options: { unpinnedOnly?: boolean }) => {
       const cwd = process.cwd();
       console.log(chalk.bold.cyan('\nSoftware Bill of Materials\n'));
       const report = buildSbom(cwd);
 
       if (report.packages.length === 0) {
         console.log(chalk.yellow('No package files found (requirements.txt, package.json, go.mod, Cargo.toml)'));
+        await refreshScanDashboard(cwd, 'scan sbom');
         return;
       }
 
@@ -149,5 +165,6 @@ export function registerScan(program: Command): void {
       if (report.unpinned.length > 0) {
         console.log(chalk.yellow(`  ${report.unpinned.length} unpinned (supply chain risk)`));
       }
+      await refreshScanDashboard(cwd, 'scan sbom');
     });
 }

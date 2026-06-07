@@ -1,5 +1,4 @@
 import type { Command } from 'commander';
-import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { Orchestrator } from '../../core/orchestrator.js';
 import { AuditPipeline } from '../../core/pipelines/audit-pipeline.js';
@@ -10,6 +9,7 @@ import { saveAuditReport } from '../../infra/audit-report-writer.js';
 import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
 import type { AuditFinding, AuditReport } from '../../schemas/audit.js';
 import { parseBudget, parsePositiveInt } from '../cli-utils.js';
+import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 
 interface AuditOptions {
   scanners?: string;
@@ -235,21 +235,9 @@ export function registerAudit(program: Command): void {
           })),
         };
         const saved = saveAuditReport(process.cwd(), report, durationMs, parsePositiveInt(mergedOptions.aiContextBudget, 8000, 100000), costSummary);
-        const openInBrowser = (filePath: string) => {
-          try {
-            const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
-            const child = spawn(cmd, [`file://${filePath}`], { detached: true, stdio: 'ignore' });
-            child.unref();
-          } catch { /* best-effort */ }
-        };
-        const termLink = (label: string, filePath: string) => {
-          const url = `file://${filePath}`;
-          return `\x1b]8;;${url}\x1b\\${label}\x1b]8;;\x1b\\`;
-        };
-        if (saved.project) {
-          console.log('\n' + chalk.bold.cyan('📊 ') + termLink(chalk.bold.cyan('Abrir relatório no navegador →'), saved.project));
-          openInBrowser(saved.project);
-        }
+        await refreshUnifiedReport(process.cwd(), {
+          reason: 'Atualizando dashboard após audit',
+        });
         console.log(chalk.gray(`html: ${saved.html}`));
         console.log(chalk.gray(`project: ${saved.project}`));
         console.log(chalk.gray(`dashboard: ${saved.dashboard}`));

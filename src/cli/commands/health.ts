@@ -7,6 +7,7 @@ import { detectPatterns } from '../../infra/pattern-detect.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { appendTrend, loadTrend, renderTrendChart } from '../../infra/audit-trend.js';
 import { loadLatestAudit } from '../../infra/project-report.js';
+import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 
 export function registerHealth(program: Command): void {
   program
@@ -107,13 +108,19 @@ export function registerHealth(program: Command): void {
         console.log(chalk.dim('\n  Tip: run `audit` first for security dimension accuracy'));
       }
 
+      let failedThreshold = false;
       if (threshold > 0) {
         if (score.total < threshold) {
           console.log(chalk.red(`\n✗ Score ${score.total} below threshold ${threshold} — CI gate failed`));
-          process.exit(1);
+          failedThreshold = true;
         } else {
           console.log(chalk.green(`\n✓ Score ${score.total} meets threshold ${threshold}`));
         }
       }
+
+      await refreshUnifiedReport(cwd, {
+        reason: 'Atualizando dashboard após health check',
+      });
+      if (failedThreshold) process.exit(1);
     });
 }

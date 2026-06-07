@@ -194,13 +194,17 @@ ${data.cognitive.length ? `<section id="complexity"><h2>Complexity</h2><table><t
 
 export function writeProjectReport(cwd: string, data: Awaited<ReturnType<typeof buildProjectReportData>>, mdOnly: boolean): { mdFile: string; htmlFile?: string; md: string } {
   const outDir = join(cwd, '.ai-runtime');
+  const reportsDir = join(outDir, 'reports');
   mkdirSync(outDir, { recursive: true });
+  mkdirSync(reportsDir, { recursive: true });
   const md = renderProjectMarkdown(data);
   const mdFile = join(outDir, 'context.md');
   writeFileSync(mdFile, md, 'utf8');
   if (mdOnly) return { mdFile, md };
-  const htmlFile = join(outDir, 'report.html');
-  writeFileSync(htmlFile, renderProjectHtml(data, existsSync(join(outDir, 'graph.html'))), 'utf8');
+  const html = renderProjectHtml(data, existsSync(join(outDir, 'graph.html')));
+  const htmlFile = projectReportPath(cwd);
+  writeFileSync(htmlFile, html, 'utf8');
+  writeFileSync(join(outDir, 'report.html'), html, 'utf8');
   return { mdFile, htmlFile, md };
 }
 
