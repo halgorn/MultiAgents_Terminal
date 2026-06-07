@@ -1,5 +1,7 @@
 import { spawnSync } from 'child_process';
 import { createInterface } from 'readline';
+import { existsSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
 import chalk from 'chalk';
 import { selectOne, selectMany, printHeader } from './tui.js';
 import type { MenuItem } from './tui.js';
@@ -540,6 +542,37 @@ export async function runMenu(cwd: string): Promise<void> {
   } catch { /* best-effort */ }
 
   await loadCapState(cwd);
+
+  function checkIndexStaleness(root: string): string | null {
+    try {
+      const idxPath = join(root, '.ai-runtime', 'repo-index.json');
+      if (!existsSync(idxPath)) return null;
+      const idxMtime = statSync(idxPath).mtimeMs;
+      const srcDir = join(root, 'src');
+      const base = existsSync(srcDir) ? srcDir : root;
+      let newest = 0;
+      let changed = 0;
+      const walk = (dir: string, depth = 0) => {
+        if (depth > 4) return;
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          if (['node_modules', 'dist', 'build', '.git', '.ai-runtime'].includes(entry.name)) continue;
+          const full = join(dir, entry.name);
+          if (entry.isDirectory()) { walk(full, depth + 1); continue; }
+          if (!/\.(ts|tsx|js|jsx|py|go|rb|rs|java)$/.test(entry.name)) continue;
+          const mtime = statSync(full).mtimeMs;
+          if (mtime > idxMtime) { changed++; newest = Math.max(newest, mtime); }
+        }
+      };
+      walk(base);
+      if (changed === 0) return null;
+      const mins = Math.round((Date.now() - idxMtime) / 60000);
+      const ago = mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`;
+      return chalk.yellow(`⚠ Índice desatualizado há ${ago} (${changed} arquivo${changed > 1 ? 's' : ''} modificado${changed > 1 ? 's' : ''}) — execute ${chalk.bold('aion index')}`);
+    } catch { return null; }
+  }
+
+  const staleWarning = checkIndexStaleness(cwd);
+
   function buildStatusLine(): string {
     const rag = _ragReady ? chalk.green('✓ RAG') : chalk.yellow('⚠ RAG não treinado');
     const setup = _setupReady ? chalk.green('✓ Setup') : chalk.dim('○ Setup pendente');
@@ -550,6 +583,7 @@ export async function runMenu(cwd: string): Promise<void> {
     console.log('');
     printHeader(cwd.split('/').pop() ?? cwd, info);
     console.log(buildStatusLine());
+    if (staleWarning) console.log(`  ${staleWarning}`);
     const action = await selectOne('O que você quer fazer?', MAIN_ITEMS);
 
     if (!action || action === 'quit') break;

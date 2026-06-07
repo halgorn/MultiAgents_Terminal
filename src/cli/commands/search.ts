@@ -19,8 +19,8 @@ export function registerSearch(program: Command): void {
 
       console.log(chalk.bold.cyan(`\nSearch: ${query}\n`));
       if (options.semantic) {
-        const vectors = ensureRepoVectorIndex(cwd, index, Boolean(options.rebuild));
-        const results = queryRepoVectors(vectors, query, limit);
+        const vectors = await ensureRepoVectorIndex(cwd, index, Boolean(options.rebuild));
+        const results = await queryRepoVectors(vectors, query, limit);
         if (results.length === 0) {
           console.log(chalk.yellow('No vector matches.'));
           return;

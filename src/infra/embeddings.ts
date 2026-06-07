@@ -3,6 +3,39 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 
 const VECTOR_DIMENSIONS = 384;
+const XENOVA_MODEL = 'Xenova/jina-embeddings-v2-base-code';
+
+// Tri-state: undefined = not tried, null = failed, function = ready
+let _xenovaPipeline: ((input: string, opts: object) => Promise<{ data: Float32Array; dims: number[] }>) | null | undefined = undefined;
+
+async function getXenovaPipeline() {
+  if (_xenovaPipeline !== undefined) return _xenovaPipeline;
+  try {
+    // Dynamic import keeps this optional — fails gracefully if package not installed
+    const mod = await import('@xenova/transformers') as { pipeline: (task: string, model: string) => Promise<(input: string | string[], opts: object) => Promise<{ data: Float32Array; dims: number[] }>> };
+    const pipe = await mod.pipeline('feature-extraction', XENOVA_MODEL);
+    _xenovaPipeline = pipe;
+    return _xenovaPipeline;
+  } catch {
+    _xenovaPipeline = null;
+    return null;
+  }
+}
+
+async function callXenova(texts: string[]): Promise<number[][] | null> {
+  const pipe = await getXenovaPipeline();
+  if (!pipe) return null;
+  try {
+    const results: number[][] = [];
+    for (const text of texts) {
+      const out = await pipe(text.slice(0, 8192), { pooling: 'mean', normalize: true });
+      results.push(Array.from(out.data));
+    }
+    return results;
+  } catch {
+    return null;
+  }
+}
 
 function hashToken(token: string): number {
   let hash = 2166136261;
@@ -40,9 +73,10 @@ export function embedText(text: string, maxChars: number): Float32Array {
 // ── Real Embedding API ────────────────────────────────────────────────────────
 
 export function embeddingProvider(): string {
-  if (process.env.VOYAGE_API_KEY) return 'voyage-code-3 (1024d)';
-  if (process.env.OPENAI_API_KEY) return 'text-embedding-3-small (1536d)';
-  return 'hash-384d (local, no API key)';
+  if (process.env.VOYAGE_API_KEY) return 'voyage-code-3';
+  if (process.env.OPENAI_API_KEY) return 'text-embedding-3-small';
+  if (_xenovaPipeline === null) return 'hash-384d'; // xenova failed to load
+  return 'jina-code-768d'; // xenova intended or loaded
 }
 
 // Single text — returns null if no API key configured
@@ -51,10 +85,12 @@ export async function embedTextRemote(text: string): Promise<number[] | null> {
   return batch[0] ?? null;
 }
 
-// Batch embed — falls back to local hash when no API key
+// Batch embed — Voyage → OpenAI → Xenova/jina-code → FNV-1a hash
 export async function embedBatch(texts: string[]): Promise<number[][]> {
   if (process.env.VOYAGE_API_KEY) return callVoyage(texts);
   if (process.env.OPENAI_API_KEY) return callOpenAI(texts);
+  const xenova = await callXenova(texts);
+  if (xenova) return xenova;
   return texts.map((t) => Array.from(embedText(t, 2000)));
 }
 

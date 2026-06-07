@@ -17,6 +17,7 @@ import {
   readSetupState,
   writeSetupState,
 } from '../../infra/setup/project-setup.js';
+import { installPostCommitHook, isHookInstalled } from '../../infra/git-hooks.js';
 
 interface SetupRunOptions {
   budget?: 'low' | 'normal' | 'deep';
@@ -146,6 +147,8 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
   });
   const stateFile = writeSetupState(cwd, state);
 
+  installPostCommitHook(cwd);
+
   return { setupFile, stateFile, budget, domain, scanners, semanticRagBuilt };
 }
 
@@ -200,6 +203,7 @@ export function registerSetup(program: Command): void {
       process.stdout.write(`  state: ${result.stateFile}\n`);
       process.stdout.write(`  defaults: domain=${result.domain}, budget=${result.budget}, scanners=${result.scanners}\n`);
       process.stdout.write(`  semantic rag: ${result.semanticRagBuilt ? 'built' : 'skipped'}\n`);
+      process.stdout.write(`  git hook: ${isHookInstalled(cwd) ? 'instalado (.git/hooks/post-commit)' : 'não instalado (sem .git)'}\n`);
       if (!result.semanticRagBuilt) {
         process.stdout.write('  run `aion memory build` later to enable semantic retrieval.\n');
       }

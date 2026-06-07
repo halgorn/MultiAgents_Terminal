@@ -1,6 +1,6 @@
 {
   "name": "@aionlabsai/aion",
-  "version": "0.2.27",
+  "version": "0.3.0",
   "description": "Multi-agent AI engineering runtime — audit, fix, graph, analyze",
   "type": "module",
   "bin": {
@@ -39,6 +39,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.100.1",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@xenova/transformers": "^2.17.2",
     "chalk": "5.6.2",
     "commander": "13.1.0",
     "dotenv": "16.6.1",

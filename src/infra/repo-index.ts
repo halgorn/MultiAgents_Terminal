@@ -1,5 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
+import { chunkFile } from './chunker.js';
 
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs']);
 const IGNORE_DIRS = new Set([
@@ -32,7 +33,7 @@ export interface RepoImport {
 export interface RepoChunk {
   file: string;
   name: string;
-  type: 'function' | 'class' | 'method' | 'block';
+  type: 'function' | 'class' | 'method' | 'block' | 'arrow_function' | 'export_statement' | 'variable_declaration';
   startLine: number;
   endLine: number;
   tokens: number;
@@ -259,7 +260,22 @@ export async function buildRepoIndex(cwd: string): Promise<RepoIndex> {
     const fileSymbols = detectSymbols(file, text);
     symbols.push(...fileSymbols);
     imports.push(...detectImports(file, text, fileSet));
-    chunks.push(...buildChunks(file, text, fileSymbols));
+
+    // Use AST chunker (tree-sitter for TS/JS, line-based fallback for others)
+    try {
+      const codeChunks = await chunkFile(full);
+      chunks.push(...codeChunks.map((c) => ({
+        file: file.path,
+        name: c.name ?? 'anonymous',
+        type: c.type as RepoChunk['type'],
+        startLine: c.startLine,
+        endLine: c.endLine,
+        tokens: c.tokens,
+      })));
+    } catch {
+      // Fallback to line chunks if AST fails for this file
+      chunks.push(...lineChunks(file, text.split('\n')));
+    }
   }
 
   const tests = mapTests(files);
