@@ -67,8 +67,9 @@ export function mergeConfig<T extends Record<string, unknown>>(
 
 export function generateDefaultConfig(): AionConfig {
   return {
-    preset: 'quality',
+    domains: ['bugs'],
     budget: 'low',
+    scanners: 1,
     provider: 'claude',
     ignore: ['**/fixtures/**', '**/testdata/**', '**/*.generated.*'],
     fixMax: 5,
@@ -77,8 +78,12 @@ export function generateDefaultConfig(): AionConfig {
 }
 
 export function writeDefaultConfig(cwd: string): string {
-  const path = join(cwd, CONFIG_FILE);
   const config = generateDefaultConfig();
+  return writeAionConfig(cwd, config);
+}
+
+export function writeAionConfig(cwd: string, config: AionConfig): string {
+  const path = join(cwd, CONFIG_FILE);
   writeFileSync(path, JSON.stringify(config, null, 2) + '\n', 'utf8');
   return path;
 }

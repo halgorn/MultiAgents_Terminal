@@ -7,7 +7,7 @@ test('low budget is economical by default', () => {
 
   assert.equal(policy.budget, 'low');
   assert.equal(policy.deep, false);
-  assert.equal(policy.maxAgents, 3);
+  assert.equal(policy.maxAgents, 1);
   assert.equal(policy.maxFileLines, 500);
   assert.equal(policy.plannerProvider, 'claude');
   assert.equal(policy.investigatorProvider, 'claude');
@@ -20,6 +20,11 @@ test('deep budget enables multi-investigator fan out', () => {
 
   assert.equal(policy.deep, true);
   assert.equal(policy.maxAgents, 7);
+});
+
+test('normal budget caps fan-out to two scanners', () => {
+  const policy = createRuntimePolicy({ budget: 'normal' });
+  assert.equal(policy.maxAgents, 2);
 });
 
 test('limitLines truncates over-budget text', () => {

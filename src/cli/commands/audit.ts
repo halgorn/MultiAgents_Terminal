@@ -208,9 +208,9 @@ export function registerAudit(program: Command): void {
         }
       }
 
-      const label = mergedOptions.localOnly ? 'local-only scan (no AI tokens)'
-        : explicitDomains.length > 0 ? `personas: ${explicitDomains.slice(0, maxAiScanners).join(', ')} [${domainSource}]`
-        : explicitN ? `${explicitN} scanners` : `auto scanners (${budget} budget)`;
+      const label = mergedOptions.localOnly ? 'análise local (sem tokens)'
+        : explicitDomains.length > 0 ? `análise rápida: ${explicitDomains.slice(0, maxAiScanners).join(', ')} [${domainSource}]`
+        : explicitN ? `análise com ${explicitN} scanner(s)` : `análise rápida (${budget})`;
       console.log(chalk.bold.cyan(`\nStarting audit with ${label}...\n`));
       const start = Date.now();
       try {

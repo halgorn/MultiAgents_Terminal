@@ -32,10 +32,12 @@ import { registerImpactLocal } from './cli/commands/impact-local.js';
 import { registerDocs } from './cli/commands/docs.js';
 import { registerCloud } from './cli/commands/cloud.js';
 import { registerDeploy } from './cli/commands/deploy.js';
+import { registerSetup, runProjectSetupWizard } from './cli/commands/setup.js';
 import { buildAssistPlan, saveAssistPlan } from './infra/assist/assist-plan.js';
 import { applyArtifacts, formatArtifactSummary } from './infra/assist/apply-artifacts.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
+import { shouldRunInitialWizard } from './infra/setup/project-setup.js';
 
 runMigrations();
 await checkForUpdate();
@@ -59,6 +61,9 @@ program
 
     if (requestWords.length === 0) {
       // No args → always try menu first; falls back to NL REPL if no TTY
+      if (shouldRunInitialWizard(process.cwd(), Boolean(process.stdin.isTTY))) {
+        await runProjectSetupWizard(process.cwd());
+      }
       await runMenu(process.cwd());
     } else {
       await runNaturalLanguage(requestWords.join(' '), process.cwd());
@@ -104,6 +109,7 @@ registerImpactLocal(program);
 registerDocs(program);
 registerCloud(program);
 registerDeploy(program);
+registerSetup(program);
 
 program
   .command('assist')

@@ -93,6 +93,10 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     const ciDryRun = runSourceCli(repo, ['ci', '.', '--dry-run']);
     assert.equal(ciDryRun.status, 0, ciDryRun.stderr);
     assert.match(ciDryRun.stdout, /"dryRun": true/);
+
+    const setupStatus = runSourceCli(repo, ['setup', '--status']);
+    assert.equal(setupStatus.status, 0, setupStatus.stderr);
+    assert.match(setupStatus.stdout, /"prepared": false/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
@@ -187,6 +191,30 @@ test('CLI ci assist and deploy check expose safe failure modes', () => {
     const badCheck = runSourceCli(repo, ['deploy', 'check', 'file:///etc/passwd']);
     assert.equal(badCheck.status, 1);
     assert.match(badCheck.stdout, /Invalid healthcheck URL/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('CLI setup command prepares project and can be reset', () => {
+  const repo = makeFixtureRepo('aion-cli-e2e-');
+  try {
+    const setup = runSourceCli(repo, ['setup', '--domain', 'bugs', '--budget', 'low', '--skip-semantic-rag']);
+    assert.equal(setup.status, 0, setup.stderr);
+    assert.match(setup.stdout, /Setup complete/);
+
+    const status = runSourceCli(repo, ['setup', '--status']);
+    assert.equal(status.status, 0, status.stderr);
+    assert.match(status.stdout, /"prepared": true/);
+    assert.match(status.stdout, /"selectedScanners": 1/);
+
+    const reset = runSourceCli(repo, ['setup', '--reset']);
+    assert.equal(reset.status, 0, reset.stderr);
+    assert.match(reset.stdout, /Setup state reset/);
+
+    const statusAfterReset = runSourceCli(repo, ['setup', '--status']);
+    assert.equal(statusAfterReset.status, 0, statusAfterReset.stderr);
+    assert.match(statusAfterReset.stdout, /"prepared": false/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

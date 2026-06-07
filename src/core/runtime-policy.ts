@@ -41,8 +41,8 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
   const defaults = budget === 'deep'
     ? { maxAgents: 7, maxOutputChars: 20000, claudeMaxBudgetUsd: 5.0, claudeModel: 'claude-opus-4-8' as ClaudeModel }
     : budget === 'normal'
-      ? { maxAgents: 5, maxOutputChars: 14000, claudeMaxBudgetUsd: 2.0, claudeModel: 'claude-sonnet-4-6' as ClaudeModel }
-      : { maxAgents: 3, maxOutputChars: 10000, claudeMaxBudgetUsd: 1.0, claudeModel: 'claude-haiku-4-5-20251001' as ClaudeModel };
+      ? { maxAgents: 2, maxOutputChars: 14000, claudeMaxBudgetUsd: 2.0, claudeModel: 'claude-sonnet-4-6' as ClaudeModel }
+      : { maxAgents: 1, maxOutputChars: 10000, claudeMaxBudgetUsd: 1.0, claudeModel: 'claude-haiku-4-5-20251001' as ClaudeModel };
 
   return {
     budget,

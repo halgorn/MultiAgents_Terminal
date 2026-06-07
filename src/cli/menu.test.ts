@@ -14,6 +14,7 @@ test('menu action audit covers every selectable main menu item', () => {
 test('main menu exposes simplified human workflows', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
+  assert.equal(labels.includes('Preparar / configurar projeto'), true);
   assert.equal(labels.includes('Ver estado do projeto'), true);
   assert.equal(labels.includes('Encontrar problemas'), true);
   assert.equal(labels.includes('Buscar e entender código'), true);
@@ -23,6 +24,7 @@ test('main menu exposes simplified human workflows', () => {
 });
 
 test('direct menu commands map to real CLI subcommands without cwd baked in', () => {
+  assert.deepEqual(DIRECT_COMMANDS.setup, ['setup']);
   assert.deepEqual(DIRECT_COMMANDS.health, ['health']);
   assert.deepEqual(DIRECT_COMMANDS.tree, ['tree', '--hotspots']);
   assert.deepEqual(DIRECT_COMMANDS.trace, ['trace']);
@@ -53,7 +55,8 @@ test('non-TTY menu fallback prints actionable commands and exits', () => {
   }
 
   assert.match(output, /aion — example-project/);
+  assert.match(output, /aion setup/);
   assert.match(output, /aion health/);
-  assert.match(output, /aion audit \. --preset security/);
+  assert.match(output, /aion audit \. --domains bugs --scanners 1/);
   assert.match(output, /aion deploy assist/);
 });
