@@ -60,6 +60,16 @@ export OPENROUTER_API_KEY="your_key_here"
 export OPENROUTER_MODEL="moonshotai/kimi-k2"
 ```
 
+### LangFuse (optional observability)
+
+```bash
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_SECRET_KEY="sk-lf-..."
+export LANGFUSE_BASE_URL="https://cloud.langfuse.com"
+```
+
+When enabled, Aion emits observation traces for agent runs and cost lifecycle events.
+
 ### Codex
 
 ```bash
@@ -184,6 +194,7 @@ aion tree --hotspots --rebuild
 aion graph
 aion churn
 aion patterns
+aion trace
 ```
 
 ### Explain And Onboard

@@ -254,11 +254,11 @@ export function registerAudit(program: Command): void {
         console.log(chalk.gray(`project: ${saved.project}`));
         console.log(chalk.gray(`dashboard: ${saved.dashboard}`));
         console.log(chalk.dim(orch.costs.summary()));
-        orch.flushTrace();
+        await orch.flushTrace();
         await maybeAutoFix(options, report, orch);
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
       } catch (err) {
-        orch.flushTrace();
+        await orch.flushTrace();
         renderer.showError(err);
         process.exit(1);
       }

@@ -13,6 +13,12 @@ import { runReviewPipeline } from './pipelines/review-pipeline.js';
 import { runAuditFixPipeline, type AuditFixOptions, type AuditFixReport } from './pipelines/audit-fix-pipeline.js';
 import type { ScanDomain } from '../prompts/scanner.js';
 import type { PipelineContext } from './pipeline-context.js';
+import {
+  startLangfuseRootObservation,
+  startLangfuseChildObservation,
+  endLangfuseObservation,
+  flushLangfuse,
+} from '../infra/langfuse.js';
 
 export interface OrchestratorEvents {
   'state:change': { taskId: string; state: TaskState };
@@ -27,6 +33,9 @@ export class Orchestrator extends EventEmitter {
   private readonly policy: RuntimePolicy;
   readonly costs = new CostTracker();
   private tracer: Tracer | null = null;
+  private traceCommand: string | null = null;
+  private langfuseRoot: ReturnType<typeof startLangfuseRootObservation> | null = null;
+  private langfuseAgentObs = new Map<string, ReturnType<typeof startLangfuseChildObservation>>();
 
   constructor(private readonly cwd: string, policyInput: RuntimePolicyInput = {}) {
     super();
@@ -40,11 +49,26 @@ export class Orchestrator extends EventEmitter {
 
   startTrace(command: string): void {
     this.tracer = new Tracer(command);
+    this.traceCommand = command;
+    this.langfuseRoot = startLangfuseRootObservation(command, this.cwd);
+    this.langfuseAgentObs.clear();
   }
 
-  flushTrace(): void {
+  async flushTrace(): Promise<void> {
     this.tracer?.flush(this.cwd);
     this.tracer = null;
+    const fallbackCommand = this.traceCommand ?? 'run';
+    endLangfuseObservation(this.langfuseRoot, {
+      output: {
+        command: fallbackCommand,
+        totalUsd: this.costs.totalUsd(),
+        usageAvailable: this.costs.usageAvailable(),
+      },
+    });
+    this.traceCommand = null;
+    this.langfuseRoot = null;
+    this.langfuseAgentObs.clear();
+    await flushLangfuse();
   }
 
   private onChunk = (agentName: string, text: string): void => {
@@ -58,6 +82,16 @@ export class Orchestrator extends EventEmitter {
         inputTokens: input, outputTokens: output,
         cacheReadTokens: cacheRead, cacheWriteTokens: cacheWrite,
       }, 0);
+      endLangfuseObservation(this.langfuseAgentObs.get(agentName), {
+        usageDetails: {
+          input,
+          output,
+          cache_read_input_tokens: cacheRead,
+          cache_write_input_tokens: cacheWrite,
+          total: input + output + cacheRead + cacheWrite,
+        },
+      });
+      this.langfuseAgentObs.delete(agentName);
       if (this.tracer) {
         const costUsd = this.costs.byAgent().find((e) => e.agentName === agentName)?.costUsd ?? 0;
         this.tracer.endSpan(agentName, this.policy.claudeModel,
@@ -76,7 +110,17 @@ export class Orchestrator extends EventEmitter {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const emit: any = (event: string, payload: unknown) => {
       if (event === 'agent:start' && payload && typeof payload === 'object') {
-        this.tracer?.startSpan((payload as Record<string, string>)['agentName'] ?? '');
+        const agentName = (payload as Record<string, string>)['agentName'] ?? '';
+        this.tracer?.startSpan(agentName);
+        if (!this.langfuseRoot) {
+          this.langfuseRoot = startLangfuseRootObservation('runtime', this.cwd);
+        }
+        if (agentName) {
+          this.langfuseAgentObs.set(
+            agentName,
+            startLangfuseChildObservation(this.langfuseRoot, agentName),
+          );
+        }
       }
       return this.emit(event, payload);
     };

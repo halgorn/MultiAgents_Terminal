@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
 import { loadTraces, formatDuration } from '../../infra/tracer.js';
+import { langfuseStatusLine } from '../../infra/langfuse.js';
 
 export function registerTrace(program: Command): void {
   program
@@ -17,6 +18,7 @@ export function registerTrace(program: Command): void {
       if (traces.length === 0) {
         console.log(chalk.gray('No traces found. Run `aion audit` or `aion fix` first.'));
         console.log(chalk.gray('Traces are saved to .ai-runtime/traces.jsonl'));
+        console.log(chalk.gray(`LangFuse: ${langfuseStatusLine()}`));
         return;
       }
 
@@ -35,6 +37,7 @@ export function registerTrace(program: Command): void {
 
       // Summary table
       console.log(chalk.bold(`\nRecent runs (${traces.length})\n`));
+      console.log(chalk.gray(`  LangFuse: ${langfuseStatusLine()}`));
       console.log(
         chalk.gray('  ' + [
           'traceId'.padEnd(10),
