@@ -9,21 +9,21 @@ import type { MenuItem } from './tui.js';
 // ── Kept for external consumers (audit command, tests) ────────────────────────
 export type { MenuItem };
 export const ALL_DOMAINS = [
-  { label: 'security',       hint: 'pentester buscando vetores de ataque',                       value: 'security' },
-  { label: 'bugs',           hint: 'QA caçando falhas lógicas e null dereferences',              value: 'bugs' },
-  { label: 'redundancy',     hint: 'arquiteto eliminando código morto e duplicado',              value: 'redundancy' },
-  { label: 'error-handling', hint: 'SRE encontrando pontos de falha silenciosa',                 value: 'error-handling' },
-  { label: 'architecture',   hint: 'tech lead avaliando acoplamento e dívida técnica',           value: 'architecture' },
-  { label: 'testing',        hint: 'QA mapeando lacunas de cobertura de testes',                 value: 'testing' },
-  { label: 'performance',    hint: 'engenheiro caçando gargalos de plataforma',                  value: 'performance' },
-  { label: 'infrastructure', hint: 'DevOps revisando K8s e containers',                          value: 'infrastructure' },
-  { label: 'observability',  hint: 'SRE verificando logs, traces e métricas',                    value: 'observability' },
-  { label: 'resilience',     hint: 'eng de confiabilidade: timeouts, retries, circuit breakers', value: 'resilience' },
-  { label: 'data',           hint: 'DBA encontrando N+1 queries e índices faltando',             value: 'data' },
-  { label: 'dependencies',   hint: 'segurança em supply chain e CVEs',                           value: 'dependencies' },
-  { label: 'compliance',     hint: 'DPO verificando conformidade LGPD/GDPR',                     value: 'compliance' },
-  { label: 'multitenancy',   hint: 'arquiteto verificando isolamento de tenants',                value: 'multitenancy' },
-  { label: 'prompt-audit',   hint: 'eng de IA auditando prompts LLM e injeção',                 value: 'prompt-audit' },
+  { label: 'security',       hint: 'pentester looking for attack paths',                         value: 'security' },
+  { label: 'bugs',           hint: 'QA finding logic bugs and null dereferences',                value: 'bugs' },
+  { label: 'redundancy',     hint: 'architect removing dead and duplicate code',                 value: 'redundancy' },
+  { label: 'error-handling', hint: 'SRE finding silent failure paths',                           value: 'error-handling' },
+  { label: 'architecture',   hint: 'tech lead reviewing coupling and technical debt',            value: 'architecture' },
+  { label: 'testing',        hint: 'QA mapping test coverage gaps',                              value: 'testing' },
+  { label: 'performance',    hint: 'engineer finding platform bottlenecks',                      value: 'performance' },
+  { label: 'infrastructure', hint: 'DevOps reviewing K8s and containers',                        value: 'infrastructure' },
+  { label: 'observability',  hint: 'SRE checking logs, traces, and metrics',                     value: 'observability' },
+  { label: 'resilience',     hint: 'reliability checks: timeouts, retries, circuit breakers',    value: 'resilience' },
+  { label: 'data',           hint: 'DBA finding N+1 queries and missing indexes',                value: 'data' },
+  { label: 'dependencies',   hint: 'supply-chain security and CVEs',                             value: 'dependencies' },
+  { label: 'compliance',     hint: 'DPO checking GDPR/LGPD compliance',                          value: 'compliance' },
+  { label: 'multitenancy',   hint: 'architect checking tenant isolation',                        value: 'multitenancy' },
+  { label: 'prompt-audit',   hint: 'AI engineer auditing LLM prompts and injection risk',        value: 'prompt-audit' },
 ];
 
 export const PRESETS = [
@@ -35,9 +35,9 @@ export const PRESETS = [
 ];
 
 export const BUDGETS = [
-  { label: 'low',    hint: 'rápido e barato  · est. $0.10–0.50', value: 'low' },
-  { label: 'normal', hint: 'balanceado       · est. $0.50–2.00', value: 'normal' },
-  { label: 'deep',   hint: 'completo         · est. $2.00–5.00', value: 'deep' },
+  { label: 'low',    hint: 'fast and cheap   · est. $0.10–0.50', value: 'low' },
+  { label: 'normal', hint: 'balanced         · est. $0.50–2.00', value: 'normal' },
+  { label: 'deep',   hint: 'complete         · est. $2.00–5.00', value: 'deep' },
 ];
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
@@ -57,8 +57,8 @@ const AUDIT_AI_DOMAIN_ARGS: Record<AuditTrack, string> = {
 };
 
 const AUDIT_MODE_ITEMS: Array<MenuItem<AuditMode>> = [
-  { label: '🧪 Local', hint: 'zero token · varredura local completa', value: 'local-only' },
-  { label: '🤖 IA normal', hint: 'usa token · análise multi-agente balanceada', value: 'normal' },
+  { label: '🧪 Local', hint: 'zero token · complete local scan', value: 'local-only' },
+  { label: '🤖 Normal AI', hint: 'uses tokens · balanced multi-agent analysis', value: 'normal' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ function drainStdin(): void {
 function run(args: string[]): void {
   resetTty();
   const displayArgs = args.filter((a, i) => a !== '--cwd' && args[i - 1] !== '--cwd');
-  console.log(chalk.dim(`\n  ⏳ aion ${displayArgs.join(' ')}  (Ctrl+C para cancelar)\n`));
+  console.log(chalk.dim(`\n  ⏳ aion ${displayArgs.join(' ')}  (Ctrl+C to cancel)\n`));
   const onSigint = () => { /* intentional: let child handle it, menu survives */ };
   process.on('SIGINT', onSigint);
   const result = spawnSync(process.execPath, [process.argv[1]!, ...args], {
@@ -98,7 +98,7 @@ async function pressEnter(): Promise<void> {
   drainStdin();
   return new Promise<void>((resolve) => {
     process.stdout.write(chalk.dim('\n  ──────────────────────────────────────────────────\n'));
-    process.stdout.write('  ' + chalk.bold('↵  Pressione Enter para voltar ao menu'));
+    process.stdout.write('  ' + chalk.bold('↵  Press Enter to return to the menu'));
     let resolved = false;
     const cleanup = () => {
       if (resolved) return;
@@ -133,7 +133,7 @@ async function promptLine(question: string): Promise<string> {
 }
 
 async function chooseAuditMode(track: AuditTrack): Promise<AuditMode | null> {
-  const mode = await selectOne(`Modo do audit (${track})`, AUDIT_MODE_ITEMS);
+  const mode = await selectOne(`Audit mode (${track})`, AUDIT_MODE_ITEMS);
   if (!mode) return null;
   return mode;
 }
@@ -192,7 +192,7 @@ function checkIndexStaleness(root: string): string | null {
     if (changed === 0) return null;
     const mins = Math.round((Date.now() - idxMtime) / 60000);
     const ago = mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`;
-    return chalk.yellow(`⚠ Índice desatualizado há ${ago} (${changed} arquivo${changed > 1 ? 's' : ''} modificado${changed > 1 ? 's' : ''}) — execute ${chalk.bold('aion index')}`);
+    return chalk.yellow(`⚠ Index is stale by ${ago} (${changed} modified file${changed > 1 ? 's' : ''}) — run ${chalk.bold('aion index')}`);
   } catch { return null; }
 }
 
@@ -203,28 +203,28 @@ export function runMenuFallback(cwd: string): void {
   console.log('');
   console.log(chalk.bold.cyan(`  🤖 aion — ${projectName}`));
   console.log(chalk.dim('  ─────────────────────────────────────'));
-  console.log(chalk.dim('  Execute em um terminal interativo para acessar o menu.'));
+  console.log(chalk.dim('  Run in an interactive terminal to access the menu.'));
   console.log('');
   console.log(chalk.bold('  Zero token:  ') + chalk.cyan('aion health  · aion scan secrets  · aion scan env-audit  · aion report'));
-  console.log(chalk.bold('  Usa IA:      ') + chalk.cyan('aion audit . --budget normal  · aion fix <arquivo>  · aion analyze "<problema>"  · aion chat'));
-  console.log(chalk.bold('  Guiado:      ') + chalk.cyan('aion menu'));
+  console.log(chalk.bold('  Uses AI:     ') + chalk.cyan('aion audit . --budget normal  · aion fix <file>  · aion analyze "<problem>"  · aion chat'));
+  console.log(chalk.bold('  Guided:      ') + chalk.cyan('aion menu'));
   console.log('');
 }
 
 // ── Main menu items ───────────────────────────────────────────────────────────
 
 export const MAIN_ITEMS: Array<MenuItem<MenuAction>> = [
-  { label: '📊 Diagnóstico automático', hint: 'zero token · health + secrets + env + SBOM + complexidade', value: 'local-check' },
-  { label: '🐛 Bugs & Qualidade',       hint: 'local zero token ou IA normal',                         value: 'bugs' },
-  { label: '🔐 Segurança',              hint: 'local zero token ou IA normal',                         value: 'security' },
-  { label: '⚡ Performance & Infra',    hint: 'local zero token ou IA normal',                         value: 'perf' },
-  { label: '🔧 Corrigir arquivo',       hint: 'usa IA · pede caminho e aplica pipeline de fix',         value: 'fix' },
-  { label: '🔍 Analisar problema',      hint: 'usa IA · pede uma descrição objetiva',                   value: 'analyze' },
-  { label: '🤖 Assistente direto',      hint: 'usa IA quando a intenção exigir',                        value: 'assistant' },
-  { label: '💬 Chat do código',         hint: 'usa IA · perguntas com contexto do repositório',         value: 'chat-qa' },
-  { label: '📋 Ver relatório',          hint: 'zero token · abre o relatório principal unificado',      value: 'report' },
+  { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM + complexity', value: 'local-check' },
+  { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',                      value: 'bugs' },
+  { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',                      value: 'security' },
+  { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',                      value: 'perf' },
+  { label: '🔧 Fix file',              hint: 'uses AI · asks for a path and runs the fix pipeline',     value: 'fix' },
+  { label: '🔍 Analyze problem',       hint: 'uses AI · asks for a focused description',                value: 'analyze' },
+  { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',                     value: 'assistant' },
+  { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',                    value: 'chat-qa' },
+  { label: '📋 View report',           hint: 'zero token · opens the unified main report',              value: 'report' },
   { label: '', value: 'sep', separator: true },
-  { label: '  Sair', value: 'quit' },
+  { label: '  Quit', value: 'quit' },
 ];
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
@@ -261,10 +261,10 @@ export async function runMenu(cwd: string): Promise<void> {
   const staleWarning = checkIndexStaleness(cwd);
 
   function buildStatusLine(): string {
-    const rag = _ragReady ? chalk.green('RAG pronto') : chalk.dim('RAG opcional');
-    const setup = _setupReady ? chalk.green('setup ok') : chalk.dim('setup inicial pendente');
+    const rag = _ragReady ? chalk.green('RAG ready') : chalk.dim('RAG optional');
+    const setup = _setupReady ? chalk.green('setup ok') : chalk.dim('initial setup pending');
     const lf = `LangFuse ${currentLangfuseLabel()}`;
-    return `  zero token: diagnóstico/relatório/audit local   usa IA: fix/analyze/chat/audit normal   ${setup}   ${rag}   ${lf}`;
+    return `  zero token: diagnostics/report/local audit   uses AI: fix/analyze/chat/normal audit   ${setup}   ${rag}   ${lf}`;
   }
 
   while (true) {
@@ -273,7 +273,7 @@ export async function runMenu(cwd: string): Promise<void> {
     console.log(buildStatusLine());
     if (staleWarning) console.log(`  ${staleWarning}`);
 
-    const action = await selectOne('O que você quer fazer?', MAIN_ITEMS);
+    const action = await selectOne('What do you want to do?', MAIN_ITEMS);
     if (!action || action === 'quit') break;
     if (action === 'sep') continue;
 
@@ -305,13 +305,13 @@ export async function runMenu(cwd: string): Promise<void> {
     }
 
     if (action === 'fix') {
-      const file = await promptLine('Arquivo para corrigir (caminho relativo)');
+      const file = await promptLine('File to fix (relative path)');
       if (file) { run(['--cwd', cwd, 'fix', file]); await pressEnter(); }
       continue;
     }
 
     if (action === 'analyze') {
-      const target = await promptLine('Descreva o problema');
+      const target = await promptLine('Describe the problem');
       if (target) { run(['--cwd', cwd, 'analyze', target]); await pressEnter(); }
       continue;
     }

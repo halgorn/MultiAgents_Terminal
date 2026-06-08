@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MAIN_ITEMS, runMenuFallback } from './menu.js';
 
-test('menu principal tem os itens acionáveis esperados', () => {
+test('main menu has the expected actionable items', () => {
   const selectable = MAIN_ITEMS
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
@@ -10,33 +10,33 @@ test('menu principal tem os itens acionáveis esperados', () => {
   assert.deepEqual(selectable, ['local-check', 'bugs', 'security', 'perf', 'fix', 'analyze', 'assistant', 'chat-qa', 'report']);
 });
 
-test('menu não tem submenus antigos', () => {
+test('menu does not include old submenus', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
-  assert.equal(labels.includes('Diagnóstico local'), false);
+  assert.equal(labels.includes('Local diagnostics'), false);
   assert.equal(labels.includes('IA — Copilot / Audit'), false);
-  assert.equal(labels.includes('Avançado'), false);
-  assert.equal(labels.includes('Publicar / operar'), false);
+  assert.equal(labels.includes('Advanced'), false);
+  assert.equal(labels.includes('Publish / operate'), false);
 });
 
-test('menu tem os labels corretos', () => {
+test('menu has the correct English labels', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
-  assert.equal(labels.includes('📊 Diagnóstico automático'), true);
-  assert.equal(labels.includes('🐛 Bugs & Qualidade'), true);
-  assert.equal(labels.includes('🔐 Segurança'), true);
+  assert.equal(labels.includes('📊 Automatic diagnostics'), true);
+  assert.equal(labels.includes('🐛 Bugs & Quality'), true);
+  assert.equal(labels.includes('🔐 Security'), true);
   assert.equal(labels.includes('⚡ Performance & Infra'), true);
-  assert.equal(labels.includes('🔧 Corrigir arquivo'), true);
-  assert.equal(labels.includes('🔍 Analisar problema'), true);
-  assert.equal(labels.includes('🤖 Assistente direto'), true);
-  assert.equal(labels.includes('💬 Chat do código'), true);
-  assert.equal(labels.includes('📋 Ver relatório'), true);
+  assert.equal(labels.includes('🔧 Fix file'), true);
+  assert.equal(labels.includes('🔍 Analyze problem'), true);
+  assert.equal(labels.includes('🤖 Direct assistant'), true);
+  assert.equal(labels.includes('💬 Code chat'), true);
+  assert.equal(labels.includes('📋 View report'), true);
   assert.equal(labels.includes('🧪 DeepEval quickcheck'), false);
-  assert.equal(labels.includes('🕸️ Orquestrador IA'), false);
+  assert.equal(labels.includes('🕸️ AI orchestrator'), false);
   assert.equal(labels.includes('⚙️  Setup'), false);
 });
 
-test('non-TTY fallback imprime comandos acionáveis', () => {
+test('non-TTY fallback prints actionable commands', () => {
   const originalWrite = process.stdout.write;
   let output = '';
   process.stdout.write = ((chunk: string | Uint8Array) => {
