@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { ExplainAgent } from '../../agents/explain-agent.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { createRuntimePolicy } from '../../core/runtime-policy.js';
+import { displayProjectName } from '../../infra/project-name.js';
 import { addRuntimeOptions, toRuntimePolicyInput, type RuntimeCliOptions } from '../runtime-options.js';
 
 async function buildFileContext(cwd: string, filePath: string): Promise<string> {
@@ -56,7 +57,7 @@ async function buildOnboardContext(cwd: string): Promise<string> {
   const testRatio = Math.round((index.files.filter((f) => f.isTest).length / Math.max(index.files.length, 1)) * 100);
 
   return [
-    `Project: ${cwd.split('/').pop()}`,
+    `Project: ${displayProjectName(cwd)}`,
     `Files: ${index.stats.files} | Symbols: ${index.stats.symbols} | Test ratio: ${testRatio}%`,
     `Top-level directories: ${topDirs.join(', ')}`,
     depInfo,
@@ -118,7 +119,7 @@ export function registerExplain(program: Command): void {
     .action(async (options: RuntimeCliOptions) => {
       const cwd = process.cwd();
       const policy = createRuntimePolicy(toRuntimePolicyInput(options));
-      const projectName = cwd.split('/').pop() ?? 'project';
+      const projectName = displayProjectName(cwd);
       console.log(chalk.bold.cyan(`\nGenerating onboarding guide for ${projectName}…\n`));
       const context = await buildOnboardContext(cwd);
       const agent = new ExplainAgent('onboard');

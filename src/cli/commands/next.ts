@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { displayProjectName } from '../../infra/project-name.js';
 
 function hasLatestAudit(cwd: string): boolean {
   return existsSync(join(cwd, '.ai-runtime', 'reports', 'latest-audit.json'));
@@ -22,7 +23,7 @@ export function registerNext(program: Command): void {
     .description('Show the recommended low-token next steps for this project')
     .action(() => {
       const cwd = process.cwd();
-      const project = cwd.split('/').pop() ?? cwd;
+      const project = displayProjectName(cwd);
       console.log(chalk.bold.cyan(`\nNext steps for ${project}\n`));
       console.log(chalk.bold('Low-token analysis flow:'));
       console.log(`  1. ${chalk.cyan('aion audit . --dry-run --max-files 20')}`);

@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import { latestAuditPointer, projectReportPath } from '../../infra/project-report.js';
 import { openReportFile, refreshUnifiedReport } from '../../infra/report-refresh.js';
+import { displayProjectName } from '../../infra/project-name.js';
 
 function ensureUnifiedReport(cwd: string): string {
   const reportPath = projectReportPath(cwd);
@@ -67,7 +68,7 @@ export function registerReport(program: Command): void {
         days,
         open: options.md ? false : options.open !== false,
         mdOnly: Boolean(options.md),
-        reason: `Building ${label} for ${cwd.split('/').pop() ?? 'project'}`,
+        reason: `Building ${label} for ${displayProjectName(cwd)}`,
       });
       console.log(chalk.gray(`Markdown: ${written.mdFile}`));
       if (written.htmlFile) console.log(chalk.gray(`Dashboard: ${projectReportPath(cwd)}`));

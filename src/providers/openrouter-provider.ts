@@ -28,8 +28,8 @@ export class OpenRouterProvider implements AgentProvider {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://github.com/MultiAgents-Terminal',
-          'X-Title': 'ai-runtime',
+          'HTTP-Referer': 'https://www.npmjs.com/package/@aionlabsai/aion',
+          'X-Title': 'Aion',
         },
         body: JSON.stringify({
           model: this.model,

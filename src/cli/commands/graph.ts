@@ -5,6 +5,7 @@ import { spawnSync } from 'child_process';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { detectLang } from '../../infra/lang-detect.js';
 import { buildDepGraph, buildDepGraphAuto } from '../../infra/dep-graph.js';
+import { displayProjectName } from '../../infra/project-name.js';
 
 import type { DepGraph } from '../../infra/dep-graph.js';
 import type { RepoIndex } from '../../infra/repo-index.js';
@@ -309,7 +310,7 @@ export function writeGraphHtml(cwd: string, index: RepoIndex, dep: DepGraph): st
   const d3Src = fetchD3(outDir);
   const data = buildGraphData(index, dep);
   data.stats.lang = detectLang(cwd).lang;
-  const projectName = cwd.split('/').pop() ?? 'project';
+  const projectName = displayProjectName(cwd);
   const outFile = join(outDir, 'graph.html');
   writeFileSync(outFile, renderHtml(data, projectName, d3Src), 'utf8');
   return outFile;

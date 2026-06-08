@@ -8,6 +8,7 @@ import { computeHealthScore } from './health-score.js';
 import { GraphAgent } from '../agents/graph-agent.js';
 import type { AuditFinding, AuditReport } from '../schemas/audit.js';
 import { SEVERITY_RANK } from './audit-model.js';
+import { displayProjectName } from './project-name.js';
 import type { RepoIndex } from './repo-index.js';
 
 function esc(s: unknown): string {
@@ -162,14 +163,14 @@ export function loadLatestAudit(cwd: string): AuditReport | null {
 }
 
 export async function buildProjectReportData(cwd: string, days: number, onProgress?: (message: string) => void) {
-  const projectName = cwd.split('/').pop() ?? 'project';
-  onProgress?.('indexando arquivos e símbolos');
+  const projectName = displayProjectName(cwd);
+  onProgress?.('indexing files and symbols');
   const graph = new GraphAgent(cwd);
   const index = await graph.ensureIndex();
   let hotspots: Array<{ file: string; fanIn: number; fanOut: number }> = [];
   let cycles = 0;
   let detectedLang = 'unknown';
-  onProgress?.('calculando dependências e hotspots');
+  onProgress?.('calculating dependencies and hotspots');
   try {
     const { detectLang } = await import('./lang-detect.js');
     const { buildDepGraphAuto } = await import('./dep-graph.js');
@@ -179,20 +180,20 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
     hotspots = dep.hotspots;
     cycles = dep.cycles.length;
   } catch { /* best-effort */ }
-  onProgress?.('carregando auditoria mais recente');
+  onProgress?.('loading latest audit');
   const audit = loadLatestAudit(cwd);
-  onProgress?.('analisando churn e bus factor');
+  onProgress?.('analyzing churn and bus factor');
   const churn = buildChurnReport(cwd, hotspots.map((h) => h.file), days);
-  onProgress?.('detectando padrões e complexidade');
+  onProgress?.('detecting patterns and complexity');
   const patterns = detectPatterns(cwd, hotspots);
   const cognitive = measureCognitiveLoad(cwd, 30);
-  onProgress?.('executando scanners locais zero-token');
+  onProgress?.('running zero-token local scanners');
   const apiEndpoints = buildApiMap(cwd);
   const envAudit = auditEnvVars(cwd);
   const secrets = scanCurrentSecrets(cwd);
   const sbom = buildSbom(cwd);
   const architecture = buildArchitectureView(index, cycles, detectedLang);
-  onProgress?.('calculando health score');
+  onProgress?.('calculating health score');
   const health = computeHealthScore({
     totalFiles: index.stats.files,
     totalSymbols: index.stats.symbols,
@@ -206,7 +207,7 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
     auditCriticals: audit?.criticalCount,
     auditHighs: audit?.highCount,
   });
-  onProgress?.('gerando relatório HTML');
+  onProgress?.('generating HTML report');
   return { projectName, health, audit, churn, patterns, cognitive, generatedAt: new Date().toLocaleString(),
     totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom };
 }
@@ -292,9 +293,9 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const apiRows = data.apiEndpoints.slice(0, 50).map((ep) => `<tr><td>${esc(ep.method)}</td><td class="mono">${esc(ep.path)}</td><td>${ep.hasAuth ? 'yes' : 'no'}</td><td>${ep.hasRateLimit ? 'yes' : 'no'}</td><td class="mono">${esc(ep.file)}:${ep.line}</td></tr>`).join('');
   const architectureSvg = renderArchitectureSvg(data.architecture.nodes, data.architecture.edges);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>
-body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px;flex-wrap:wrap;z-index:2}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{font-size:56px;font-weight:700;color:${gradeColor}}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.card strong{font-size:24px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}.muted{color:#8b949e}.warn{color:#e3b341}.ok{color:#3fb950}.graph-wrap{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:auto;margin:14px 0}.graph-wrap svg{display:block;min-width:900px;width:100%;height:auto}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:800px){.grid,.dim-row,.split{grid-template-columns:1fr}.header{display:block}}
+body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px;flex-wrap:wrap;z-index:2}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{color:${gradeColor};text-align:right}.score strong{display:block;font-size:48px;line-height:1;font-weight:800}.score span{display:block;margin-top:6px;color:#8b949e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.card strong{font-size:24px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}.muted{color:#8b949e}.warn{color:#e3b341}.ok{color:#3fb950}.graph-wrap{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:auto;margin:14px 0}.graph-wrap svg{display:block;min-width:900px;width:100%;height:auto}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:800px){.grid,.dim-row,.split{grid-template-columns:1fr}.header{display:block}.score{text-align:left;margin-top:16px}}
 </style></head><body><nav><a href="#health">Health</a><a href="#architecture">Architecture</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
-<section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score">${data.health.total} ${data.health.grade}</div></section>
+<section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score" title="Health Score"><strong>${data.health.total}/100</strong><span>Grade ${data.health.grade}</span></div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
 <section id="architecture"><h2>Architecture</h2><div class="grid"><div class="card"><strong>${esc(data.architecture.lang)}</strong><br>Primary language</div><div class="card"><strong>${data.architecture.nodes.length}</strong><br>Top modules</div><div class="card"><strong class="${data.cycles ? 'warn' : 'ok'}">${data.cycles}</strong><br>Dependency cycles</div><div class="card"><strong>${data.hotspots.length}</strong><br>Hotspots</div></div>
 <p class="muted">Shape: ${esc(data.architecture.style)}${graphExists ? ' · Interactive dependency graph available in the top nav.' : ''}</p>
@@ -330,7 +331,7 @@ export function writeProjectReport(cwd: string, data: Awaited<ReturnType<typeof 
   return { mdFile, htmlFile, md };
 }
 
-// ── Accumulated project audit report (tabs por domínio) ───────────────────────
+// ── Accumulated project audit report (domain tabs) ────────────────────────────
 
 export interface DomainSnapshot {
   domain: string;
@@ -402,11 +403,11 @@ const PROJECT_DOMAIN_ICONS: Record<string, string> = {
 };
 
 const PROJECT_DOMAIN_NAMES: Record<string, string> = {
-  security: 'Segurança', bugs: 'Bugs', 'error-handling': 'Error Handling',
-  architecture: 'Arquitetura', testing: 'Testes', performance: 'Performance',
-  observability: 'Observabilidade', resilience: 'Resiliência', compliance: 'Compliance',
-  dependencies: 'Dependências', infrastructure: 'Infraestrutura', data: 'Dados',
-  multitenancy: 'Multitenancy', redundancy: 'Redundância', 'prompt-audit': 'Prompt Audit', local: 'Local',
+  security: 'Security', bugs: 'Bugs', 'error-handling': 'Error Handling',
+  architecture: 'Architecture', testing: 'Tests', performance: 'Performance',
+  observability: 'Observability', resilience: 'Resilience', compliance: 'Compliance',
+  dependencies: 'Dependencies', infrastructure: 'Infrastructure', data: 'Data',
+  multitenancy: 'Multitenancy', redundancy: 'Redundancy', 'prompt-audit': 'Prompt Audit', local: 'Local',
 };
 
 const PROJECT_CSS = `
@@ -476,11 +477,11 @@ a{color:var(--primary);text-decoration:none}code{font-family:'JetBrains Mono',ui
 
 export function rebuildProjectHtml(cwd: string): void {
   const domains = loadAllDomains(cwd);
-  const projectName = cwd.split('/').pop() ?? cwd;
+  const projectName = displayProjectName(cwd);
   const totalCrit = domains.reduce((s, d) => s + d.findings.filter((f) => f.severity === 'critical').length, 0);
   const totalHigh = domains.reduce((s, d) => s + d.findings.filter((f) => f.severity === 'high').length, 0);
   const totalFindings = domains.reduce((s, d) => s + d.findings.length, 0);
-  const dateStr = new Date().toLocaleDateString('pt-BR');
+  const dateStr = new Date().toLocaleDateString('en-US');
 
   const sidebarItems = domains.map((snap, i) => {
     const icon = PROJECT_DOMAIN_ICONS[snap.domain] ?? 'search';
@@ -505,13 +506,13 @@ export function rebuildProjectHtml(cwd: string): void {
     const crit = sorted.filter((f) => f.severity === 'critical').length;
     const high = sorted.filter((f) => f.severity === 'high').length;
     const ago = Math.round((Date.now() - new Date(snap.scannedAt).getTime()) / 60000);
-    const agoStr = ago < 60 ? `${ago}m atrás` : `${Math.round(ago / 60)}h atrás`;
+    const agoStr = ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`;
 
     const cards = sorted.length === 0
-      ? `<div class="empty" style="padding:48px 24px"><span class="ms material-symbols-outlined" style="font-size:48px;color:#3fb950;font-variation-settings:'FILL' 1">check_circle</span><p style="margin:12px 0 0;font-size:15px">Nenhum finding neste domínio.</p></div>`
+      ? `<div class="empty" style="padding:48px 24px"><span class="ms material-symbols-outlined" style="font-size:48px;color:#3fb950;font-variation-settings:'FILL' 1">check_circle</span><p style="margin:12px 0 0;font-size:15px">No findings in this domain.</p></div>`
       : sorted.map((f) => {
           const loc = f.file ? `${f.file}${f.line ? ':' + f.line : ''}` : '';
-          const copyData = esc(`${f.severity.toUpperCase()}: ${f.finding}${loc ? ' — ' + loc : ''}${f.recommendation ? '\nRecomendação: ' + f.recommendation : ''}`);
+          const copyData = esc(`${f.severity.toUpperCase()}: ${f.finding}${loc ? ' — ' + loc : ''}${f.recommendation ? '\nRecommendation: ' + f.recommendation : ''}`);
           return `<article class="card sev-${esc(f.severity)}">
   <div class="card-body">
     <div class="card-content">
@@ -522,7 +523,7 @@ export function rebuildProjectHtml(cwd: string): void {
       ${loc ? `<div class="card-loc"><span class="ms material-symbols-outlined" style="font-size:16px;color:#8b919d">folder</span><code>${esc(loc)}</code></div>` : ''}
       ${f.recommendation ? `<p class="card-rec">${esc(f.recommendation)}</p>` : ''}
     </div>
-    <button onclick="copyFinding(this)" data-text="${copyData}" class="copy-btn" title="Copiar">
+    <button onclick="copyFinding(this)" data-text="${copyData}" class="copy-btn" title="Copy">
       <span class="ms material-symbols-outlined">content_copy</span>
     </button>
   </div>
@@ -555,7 +556,7 @@ export function rebuildProjectHtml(cwd: string): void {
   }).join('\n');
 
   const html = `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
@@ -572,7 +573,7 @@ export function rebuildProjectHtml(cwd: string): void {
     <span style="font-size:14px;font-weight:600;color:#e0e2ea">${esc(projectName)}</span>
   </div>
   <button class="copy-all-btn" onclick="copyAllFindings()">
-    <span class="ms material-symbols-outlined" style="font-size:18px">content_copy</span>Copiar todos
+    <span class="ms material-symbols-outlined" style="font-size:18px">content_copy</span>Copy all
   </button>
 </header>
 <aside class="sidebar">
@@ -581,10 +582,10 @@ export function rebuildProjectHtml(cwd: string): void {
     <p style="margin:4px 0 0;font-size:12px;color:#8b919d;font-family:'JetBrains Mono',monospace">${esc(dateStr)}</p>
   </div>
   <nav class="sidebar-nav">
-    ${domains.length === 0 ? '<p style="color:#8b919d;font-size:13px;padding:0 4px">Nenhum scan realizado.</p>' : sidebarItems}
+    ${domains.length === 0 ? '<p style="color:#8b919d;font-size:13px;padding:0 4px">No scans yet.</p>' : sidebarItems}
   </nav>
   <div class="sidebar-footer">
-    <span class="sidebar-lbl">Feedback &amp; Contato</span>
+    <span class="sidebar-lbl">Feedback &amp; Contact</span>
     <a href="mailto:brunoinacio30000@hotmail.com" class="sidebar-link">
       <span class="ms material-symbols-outlined" style="font-size:18px">mail</span>brunoinacio30000@hotmail.com
     </a>
@@ -596,10 +597,10 @@ export function rebuildProjectHtml(cwd: string): void {
 <main class="main">
   <section class="bento">
     <div class="bento-hero">
-      <h1>Relatório de Auditoria</h1>
+      <h1>Audit Report</h1>
       <p>
         <span class="ms material-symbols-outlined" style="font-size:16px">domain</span>
-        ${domains.length} domínio${domains.length !== 1 ? 's' : ''} escaneado${domains.length !== 1 ? 's' : ''}
+        ${domains.length} scanned domain${domains.length !== 1 ? 's' : ''}
         &nbsp;·&nbsp;
         <span class="ms material-symbols-outlined" style="font-size:16px">update</span>
         ${esc(dateStr)}
@@ -621,7 +622,7 @@ export function rebuildProjectHtml(cwd: string): void {
     </div>
   </section>
   ${domains.length === 0
-    ? `<div class="empty"><span class="ms material-symbols-outlined" style="font-size:64px">search_off</span><p style="margin:12px 0 0;font-size:18px;font-weight:600;color:#e0e2ea">Nenhum scan realizado ainda.</p><p style="margin:8px 0 0;font-size:14px">Execute <code style="background:#272a30;padding:2px 8px;border-radius:4px">aion</code> e escolha uma categoria.</p></div>`
+    ? `<div class="empty"><span class="ms material-symbols-outlined" style="font-size:64px">search_off</span><p style="margin:12px 0 0;font-size:18px;font-weight:600;color:#e0e2ea">No scans yet.</p><p style="margin:8px 0 0;font-size:14px">Run <code style="background:#272a30;padding:2px 8px;border-radius:4px">aion</code> and choose a category.</p></div>`
     : panels}
 </main>
 <div class="mobile-bar">${mobileBtns}</div>

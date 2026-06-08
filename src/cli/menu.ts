@@ -5,6 +5,7 @@ import { join } from 'path';
 import chalk from 'chalk';
 import { selectOne, printHeader } from './tui.js';
 import type { MenuItem } from './tui.js';
+import { displayProjectName } from '../infra/project-name.js';
 
 // ── Kept for external consumers (audit command, tests) ────────────────────────
 export type { MenuItem };
@@ -199,7 +200,7 @@ function checkIndexStaleness(root: string): string | null {
 // ── Fallback (non-TTY) ────────────────────────────────────────────────────────
 
 export function runMenuFallback(cwd: string): void {
-  const projectName = cwd.split('/').pop() ?? cwd;
+  const projectName = displayProjectName(cwd);
   console.log('');
   console.log(chalk.bold.cyan(`  🤖 aion — ${projectName}`));
   console.log(chalk.dim('  ─────────────────────────────────────'));
@@ -232,7 +233,8 @@ export const MAIN_ITEMS: Array<MenuItem<MenuAction>> = [
 export async function runMenu(cwd: string): Promise<void> {
   if (!process.stdin.isTTY) { runMenuFallback(cwd); return; }
 
-  let info = cwd.split('/').pop() ?? cwd;
+  const projectName = displayProjectName(cwd);
+  let info = projectName;
   try {
     const { GraphAgent } = await import('../agents/graph-agent.js');
     const index = new GraphAgent(cwd).getIndex();
@@ -269,7 +271,7 @@ export async function runMenu(cwd: string): Promise<void> {
 
   while (true) {
     console.log('');
-    printHeader(cwd.split('/').pop() ?? cwd, info);
+    printHeader(projectName, info);
     console.log(buildStatusLine());
     if (staleWarning) console.log(`  ${staleWarning}`);
 

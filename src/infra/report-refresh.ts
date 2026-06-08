@@ -31,7 +31,7 @@ export async function refreshUnifiedReport(cwd: string, options: RefreshReportOp
   const shouldOpen = options.open ?? Boolean(process.stdout.isTTY);
   const progress = !options.quiet;
   if (progress) {
-    const label = options.reason ?? 'atualizando dashboard';
+    const label = options.reason ?? 'updating dashboard';
     console.log(chalk.bold.cyan(`\n${label}\n`));
   }
   const data = await buildProjectReportData(cwd, options.days ?? 90, progress ? (message) => {
@@ -39,7 +39,7 @@ export async function refreshUnifiedReport(cwd: string, options: RefreshReportOp
   } : undefined);
   if (!options.mdOnly) {
     try {
-      if (progress) console.log(chalk.gray('  • gerando grafo interativo'));
+      if (progress) console.log(chalk.gray('  • generating interactive graph'));
       const { GraphAgent } = await import('../agents/graph-agent.js');
       const { detectLang } = await import('./lang-detect.js');
       const { buildDepGraphAuto } = await import('./dep-graph.js');
@@ -55,7 +55,7 @@ export async function refreshUnifiedReport(cwd: string, options: RefreshReportOp
 
   if (progress && written.htmlFile) {
     console.log(chalk.gray(`  HTML: ${written.htmlFile}`));
-    console.log(chalk.bold.cyan('  📊 ') + terminalFileLink(chalk.bold.cyan('Abrir dashboard →'), written.htmlFile));
+    console.log(chalk.bold.cyan('  📊 ') + terminalFileLink(chalk.bold.cyan('Open dashboard →'), written.htmlFile));
   }
   if (shouldOpen && written.htmlFile) openReportFile(written.htmlFile);
   return { htmlFile: written.htmlFile, mdFile: written.mdFile };

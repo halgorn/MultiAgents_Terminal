@@ -6,7 +6,7 @@ import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 
 async function refreshScanDashboard(cwd: string, scanName: string): Promise<void> {
   await refreshUnifiedReport(cwd, {
-    reason: `Atualizando dashboard após ${scanName}`,
+    reason: `Updating dashboard after ${scanName}`,
   });
 }
 

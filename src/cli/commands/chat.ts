@@ -4,6 +4,7 @@ import * as readline from 'readline';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { createRuntimePolicy } from '../../core/runtime-policy.js';
 import { CostTracker } from '../../core/cost-tracker.js';
+import { displayProjectName } from '../../infra/project-name.js';
 import type { RuntimePolicy } from '../../core/runtime-policy.js';
 import { safeProcessEnv } from '../../providers/cli-provider.js';
 
@@ -89,7 +90,7 @@ export function registerChat(program: Command): void {
         repoContext = '(No repo index available)';
       }
 
-      const projectName = cwd.split('/').pop() ?? cwd;
+      const projectName = displayProjectName(cwd);
       console.log(chalk.bold.cyan(`\n  💬 Aion Chat — ${projectName}`));
       console.log(chalk.dim(`  Provider: ${provider}  Budget: ${budget}  Context: ${repoContext.length} chars`));
       console.log(chalk.dim('  Type "exit" or Ctrl+C to quit.'));

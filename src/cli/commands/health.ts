@@ -119,7 +119,7 @@ export function registerHealth(program: Command): void {
       }
 
       await refreshUnifiedReport(cwd, {
-        reason: 'Atualizando dashboard após health check',
+        reason: 'Updating dashboard after health check',
       });
       if (failedThreshold) process.exit(1);
     });
