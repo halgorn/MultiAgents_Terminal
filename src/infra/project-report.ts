@@ -16,6 +16,7 @@ import { buildProjectInsights, renderInsightsHtml, renderInsightsMarkdown } from
 import { analyzeLineSize } from './line-size-analyzer.js';
 import { buildProjectTrend, renderTrendHtml, renderTrendMarkdown, saveProjectTrend } from './project-trend.js';
 import { projectReportCss } from './project-report-style.js';
+import { renderSeoHtml, renderSeoMarkdown } from './seo-report-render.js';
 import type { RepoIndex } from './repo-index.js';
 
 export { projectReportPath, rebuildProjectHtml, saveDomainSnapshot } from './project-audit-dashboard.js';
@@ -369,16 +370,7 @@ export function renderProjectMarkdown(data: Awaited<ReturnType<typeof buildProje
   lines.push(`- Primary language: ${data.architecture.lang}`);
   lines.push(`- Shape: ${data.architecture.style}`);
   lines.push(`- Modules: ${data.architecture.nodes.length}`);
-  lines.push('', `## SEO, Analytics & Crawlers: ${data.seo.score}/100`);
-  lines.push(`- robots.txt: ${data.seo.robotsTxt ? 'present' : 'missing'}`);
-  lines.push(`- sitemap: ${data.seo.sitemap ? 'present' : 'missing'}`);
-  lines.push(`- AI crawler policy: ${data.seo.aiCrawlerPolicy}`);
-  lines.push(`- Google Analytics/GTM: ${data.seo.googleAnalytics || data.seo.googleTagManager ? 'detected' : 'not detected'}`);
-  lines.push(`- Search Console: ${data.seo.searchConsole ? 'detected' : 'not detected'}`);
-  if (data.seo.issues.length > 0) {
-    lines.push('', '| Severity | Area | Issue | Recommendation |', '|---|---|---|---|');
-    data.seo.issues.slice(0, 10).forEach((issue) => lines.push(`| ${issue.severity} | ${issue.area} | ${issue.issue} | ${issue.recommendation} |`));
-  }
+  lines.push('', renderSeoMarkdown(data.seo), '');
   lines.push('', '## Improvement Perspectives');
   lines.push('| Persona | Focus | Risk | Recommendation | Projection |', '|---|---|---|---|---|');
   data.improvementPerspectives.forEach((p) => lines.push(`| ${p.persona} | ${p.focus} | ${p.risk} | ${p.recommendation} | ${p.projection} |`));
@@ -439,8 +431,6 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const architectureRows = data.architecture.nodes.map((node) => `<tr><td class="mono">${esc(node.id)}</td><td>${node.files}</td><td>${node.symbols}</td><td>${node.loc}</td><td>${node.fanIn}</td><td>${node.fanOut}</td></tr>`).join('');
   const patternRows = data.patterns.detected.slice(0, 12).map((pattern) => `<tr><td>${esc(pattern.pattern)}</td><td>${esc(pattern.category)}</td><td>${esc(pattern.confidence)}</td><td>${pattern.evidence.map(esc).join('<br>')}</td></tr>`).join('');
   const antiPatternRows = data.patterns.antiPatterns.slice(0, 12).map((pattern) => `<tr><td>${esc(pattern.name)}</td><td>${esc(pattern.severity)}</td><td>${esc(pattern.description)}</td><td>${pattern.evidence.map(esc).join('<br>')}</td></tr>`).join('');
-  const seoSignalRows = data.seo.signals.map((signal) => `<tr><td>${esc(signal.name)}</td><td><span class="${signal.status === 'ok' ? 'ok' : signal.status === 'warn' ? 'warn' : 'sev-high'}">${esc(signal.status)}</span></td><td>${esc(signal.detail)}</td></tr>`).join('');
-  const seoIssueRows = data.seo.issues.map((issue) => `<tr><td>${esc(issue.severity)}</td><td>${esc(issue.area)}</td><td>${esc(issue.issue)}</td><td>${esc(issue.recommendation)}</td></tr>`).join('');
   const perspectiveRows = data.improvementPerspectives.map((p) => `<tr><td>${esc(p.persona)}</td><td>${esc(p.focus)}</td><td>${esc(p.risk)}</td><td>${esc(p.recommendation)}</td><td>${esc(p.projection)}</td></tr>`).join('');
   const secretRows = data.secrets.length
     ? data.secrets.map((s) => `<tr><td class="mono">${esc(s.file)}:${s.line}</td><td>${esc(s.pattern)}</td><td class="mono">${esc(s.preview)}</td></tr>`).join('')
@@ -460,9 +450,7 @@ ${architectureSvg}
 <div class="split"><div><h3>Detected Architecture Patterns</h3><table><tr><th>Pattern</th><th>Category</th><th>Confidence</th><th>Evidence</th></tr>${patternRows || '<tr><td colspan="4">No explicit architecture patterns detected.</td></tr>'}</table></div>
 <div><h3>Architecture Risks</h3><table><tr><th>Name</th><th>Severity</th><th>Description</th><th>Evidence</th></tr>${antiPatternRows || '<tr><td colspan="4">No architecture anti-patterns detected.</td></tr>'}</table></div></div>
 <h3>Module Coupling</h3><table><tr><th>Module</th><th>Files</th><th>Symbols</th><th>LOC</th><th>Fan-in</th><th>Fan-out</th></tr>${architectureRows || '<tr><td colspan="6">No module data available.</td></tr>'}</table></section>
-<section id="seo"><h2>SEO, Analytics & AI Crawlers</h2><div class="grid"><div class="card"><strong class="${data.seo.score >= 80 ? 'ok' : data.seo.score >= 60 ? 'warn' : 'sev-high'}">${data.seo.score}/100</strong><br>SEO score</div><div class="card"><strong class="${data.seo.robotsTxt ? 'ok' : 'sev-high'}">${data.seo.robotsTxt ? 'yes' : 'no'}</strong><br>robots.txt</div><div class="card"><strong class="${data.seo.sitemap ? 'ok' : 'sev-high'}">${data.seo.sitemap ? 'yes' : 'no'}</strong><br>sitemap</div><div class="card"><strong>${esc(data.seo.aiCrawlerPolicy)}</strong><br>AI crawler policy</div></div>
-<h3>Crawler & Analytics Signals</h3><table><tr><th>Signal</th><th>Status</th><th>Detail</th></tr>${seoSignalRows}</table>
-<h3>SEO Issues</h3><table><tr><th>Severity</th><th>Area</th><th>Issue</th><th>Recommendation</th></tr>${seoIssueRows || '<tr><td colspan="4">No SEO/crawler issues detected.</td></tr>'}</table></section>
+${renderSeoHtml(data.seo)}
 <section id="diagnostics"><h2>Local Diagnostics <span class="muted">(zero token)</span></h2><div class="grid"><div class="card"><strong class="${data.secrets.length ? 'warn' : 'ok'}">${data.secrets.length}</strong><br>Secrets</div><div class="card"><strong>${data.envAudit.vars.length}</strong><br>Env vars</div><div class="card"><strong class="${data.sbom.unpinned.length ? 'warn' : 'ok'}">${data.sbom.unpinned.length}</strong><br>Unpinned deps</div><div class="card"><strong>${data.apiEndpoints.length}</strong><br>API endpoints</div></div>
 <h3>Secrets</h3><table><tr><th>Location</th><th>Pattern</th><th>Preview</th></tr>${secretRows}</table>
 <h3>Environment Variables</h3><table><tr><th>Documented</th><th>Name</th><th>Location</th></tr>${envRows || '<tr><td colspan="3">No environment variables detected.</td></tr>'}</table>

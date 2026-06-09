@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { extname, join, relative } from 'path';
 import { isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { analyzeNextSeo, type NextSeoAnalysis } from './seo-next-analyzer.js';
 
 export interface SeoSignal {
   name: string;
@@ -24,6 +25,7 @@ export interface SeoCrawlerReport {
   googleTagManager: boolean;
   searchConsole: boolean;
   aiCrawlerPolicy: 'explicit' | 'partial' | 'missing';
+  next?: NextSeoAnalysis;
   signals: SeoSignal[];
   issues: SeoIssue[];
 }
@@ -124,6 +126,7 @@ export function analyzeSeoAndCrawlers(cwd: string): SeoCrawlerReport {
   const googleMentions = GOOGLE_CRAWLERS.filter(botMentioned);
   const aiMentions = AI_CRAWLERS.filter(botMentioned);
   const aiCrawlerPolicy: SeoCrawlerReport['aiCrawlerPolicy'] = aiMentions.length >= 3 ? 'explicit' : aiMentions.length > 0 ? 'partial' : 'missing';
+  const next = analyzeNextSeo(cwd, robots);
 
   const issues: SeoIssue[] = [];
   if (!robots) pushIssue(issues, 'high', 'Crawlers', 'robots.txt not found', 'Add robots.txt with Googlebot and AI crawler policy plus a Sitemap entry.');
@@ -151,9 +154,11 @@ export function analyzeSeoAndCrawlers(cwd: string): SeoCrawlerReport {
     { name: 'Internationalization', status: hreflang ? 'ok' : 'warn', detail: hreflang ? 'hreflang detected' : 'No hreflang signal' },
     { name: 'Crawler rendering', status: serverRendering ? 'ok' : 'warn', detail: serverRendering ? 'SSR/SSG/static HTML signal detected' : 'CSR-only risk signal' },
     ...(isNext ? [{ name: 'Next.js build awareness', status: nextBuildFiles.length || nextMetadata ? 'ok' as const : 'warn' as const, detail: `${nextSourceFiles.length} source route file(s), ${nextBuildFiles.length} rendered build file(s), metadata=${nextMetadata ? 'yes' : 'no'}` }] : []),
+    ...(next.framework ? [{ name: 'Route SEO coverage', status: next.routes.every((route) => route.issues.length === 0) ? 'ok' as const : 'warn' as const, detail: `${next.routes.length} route(s), ${next.routes.filter((route) => route.issues.length > 0).length} with issue(s)` }] : []),
   ];
 
-  const deduction = issues.reduce((sum, issue) => sum + (issue.severity === 'high' ? 18 : issue.severity === 'medium' ? 10 : 4), 0);
+  const routePenalty = Math.min(20, next.routes.filter((route) => route.issues.length > 0).length * 3 + Math.min(8, next.sitemapMissingRoutes.length * 2));
+  const deduction = issues.reduce((sum, issue) => sum + (issue.severity === 'high' ? 18 : issue.severity === 'medium' ? 10 : 4), 0) + routePenalty;
   return {
     score: Math.max(0, 100 - deduction),
     filesChecked: new Set([...files, ...nextSourceFiles, ...nextBuildFiles]).size,
@@ -163,6 +168,7 @@ export function analyzeSeoAndCrawlers(cwd: string): SeoCrawlerReport {
     googleTagManager,
     searchConsole,
     aiCrawlerPolicy,
+    next,
     signals,
     issues: issues.slice(0, 20),
   };
