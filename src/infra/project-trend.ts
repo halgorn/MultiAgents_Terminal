@@ -91,10 +91,12 @@ export function saveProjectTrend(cwd: string, snapshot: ProjectSnapshot): void {
 }
 
 export function renderTrendMarkdown(trend: ProjectTrend): string {
-  return ['## What Changed Since Last Run', ...trend.changes.map((change) => `- ${change}`)].join('\n');
+  const changes = trend.changes.length ? trend.changes : ['No score changes since the previous project snapshot.'];
+  return ['## What Changed Since Last Run', ...changes.map((change) => `- ${change}`)].join('\n');
 }
 
 export function renderTrendHtml(trend: ProjectTrend): string {
-  const rows = trend.changes.map((change) => `<li>${change.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`).join('');
+  const changes = trend.changes.length ? trend.changes : ['No score changes since the previous project snapshot.'];
+  const rows = changes.map((change) => `<li>${change.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`).join('');
   return `<section id="trend"><h2>What Changed Since Last Run</h2><ul>${rows}</ul></section>`;
 }

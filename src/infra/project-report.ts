@@ -15,6 +15,7 @@ import { analyzePerformance } from './performance-analyzer.js';
 import { buildProjectInsights, renderInsightsHtml, renderInsightsMarkdown } from './project-insights.js';
 import { analyzeLineSize } from './line-size-analyzer.js';
 import { buildProjectTrend, renderTrendHtml, renderTrendMarkdown, saveProjectTrend } from './project-trend.js';
+import { projectReportCss } from './project-report-style.js';
 import type { RepoIndex } from './repo-index.js';
 
 export { projectReportPath, rebuildProjectHtml, saveDomainSnapshot } from './project-audit-dashboard.js';
@@ -448,8 +449,7 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const sbomRows = data.sbom.unpinned.slice(0, 50).map((p) => `<tr><td>${esc(p.lang)}</td><td class="mono">${esc(p.name)}</td><td>${esc(p.version)}</td></tr>`).join('');
   const apiRows = data.apiEndpoints.slice(0, 50).map((ep) => `<tr><td>${esc(ep.method)}</td><td class="mono">${esc(ep.path)}</td><td>${ep.hasAuth ? 'yes' : 'no'}</td><td>${ep.hasRateLimit ? 'yes' : 'no'}</td><td class="mono">${esc(ep.file)}:${ep.line}</td></tr>`).join('');
   const architectureSvg = renderArchitectureSvg(data.architecture.nodes, data.architecture.edges);
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>
-</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a><a href="#seo">SEO & Crawlers</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">10 Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>${projectReportCss(gradeColor)}</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a><a href="#seo">SEO & Crawlers</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">10 Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score" title="Health Score"><strong>${data.health.total}/100</strong><span>Grade ${data.health.grade}</span></div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
 ${renderTrendHtml(data.trend)}
