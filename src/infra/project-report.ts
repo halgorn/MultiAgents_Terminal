@@ -7,10 +7,15 @@ import { detectPatterns } from './pattern-detect.js';
 import { computeHealthScore } from './health-score.js';
 import { GraphAgent } from '../agents/graph-agent.js';
 import type { AuditFinding, AuditReport } from '../schemas/audit.js';
-import { SEVERITY_RANK } from './audit-model.js';
 import { displayProjectName } from './project-name.js';
 import { analyzeSeoAndCrawlers, type SeoCrawlerReport } from './seo-analyzer.js';
+import { projectReportPath } from './project-audit-dashboard.js';
+import { analyzeDatabase } from './db-analyzer.js';
+import { analyzePerformance } from './performance-analyzer.js';
+import { buildProjectInsights, renderInsightsHtml, renderInsightsMarkdown } from './project-insights.js';
 import type { RepoIndex } from './repo-index.js';
+
+export { projectReportPath, rebuildProjectHtml, saveDomainSnapshot } from './project-audit-dashboard.js';
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -291,6 +296,10 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   const sbom = buildSbom(cwd);
   onProgress?.('checking SEO, analytics, and crawler policy');
   const seo = analyzeSeoAndCrawlers(cwd);
+  onProgress?.('analyzing database readiness');
+  const database = analyzeDatabase(cwd);
+  onProgress?.('analyzing performance readiness');
+  const performance = analyzePerformance(cwd, apiEndpoints);
   const architecture = buildArchitectureView(index, cycles, detectedLang);
   onProgress?.('calculating health score');
   const health = computeHealthScore({
@@ -320,9 +329,18 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
     audit,
     unpinnedDeps: sbom.unpinned.length,
   });
+  const insights = buildProjectInsights({
+    projectName,
+    health,
+    seo,
+    database,
+    performance,
+    files: index.stats.files,
+    hotspots: hotspots.length,
+  });
   onProgress?.('generating HTML report');
   return { projectName, health, audit, churn, patterns, cognitive, generatedAt: new Date().toLocaleString(),
-    totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom, seo, improvementPerspectives };
+    totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom, seo, database, performance, improvementPerspectives, insights };
 }
 
 export function renderProjectMarkdown(data: Awaited<ReturnType<typeof buildProjectReportData>>): string {
@@ -332,6 +350,7 @@ export function renderProjectMarkdown(data: Awaited<ReturnType<typeof buildProje
   lines.push('', `## Health Score: ${data.health.total}/100 (${data.health.grade})`, '');
   lines.push('| Dimension | Score | Detail |', '|---|---|---|');
   data.health.dimensions.forEach((d) => lines.push(`| ${d.name} | ${d.score}/100 | ${d.detail} |`));
+  lines.push('', renderInsightsMarkdown(data.insights), '');
   lines.push('', '## Project Overview');
   lines.push(`- Files: ${data.totalFiles}`);
   lines.push(`- Symbols: ${data.totalSymbols}`);
@@ -423,9 +442,10 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const architectureSvg = renderArchitectureSvg(data.architecture.nodes, data.architecture.edges);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>
 body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px;flex-wrap:wrap;z-index:2}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{color:${gradeColor};text-align:right}.score strong{display:block;font-size:48px;line-height:1;font-weight:800}.score span{display:block;margin-top:6px;color:#8b949e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.card strong{font-size:24px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}.muted{color:#8b949e}.warn{color:#e3b341}.ok{color:#3fb950}.sev-high{color:#f85149}.graph-wrap{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:auto;margin:14px 0}.graph-wrap svg{display:block;min-width:900px;width:100%;height:auto}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:800px){.grid,.dim-row,.split{grid-template-columns:1fr}.header{display:block}.score{text-align:left;margin-top:16px}}
-</style></head><body><nav><a href="#health">Health</a><a href="#architecture">Architecture</a><a href="#seo">SEO & Crawlers</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">10 Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
+</style></head><body><nav><a href="#health">Health</a><a href="#score-explain">Score</a><a href="#architecture">Architecture</a><a href="#seo">SEO & Crawlers</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">10 Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score" title="Health Score"><strong>${data.health.total}/100</strong><span>Grade ${data.health.grade}</span></div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
+${renderInsightsHtml(data.insights)}
 <section id="architecture"><h2>Architecture</h2><div class="grid"><div class="card"><strong>${esc(data.architecture.lang)}</strong><br>Primary language</div><div class="card"><strong>${data.architecture.nodes.length}</strong><br>Top modules</div><div class="card"><strong class="${data.cycles ? 'warn' : 'ok'}">${data.cycles}</strong><br>Dependency cycles</div><div class="card"><strong>${data.hotspots.length}</strong><br>Hotspots</div></div>
 <p class="muted">Shape: ${esc(data.architecture.style)}${graphExists ? ' · Interactive dependency graph available in the top nav.' : ''}</p>
 ${architectureSvg}
@@ -456,330 +476,11 @@ export function writeProjectReport(cwd: string, data: Awaited<ReturnType<typeof 
   const md = renderProjectMarkdown(data);
   const mdFile = join(outDir, 'context.md');
   writeFileSync(mdFile, md, 'utf8');
+  writeFileSync(join(outDir, 'linkedin-summary.md'), data.insights.linkedinSummary, 'utf8');
   if (mdOnly) return { mdFile, md };
   const html = renderProjectHtml(data, existsSync(join(outDir, 'graph.html')));
   const htmlFile = projectReportPath(cwd);
   writeFileSync(htmlFile, html, 'utf8');
   writeFileSync(join(outDir, 'report.html'), html, 'utf8');
   return { mdFile, htmlFile, md };
-}
-
-// ── Accumulated project audit report (domain tabs) ────────────────────────────
-
-export interface DomainSnapshot {
-  domain: string;
-  scannedAt: string;
-  findings: AuditFinding[];
-  summary: string;
-  totalFiles: number;
-}
-
-function domainsDir(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'reports', 'domains');
-}
-
-export function projectReportPath(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'reports', 'project.html');
-}
-
-export function saveDomainSnapshot(cwd: string, report: AuditReport): void {
-  const dir = domainsDir(cwd);
-  mkdirSync(dir, { recursive: true });
-  const sections = report.sections ?? [];
-  const now = new Date().toISOString();
-
-  if (sections.length > 0) {
-    for (const section of sections) {
-      const snapshot: DomainSnapshot = {
-        domain: section.domain,
-        scannedAt: now,
-        findings: section.findings,
-        summary: section.summary,
-        totalFiles: report.totalFiles,
-      };
-      writeFileSync(join(dir, `${section.domain}.json`), JSON.stringify(snapshot, null, 2), 'utf8');
-    }
-  } else {
-    const byCategory = new Map<string, AuditFinding[]>();
-    for (const f of report.findings) {
-      if (!byCategory.has(f.category)) byCategory.set(f.category, []);
-      byCategory.get(f.category)!.push(f);
-    }
-    for (const [cat, findings] of byCategory) {
-      const snapshot: DomainSnapshot = { domain: cat, scannedAt: now, findings, summary: report.summary, totalFiles: report.totalFiles };
-      writeFileSync(join(dir, `${cat}.json`), JSON.stringify(snapshot, null, 2), 'utf8');
-    }
-  }
-
-  rebuildProjectHtml(cwd);
-}
-
-function loadAllDomains(cwd: string): DomainSnapshot[] {
-  const dir = domainsDir(cwd);
-  if (!existsSync(dir)) return [];
-  try {
-    return readdirSync(dir)
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => { try { return JSON.parse(readFileSync(join(dir, f), 'utf8')) as DomainSnapshot; } catch { return null; } })
-      .filter((d): d is DomainSnapshot => d !== null)
-      .sort((a, b) => a.domain.localeCompare(b.domain));
-  } catch { return []; }
-}
-
-
-const PROJECT_DOMAIN_ICONS: Record<string, string> = {
-  security: 'shield', bugs: 'bug_report', 'error-handling': 'error',
-  architecture: 'architecture', testing: 'terminal', performance: 'speed',
-  observability: 'visibility', resilience: 'verified_user', compliance: 'gavel',
-  dependencies: 'link', infrastructure: 'dns', data: 'database',
-  multitenancy: 'group', redundancy: 'recycling', 'prompt-audit': 'psychology', local: 'home',
-};
-
-const PROJECT_DOMAIN_NAMES: Record<string, string> = {
-  security: 'Security', bugs: 'Bugs', 'error-handling': 'Error Handling',
-  architecture: 'Architecture', testing: 'Tests', performance: 'Performance',
-  observability: 'Observability', resilience: 'Resilience', compliance: 'Compliance',
-  dependencies: 'Dependencies', infrastructure: 'Infrastructure', data: 'Data',
-  multitenancy: 'Multitenancy', redundancy: 'Redundancy', 'prompt-audit': 'Prompt Audit', local: 'Local',
-};
-
-const PROJECT_CSS = `
-*,*::before,*::after{box-sizing:border-box}
-:root{--bg:#101419;--surface:#1c2025;--surface-low:#181c21;--surface-high:#272a30;--surface-highest:#32353b;--line:#414752;--text:#e0e2ea;--muted:#8b919d;--dim:#c0c7d4;--primary:#a2c9ff;--primary-btn:#58a6ff;--primary-on:#00315c;--critical:#ffb4ab;--high:#ffba42;--green:#3fb950}
-body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.5}
-a{color:var(--primary);text-decoration:none}code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px}button{cursor:pointer}
-.ms{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;vertical-align:middle;user-select:none}
-.header{position:fixed;top:0;left:0;width:100%;z-index:50;display:flex;justify-content:space-between;align-items:center;padding:0 24px;height:64px;border-bottom:1px solid var(--line);background:rgba(16,20,25,.85);backdrop-filter:blur(12px)}
-.brand{font-size:22px;font-weight:900;color:var(--primary);letter-spacing:-.02em}
-.sidebar{position:fixed;left:0;top:0;height:100%;width:260px;display:flex;flex-direction:column;padding:80px 16px 16px;background:var(--surface-low);border-right:1px solid var(--line);z-index:40;overflow:hidden}
-.sidebar-nav{flex:1;display:flex;flex-direction:column;gap:4px;overflow-y:auto;padding-right:4px}
-.sidebar-nav::-webkit-scrollbar{width:3px}.sidebar-nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
-.tab-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;width:100%;text-align:left;background:none;border:none;color:var(--dim);font-size:13px;font-family:'JetBrains Mono',monospace;transition:background .15s,color .15s}
-.tab-btn:hover{background:var(--surface-high);color:var(--text)}.tab-btn.active{background:rgba(162,201,255,.12);color:var(--primary)}
-.sidebar-footer{margin-top:auto;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
-.sidebar-lbl{padding:4px 12px;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
-.sidebar-link{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;color:var(--muted);font-size:13px;transition:all .15s}
-.sidebar-link:hover{color:var(--text);background:var(--surface-high)}
-.main{margin-left:260px;padding:88px 24px 24px;display:flex;flex-direction:column;gap:24px}
-.bento{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px}
-.bento-hero{background:var(--surface-low);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
-.bento-hero::before{content:'';position:absolute;top:-64px;right:-64px;width:256px;height:256px;background:rgba(162,201,255,.04);border-radius:50%;filter:blur(48px)}
-.bento-hero h1{margin:0;font-size:26px;font-weight:900;color:var(--text);position:relative;z-index:1}
-.bento-hero p{margin:8px 0 0;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;position:relative;z-index:1}
-.bento-stat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between}
-.bento-stat-lbl{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.bento-num{font-size:36px;font-weight:700;color:var(--text);margin-top:16px}
-.bento-crit{background:rgba(255,180,171,.06);border:1px solid rgba(255,180,171,.2);border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between}
-.bento-crit-num{font-size:36px;font-weight:700;color:var(--critical);margin-top:16px}
-.panel{display:none;flex-direction:column;gap:16px}.panel.active{display:flex}
-.panel-header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px;flex-wrap:wrap;gap:8px}
-.panel-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.panel-title h2{margin:0;font-size:20px;font-weight:700;color:var(--text)}
-.pill{display:inline-flex;align-items:center;padding:2px 10px;border-radius:999px;font-size:12px;font-family:'JetBrains Mono',monospace}
-.pill-neutral{background:var(--surface-high);color:var(--dim)}
-.pill-crit{background:rgba(255,180,171,.12);color:var(--critical);border:1px solid rgba(255,180,171,.3)}
-.pill-high{background:rgba(255,186,66,.12);color:var(--high);border:1px solid rgba(255,186,66,.3)}
-.cards{display:flex;flex-direction:column;gap:12px}
-.card{background:var(--surface-low);border:1px solid var(--line);border-radius:12px;padding:16px;position:relative;transition:border-color .15s}
-.card:hover{border-color:var(--muted)}
-.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:12px 0 0 12px}
-.card.sev-critical::before{background:var(--critical)}.card.sev-high::before{background:var(--high)}.card.sev-medium::before{background:var(--primary)}.card.sev-low::before,.card.sev-info::before{background:var(--muted)}
-.card-body{padding-left:12px;display:flex;gap:16px;align-items:flex-start}
-.card-content{flex:1;display:flex;flex-direction:column;gap:8px}
-.card-title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.card-title{margin:0;font-size:15px;font-weight:600;color:var(--text);line-height:1.4}
-.sev-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:700}
-.sev-badge.sev-critical{background:rgba(255,180,171,.12);color:var(--critical);border:1px solid rgba(255,180,171,.3)}
-.sev-badge.sev-high{background:rgba(255,186,66,.12);color:var(--high);border:1px solid rgba(255,186,66,.3)}
-.sev-badge.sev-medium{background:rgba(162,201,255,.12);color:var(--primary);border:1px solid rgba(162,201,255,.3)}
-.sev-badge.sev-low,.sev-badge.sev-info{background:rgba(139,145,157,.15);color:var(--muted);border:1px solid rgba(139,145,157,.2)}
-.card-loc{display:inline-flex;align-items:center;gap:6px;background:var(--bg);padding:3px 10px;border-radius:6px;border:1px solid var(--line);max-width:100%;overflow:hidden}
-.card-loc code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
-.card-rec{margin:0;font-size:13px;color:var(--dim);line-height:1.5}
-.copy-btn{flex-shrink:0;padding:8px;color:var(--muted);background:transparent;border:1px solid transparent;border-radius:8px;transition:all .15s;font-family:'Material Symbols Outlined'}
-.copy-btn:hover{color:var(--primary);background:rgba(162,201,255,.1);border-color:rgba(162,201,255,.3)}
-.copy-all-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;background:var(--primary-btn);color:var(--primary-on);border:none;border-radius:8px;font-size:13px;font-family:'JetBrains Mono',monospace;transition:opacity .15s}
-.copy-all-btn:hover{opacity:.85}
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:96px 24px;background:var(--surface-low);border:1px solid var(--line);border-radius:16px;color:var(--muted)}
-.mobile-bar{display:none;position:fixed;bottom:0;left:0;width:100%;background:var(--surface-low);border-top:1px solid var(--line);padding:8px 16px;z-index:50;gap:4px;overflow-x:auto}
-.mob-btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 12px;border-radius:8px;background:none;border:none;color:var(--muted);font-size:10px;font-family:'JetBrains Mono',monospace;white-space:nowrap;transition:color .15s}
-.mob-btn.active{color:var(--primary)}
-@media(max-width:768px){.sidebar{display:none}.main{margin-left:0;padding-bottom:80px}.mobile-bar{display:flex}.bento{grid-template-columns:1fr 1fr}.bento-hero{grid-column:span 2}}
-@media(max-width:480px){.bento{grid-template-columns:1fr}.bento-hero{grid-column:span 1}}
-`;
-
-export function rebuildProjectHtml(cwd: string): void {
-  const domains = loadAllDomains(cwd);
-  const projectName = displayProjectName(cwd);
-  const totalCrit = domains.reduce((s, d) => s + d.findings.filter((f) => f.severity === 'critical').length, 0);
-  const totalHigh = domains.reduce((s, d) => s + d.findings.filter((f) => f.severity === 'high').length, 0);
-  const totalFindings = domains.reduce((s, d) => s + d.findings.length, 0);
-  const dateStr = new Date().toLocaleDateString('en-US');
-
-  const sidebarItems = domains.map((snap, i) => {
-    const icon = PROJECT_DOMAIN_ICONS[snap.domain] ?? 'search';
-    const name = PROJECT_DOMAIN_NAMES[snap.domain] ?? snap.domain;
-    const crit = snap.findings.filter((f) => f.severity === 'critical').length;
-    const high = snap.findings.filter((f) => f.severity === 'high').length;
-    const count = snap.findings.length;
-    const badgeStyle = crit > 0
-      ? 'background:rgba(255,180,171,.2);color:#ffb4ab'
-      : high > 0 ? 'background:rgba(255,186,66,.2);color:#ffba42' : 'background:#272a30;color:#c0c7d4';
-    return `<button onclick="switchTab(${i})" class="tab-btn" data-idx="${i}">
-  <span class="ms material-symbols-outlined" style="font-size:20px">${esc(icon)}</span>
-  ${esc(name)}
-  <span class="ml-auto" style="margin-left:auto;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;${badgeStyle}">${count}</span>
-</button>`;
-  }).join('\n');
-
-  const panels = domains.map((snap, i) => {
-    const sorted = [...snap.findings].sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0));
-    const name = PROJECT_DOMAIN_NAMES[snap.domain] ?? snap.domain;
-    const icon = PROJECT_DOMAIN_ICONS[snap.domain] ?? 'search';
-    const crit = sorted.filter((f) => f.severity === 'critical').length;
-    const high = sorted.filter((f) => f.severity === 'high').length;
-    const ago = Math.round((Date.now() - new Date(snap.scannedAt).getTime()) / 60000);
-    const agoStr = ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`;
-
-    const cards = sorted.length === 0
-      ? `<div class="empty" style="padding:48px 24px"><span class="ms material-symbols-outlined" style="font-size:48px;color:#3fb950;font-variation-settings:'FILL' 1">check_circle</span><p style="margin:12px 0 0;font-size:15px">No findings in this domain.</p></div>`
-      : sorted.map((f) => {
-          const loc = f.file ? `${f.file}${f.line ? ':' + f.line : ''}` : '';
-          const copyData = esc(`${f.severity.toUpperCase()}: ${f.finding}${loc ? ' — ' + loc : ''}${f.recommendation ? '\nRecommendation: ' + f.recommendation : ''}`);
-          return `<article class="card sev-${esc(f.severity)}">
-  <div class="card-body">
-    <div class="card-content">
-      <div class="card-title-row">
-        <span class="sev-badge sev-${esc(f.severity)}">${esc(f.severity.toUpperCase())}</span>
-        <h3 class="card-title">${esc(f.finding)}</h3>
-      </div>
-      ${loc ? `<div class="card-loc"><span class="ms material-symbols-outlined" style="font-size:16px;color:#8b919d">folder</span><code>${esc(loc)}</code></div>` : ''}
-      ${f.recommendation ? `<p class="card-rec">${esc(f.recommendation)}</p>` : ''}
-    </div>
-    <button onclick="copyFinding(this)" data-text="${copyData}" class="copy-btn" title="Copy">
-      <span class="ms material-symbols-outlined">content_copy</span>
-    </button>
-  </div>
-</article>`;
-        }).join('\n');
-
-    const critBadge = crit > 0 ? `<span class="pill pill-crit">${crit} critical</span>` : '';
-    const highBadge = high > 0 ? `<span class="pill pill-high">${high} high</span>` : '';
-
-    return `<div class="panel" id="panel-${i}">
-  <div class="panel-header">
-    <div class="panel-title">
-      <span class="ms material-symbols-outlined" style="font-size:28px;color:#a2c9ff;font-variation-settings:'FILL' 1">${esc(icon)}</span>
-      <h2>${esc(name)}</h2>
-      <span class="pill pill-neutral">${sorted.length} total</span>
-      ${critBadge}${highBadge}
-    </div>
-    <span style="display:flex;align-items:center;gap:6px;color:#8b919d;font-size:12px;font-family:'JetBrains Mono',monospace">
-      <span class="ms material-symbols-outlined" style="font-size:16px">update</span>${esc(agoStr)}
-    </span>
-  </div>
-  <div class="cards">${cards}</div>
-</div>`;
-  }).join('\n');
-
-  const mobileBtns = domains.map((snap, i) => {
-    const icon = PROJECT_DOMAIN_ICONS[snap.domain] ?? 'search';
-    const name = PROJECT_DOMAIN_NAMES[snap.domain] ?? snap.domain;
-    return `<button onclick="switchTab(${i})" class="mob-btn" data-idx="${i}"><span class="ms material-symbols-outlined" style="font-size:20px">${esc(icon)}</span>${esc(name)}</button>`;
-  }).join('\n');
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta content="width=device-width,initial-scale=1.0" name="viewport"/>
-<title>Aion · ${esc(projectName)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
-<style>${PROJECT_CSS}</style>
-</head>
-<body>
-<header class="header">
-  <div style="display:flex;align-items:center;gap:12px">
-    <span class="brand">Aion</span>
-    <span style="color:#414752">·</span>
-    <span style="font-size:14px;font-weight:600;color:#e0e2ea">${esc(projectName)}</span>
-  </div>
-  <button class="copy-all-btn" onclick="copyAllFindings()">
-    <span class="ms material-symbols-outlined" style="font-size:18px">content_copy</span>Copy all
-  </button>
-</header>
-<aside class="sidebar">
-  <div style="margin-bottom:16px;padding:0 4px">
-    <h2 style="margin:0;font-size:15px;font-weight:700;color:#e0e2ea">${esc(projectName)}</h2>
-    <p style="margin:4px 0 0;font-size:12px;color:#8b919d;font-family:'JetBrains Mono',monospace">${esc(dateStr)}</p>
-  </div>
-  <nav class="sidebar-nav">
-    ${domains.length === 0 ? '<p style="color:#8b919d;font-size:13px;padding:0 4px">No scans yet.</p>' : sidebarItems}
-  </nav>
-  <div class="sidebar-footer">
-    <span class="sidebar-lbl">Feedback &amp; Contact</span>
-    <a href="mailto:brunoinacio30000@hotmail.com" class="sidebar-link">
-      <span class="ms material-symbols-outlined" style="font-size:18px">mail</span>brunoinacio30000@hotmail.com
-    </a>
-    <a href="https://www.linkedin.com/in/bruno-inacio-036530170/" target="_blank" rel="noopener noreferrer" class="sidebar-link">
-      <span class="ms material-symbols-outlined" style="font-size:18px">person</span>LinkedIn — Bruno Inácio
-    </a>
-  </div>
-</aside>
-<main class="main">
-  <section class="bento">
-    <div class="bento-hero">
-      <h1>Audit Report</h1>
-      <p>
-        <span class="ms material-symbols-outlined" style="font-size:16px">domain</span>
-        ${domains.length} scanned domain${domains.length !== 1 ? 's' : ''}
-        &nbsp;·&nbsp;
-        <span class="ms material-symbols-outlined" style="font-size:16px">update</span>
-        ${esc(dateStr)}
-      </p>
-    </div>
-    <div class="bento-stat">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <span class="bento-stat-lbl">Total Findings</span>
-        <span class="ms material-symbols-outlined" style="color:#8b919d">bug_report</span>
-      </div>
-      <div class="bento-num">${totalFindings}</div>
-    </div>
-    <div class="bento-crit">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <span class="bento-stat-lbl" style="color:#ffb4ab">Critical</span>
-        <span class="ms material-symbols-outlined" style="color:#ffb4ab">warning</span>
-      </div>
-      <div class="bento-crit-num">${totalCrit}</div>
-    </div>
-  </section>
-  ${domains.length === 0
-    ? `<div class="empty"><span class="ms material-symbols-outlined" style="font-size:64px">search_off</span><p style="margin:12px 0 0;font-size:18px;font-weight:600;color:#e0e2ea">No scans yet.</p><p style="margin:8px 0 0;font-size:14px">Run <code style="background:#272a30;padding:2px 8px;border-radius:4px">aion</code> and choose a category.</p></div>`
-    : panels}
-</main>
-<div class="mobile-bar">${mobileBtns}</div>
-<script>
-function switchTab(i){
-  document.querySelectorAll('.tab-btn').forEach(function(b,j){b.classList.toggle('active',j===i);});
-  document.querySelectorAll('.mob-btn').forEach(function(b,j){b.classList.toggle('active',j===i);});
-  document.querySelectorAll('.panel').forEach(function(p,j){p.classList.toggle('active',j===i);});
-}
-function copyFinding(btn){
-  navigator.clipboard.writeText(btn.getAttribute('data-text')).then(function(){
-    var ic=btn.querySelector('.material-symbols-outlined');ic.textContent='check';
-    setTimeout(function(){ic.textContent='content_copy';},1500);
-  });
-}
-function copyAllFindings(){
-  var panel=document.querySelector('.panel.active');if(!panel)return;
-  var texts=Array.from(panel.querySelectorAll('[data-text]')).map(function(b){return b.getAttribute('data-text');});
-  navigator.clipboard.writeText(texts.join('\n\n'));
-}
-if(${domains.length}>0)switchTab(0);
-</script>
-</body>
-</html>`;
-
-  writeFileSync(projectReportPath(cwd), html, 'utf8');
 }
