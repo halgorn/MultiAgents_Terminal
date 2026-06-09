@@ -4,6 +4,8 @@ import { buildApiMap, auditEnvVars, measureCognitiveLoad, scanCurrentSecrets } f
 import { buildSbom } from '../../infra/sbom.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 import { analyzeLineSize } from '../../infra/line-size-analyzer.js';
+import { analyzeSeoAndCrawlers } from '../../infra/seo-analyzer.js';
+import { printSeoReport } from './scan-seo.js';
 
 async function refreshScanDashboard(cwd: string, scanName: string): Promise<void> {
   await refreshUnifiedReport(cwd, {
@@ -14,7 +16,7 @@ async function refreshScanDashboard(cwd: string, scanName: string): Promise<void
 export function registerScan(program: Command): void {
   const scan = program
     .command('scan')
-    .description('Zero-token code scans: api-map, env-audit, cognitive-load, file-size, secrets, sbom');
+    .description('Zero-token code scans: api-map, env-audit, cognitive-load, file-size, seo, secrets, sbom');
 
   // ── api-map ────────────────────────────────────────────────────────────────
   scan
@@ -138,6 +140,17 @@ export function registerScan(program: Command): void {
       if (report.oversized.length > 30) console.log(chalk.dim(`  ... and ${report.oversized.length - 30} more`));
       console.log(chalk.bold(`\nSummary: ${report.oversized.length}/${report.checkedFiles} source files over ${report.limit} lines`));
       await refreshScanDashboard(cwd, 'scan file-size');
+    });
+
+  // ── seo ───────────────────────────────────────────────────────────────────
+  scan
+    .command('seo')
+    .description('Analyze SEO, analytics, crawler policy, and Next.js route coverage')
+    .action(async () => {
+      const cwd = process.cwd();
+      const report = analyzeSeoAndCrawlers(cwd);
+      printSeoReport(report);
+      await refreshScanDashboard(cwd, 'scan seo');
     });
 
   // ── secrets ────────────────────────────────────────────────────────────────
