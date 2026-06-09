@@ -3,7 +3,7 @@ import { join as pathJoin } from 'path';
 import { spawnSync } from 'child_process';
 import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
 import { rankFilesByRisk, buildCognitiveScores } from '../../infra/code-metrics.js';
-import { SOURCE_EXTS, IGNORE_DIRS } from '../../cli/cli-utils.js';
+import { SOURCE_EXTS, IGNORE_DIRS, isGeneratedArtifact, isIgnoredDirName } from '../../cli/cli-utils.js';
 export { SOURCE_EXTS, IGNORE_DIRS };
 export const IGNORE_PATTERNS = [
   /\.min\.[jt]sx?$/,
@@ -59,7 +59,7 @@ export function collectAuditStats(cwd: string, target: string): AuditFileStats {
       const relPath = rel ? `${rel}/${entry}` : entry;
       try {
         const st = statSync(fullPath);
-        if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) {
+        if (isIgnoredDirName(entry)) {
           if (st.isDirectory()) stats.ignoredDirs++;
           else stats.ignoredFiles++;
           continue;
@@ -71,7 +71,7 @@ export function collectAuditStats(cwd: string, target: string): AuditFileStats {
         if (!ext) { stats.ignoredFiles++; continue; }
         stats.byExtension[ext] = (stats.byExtension[ext] ?? 0) + 1;
 
-        if (IGNORE_PATTERNS.some((p) => p.test(relPath)) || isIgnored(relPath, ignorePatterns)) {
+        if (IGNORE_PATTERNS.some((p) => p.test(relPath)) || isGeneratedArtifact(relPath) || isIgnored(relPath, ignorePatterns)) {
           stats.ignoredFiles++;
         } else if (st.size >= MAX_FILE_SIZE) {
           stats.oversizedFiles++;

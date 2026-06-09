@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative, extname } from 'path';
-import { IGNORE_DIRS, SOURCE_EXTS } from '../cli/cli-utils.js';
+import { SOURCE_EXTS, isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
 
 export interface DocGap {
   type: 'missing-file' | 'missing-section' | 'undocumented-export' | 'missing-docstring';
@@ -86,11 +86,12 @@ function walkSrc(cwd: string): string[] {
     let entries: string[];
     try { entries = readdirSync(dir); } catch { return; }
     for (const entry of entries) {
-      if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) continue;
+      if (isIgnoredDirName(entry)) continue;
       const full = join(dir, entry);
       try {
         if (statSync(full).isDirectory()) { walk(full); continue; }
-        if (SOURCE_EXTS.includes(extname(entry))) files.push(relative(cwd, full));
+        const rel = relative(cwd, full);
+        if (SOURCE_EXTS.includes(extname(entry)) && !isGeneratedArtifact(rel)) files.push(rel);
       } catch { /* skip */ }
     }
   };

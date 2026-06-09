@@ -1,12 +1,9 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { chunkFile } from './chunker.js';
+import { isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
 
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.cs', '.php', '.kt', '.swift', '.c', '.cpp', '.h']);
-const IGNORE_DIRS = new Set([
-  'node_modules', 'dist', 'build', '.git', '.worktrees', 'coverage',
-  '.next', '__pycache__', 'vendor', 'target', '.gradle', '.cache',
-]);
 const MAX_FILE_SIZE = 200 * 1024;
 
 export interface RepoFile {
@@ -76,7 +73,7 @@ function collectFiles(cwd: string): RepoFile[] {
 
   const walk = (dir: string) => {
     for (const entry of safeReadDir(dir)) {
-      if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) continue;
+      if (isIgnoredDirName(entry)) continue;
       const full = join(dir, entry);
       let st;
       try { st = statSync(full); } catch { continue; }
@@ -86,8 +83,9 @@ function collectFiles(cwd: string): RepoFile[] {
       }
 
       const ext = extOf(entry);
-      if (!SOURCE_EXTS.has(ext) || st.size > MAX_FILE_SIZE) continue;
       const rel = relative(cwd, full);
+      if (isGeneratedArtifact(rel)) continue;
+      if (!SOURCE_EXTS.has(ext) || st.size > MAX_FILE_SIZE) continue;
       const text = safeRead(full);
       files.push({
         path: rel,

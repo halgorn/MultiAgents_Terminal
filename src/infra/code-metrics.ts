@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative, extname } from 'path';
 import { spawnSync } from 'child_process';
-import { IGNORE_DIRS, SOURCE_EXTS as SRC_EXTS } from '../cli/cli-utils.js';
+import { SOURCE_EXTS as SRC_EXTS, isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
 
 // ── Hot Zone Ranking ──────────────────────────────────────────────────────────
 
@@ -107,9 +107,10 @@ function walk(dir: string, exts?: Set<string>): string[] {
   const files: string[] = [];
   try {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (IGNORE_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+      if (isIgnoredDirName(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) { files.push(...walk(full, exts)); continue; }
+      if (isGeneratedArtifact(full)) continue;
       if (!exts || exts.has(extname(entry.name))) files.push(full);
     }
   } catch { /* skip unreadable */ }

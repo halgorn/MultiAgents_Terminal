@@ -1,7 +1,7 @@
 import { Project } from 'ts-morph';
 import { join, relative, dirname } from 'path';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { IGNORE_DIRS } from '../cli/cli-utils.js';
+import { isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
 
 export interface DepNode {
   file: string;           // relative path
@@ -31,7 +31,7 @@ export function buildDepGraph(cwd: string): DepGraph {
 
   for (const sf of project.getSourceFiles()) {
     const rel = relative(cwd, sf.getFilePath());
-    if (rel.startsWith('..') || rel.includes('node_modules')) continue;
+    if (rel.startsWith('..') || rel.includes('node_modules') || isGeneratedArtifact(rel)) continue;
     nodes.set(rel, {
       file: rel,
       imports: [],
@@ -49,7 +49,7 @@ export function buildDepGraph(cwd: string): DepGraph {
         const resolved = decl.getModuleSpecifierSourceFile();
         if (!resolved) continue;
         const importedRel = relative(cwd, resolved.getFilePath());
-        if (importedRel.startsWith('..') || importedRel.includes('node_modules')) continue;
+        if (importedRel.startsWith('..') || importedRel.includes('node_modules') || isGeneratedArtifact(importedRel)) continue;
         nodes.get(rel)!.imports.push(importedRel);
         nodes.get(importedRel)?.importedBy.push(rel);
       } catch { /* skip unresolved */ }
@@ -67,12 +67,13 @@ function collectPyFiles(cwd: string): string[] {
     let entries: string[];
     try { entries = readdirSync(dir); } catch { return; }
     for (const entry of entries) {
-      if (IGNORE_DIRS.has(entry) || entry.startsWith('.')) continue;
+      if (isIgnoredDirName(entry)) continue;
       const full = join(dir, entry);
       let st;
       try { st = statSync(full); } catch { continue; }
       if (st.isDirectory()) { walk(full); continue; }
-      if (entry.endsWith('.py')) files.push(relative(cwd, full));
+      const rel = relative(cwd, full);
+      if (entry.endsWith('.py') && !isGeneratedArtifact(rel)) files.push(rel);
     }
   };
   walk(cwd);

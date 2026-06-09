@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
+import { isIgnoredDirName } from '../cli/cli-utils.js';
 
 export interface PatternSignal {
   pattern: string;
@@ -36,7 +37,7 @@ function topDirs(cwd: string): DirSet {
   const dirs = new Set<string>();
   try {
     for (const entry of readdirSync(cwd, { withFileTypes: true })) {
-      if (entry.isDirectory() && !entry.name.startsWith('.')) dirs.add(entry.name.toLowerCase());
+      if (entry.isDirectory() && !isIgnoredDirName(entry.name)) dirs.add(entry.name.toLowerCase());
     }
   } catch { /* ok */ }
   return dirs;
@@ -57,6 +58,15 @@ function grepCount(cwd: string, pattern: string): number {
     '--exclude-dir=node_modules',
     '--exclude-dir=dist',
     '--exclude-dir=build',
+    '--exclude-dir=out',
+    '--exclude-dir=.next',
+    '--exclude-dir=.nuxt',
+    '--exclude-dir=.svelte-kit',
+    '--exclude-dir=.turbo',
+    '--exclude-dir=storybook-static',
+    '--exclude=*.min.js',
+    '--exclude=*.map',
+    '--exclude=*.d.ts',
     '--exclude-dir=.git',
     '--exclude-dir=.ai-runtime',
     '--exclude-dir=.worktrees',
@@ -78,6 +88,15 @@ function grepLines(cwd: string, pattern: string, ext = '*.py'): string[] {
     '--exclude-dir=node_modules',
     '--exclude-dir=dist',
     '--exclude-dir=build',
+    '--exclude-dir=out',
+    '--exclude-dir=.next',
+    '--exclude-dir=.nuxt',
+    '--exclude-dir=.svelte-kit',
+    '--exclude-dir=.turbo',
+    '--exclude-dir=storybook-static',
+    '--exclude=*.min.js',
+    '--exclude=*.map',
+    '--exclude=*.d.ts',
     '--exclude-dir=.git',
     '--exclude-dir=.ai-runtime',
     '--exclude-dir=.worktrees',
