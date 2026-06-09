@@ -13,6 +13,8 @@ import { projectReportPath } from './project-audit-dashboard.js';
 import { analyzeDatabase } from './db-analyzer.js';
 import { analyzePerformance } from './performance-analyzer.js';
 import { buildProjectInsights, renderInsightsHtml, renderInsightsMarkdown } from './project-insights.js';
+import { analyzeLineSize } from './line-size-analyzer.js';
+import { buildProjectTrend, renderTrendHtml, renderTrendMarkdown, saveProjectTrend } from './project-trend.js';
 import type { RepoIndex } from './repo-index.js';
 
 export { projectReportPath, rebuildProjectHtml, saveDomainSnapshot } from './project-audit-dashboard.js';
@@ -300,6 +302,8 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   const database = analyzeDatabase(cwd);
   onProgress?.('analyzing performance readiness');
   const performance = analyzePerformance(cwd, apiEndpoints);
+  onProgress?.('checking file size guardrails');
+  const lineSize = analyzeLineSize(cwd);
   const architecture = buildArchitectureView(index, cycles, detectedLang);
   onProgress?.('calculating health score');
   const health = computeHealthScore({
@@ -335,11 +339,14 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
     seo,
     database,
     performance,
+    lineSize,
     files: index.stats.files,
     hotspots: hotspots.length,
   });
+  const generatedAt = new Date().toLocaleString();
+  const trend = buildProjectTrend({ cwd, generatedAt, health, auditCriticals: audit?.criticalCount ?? 0, auditHighs: audit?.highCount ?? 0, seo, database, performance, lineSize });
   onProgress?.('generating HTML report');
-  return { projectName, health, audit, churn, patterns, cognitive, generatedAt: new Date().toLocaleString(),
+  return { projectName, health, audit, churn, patterns, cognitive, generatedAt, trend,
     totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom, seo, database, performance, improvementPerspectives, insights };
 }
 
@@ -350,6 +357,7 @@ export function renderProjectMarkdown(data: Awaited<ReturnType<typeof buildProje
   lines.push('', `## Health Score: ${data.health.total}/100 (${data.health.grade})`, '');
   lines.push('| Dimension | Score | Detail |', '|---|---|---|');
   data.health.dimensions.forEach((d) => lines.push(`| ${d.name} | ${d.score}/100 | ${d.detail} |`));
+  lines.push('', renderTrendMarkdown(data.trend), '');
   lines.push('', renderInsightsMarkdown(data.insights), '');
   lines.push('', '## Project Overview');
   lines.push(`- Files: ${data.totalFiles}`);
@@ -441,10 +449,10 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const apiRows = data.apiEndpoints.slice(0, 50).map((ep) => `<tr><td>${esc(ep.method)}</td><td class="mono">${esc(ep.path)}</td><td>${ep.hasAuth ? 'yes' : 'no'}</td><td>${ep.hasRateLimit ? 'yes' : 'no'}</td><td class="mono">${esc(ep.file)}:${ep.line}</td></tr>`).join('');
   const architectureSvg = renderArchitectureSvg(data.architecture.nodes, data.architecture.edges);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>
-body{background:#0d1117;color:#e6edf3;font:14px/1.55 system-ui,sans-serif;margin:0}nav{position:sticky;top:0;background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;gap:18px;flex-wrap:wrap;z-index:2}a{color:#79c0ff;text-decoration:none}.container{max-width:1200px;margin:auto;padding:24px}.header{border:1px solid #30363d;background:#161b22;border-radius:8px;padding:22px;display:flex;justify-content:space-between}.score{color:${gradeColor};text-align:right}.score strong{display:block;font-size:48px;line-height:1;font-weight:800}.score span{display:block;margin-top:6px;color:#8b949e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}h2{color:#79c0ff;border-bottom:1px solid #30363d;padding-bottom:8px;margin-top:34px}.dim-row{display:grid;grid-template-columns:140px 1fr 40px 1fr;gap:12px;margin:7px 0}.bar{background:#21262d;height:8px;border-radius:4px}.bar div{height:8px;border-radius:4px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}.card strong{font-size:24px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #21262d;padding:8px;text-align:left;vertical-align:top}.muted{color:#8b949e}.warn{color:#e3b341}.ok{color:#3fb950}.sev-high{color:#f85149}.graph-wrap{background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:auto;margin:14px 0}.graph-wrap svg{display:block;min-width:900px;width:100%;height:auto}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:800px){.grid,.dim-row,.split{grid-template-columns:1fr}.header{display:block}.score{text-align:left;margin-top:16px}}
-</style></head><body><nav><a href="#health">Health</a><a href="#score-explain">Score</a><a href="#architecture">Architecture</a><a href="#seo">SEO & Crawlers</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">10 Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
+</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a><a href="#seo">SEO & Crawlers</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">10 Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score" title="Health Score"><strong>${data.health.total}/100</strong><span>Grade ${data.health.grade}</span></div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
+${renderTrendHtml(data.trend)}
 ${renderInsightsHtml(data.insights)}
 <section id="architecture"><h2>Architecture</h2><div class="grid"><div class="card"><strong>${esc(data.architecture.lang)}</strong><br>Primary language</div><div class="card"><strong>${data.architecture.nodes.length}</strong><br>Top modules</div><div class="card"><strong class="${data.cycles ? 'warn' : 'ok'}">${data.cycles}</strong><br>Dependency cycles</div><div class="card"><strong>${data.hotspots.length}</strong><br>Hotspots</div></div>
 <p class="muted">Shape: ${esc(data.architecture.style)}${graphExists ? ' · Interactive dependency graph available in the top nav.' : ''}</p>
@@ -477,6 +485,7 @@ export function writeProjectReport(cwd: string, data: Awaited<ReturnType<typeof 
   const mdFile = join(outDir, 'context.md');
   writeFileSync(mdFile, md, 'utf8');
   writeFileSync(join(outDir, 'linkedin-summary.md'), data.insights.linkedinSummary, 'utf8');
+  saveProjectTrend(cwd, data.trend.current);
   if (mdOnly) return { mdFile, md };
   const html = renderProjectHtml(data, existsSync(join(outDir, 'graph.html')));
   const htmlFile = projectReportPath(cwd);

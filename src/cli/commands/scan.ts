@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { buildApiMap, auditEnvVars, measureCognitiveLoad, scanCurrentSecrets } from '../../infra/code-metrics.js';
 import { buildSbom } from '../../infra/sbom.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
+import { analyzeLineSize } from '../../infra/line-size-analyzer.js';
 
 async function refreshScanDashboard(cwd: string, scanName: string): Promise<void> {
   await refreshUnifiedReport(cwd, {
@@ -13,7 +14,7 @@ async function refreshScanDashboard(cwd: string, scanName: string): Promise<void
 export function registerScan(program: Command): void {
   const scan = program
     .command('scan')
-    .description('Zero-token code scans: api-map, env-audit, cognitive-load, secrets, sbom');
+    .description('Zero-token code scans: api-map, env-audit, cognitive-load, file-size, secrets, sbom');
 
   // ── api-map ────────────────────────────────────────────────────────────────
   scan
@@ -111,6 +112,32 @@ export function registerScan(program: Command): void {
       console.log(chalk.bold(`\nAvg score: ${avgScore} · Top ${entries.length} files shown`));
       console.log(chalk.dim('Score = nesting×3 + long-functions×5 + magic-numbers/3 + long-lines penalty'));
       await refreshScanDashboard(cwd, 'scan cognitive-load');
+    });
+
+  // ── file-size ──────────────────────────────────────────────────────────────
+  scan
+    .command('file-size')
+    .description('Check source files against the maintainability line limit')
+    .option('--limit <n>', 'maximum lines per source file', '500')
+    .action(async (options: { limit: string }) => {
+      const cwd = process.cwd();
+      const limit = Math.max(50, parseInt(options.limit, 10) || 500);
+      console.log(chalk.bold.cyan('\nFile Size Guardrail\n'));
+      const report = analyzeLineSize(cwd, limit);
+
+      if (report.oversized.length === 0) {
+        console.log(chalk.green(`✓ No source files over ${report.limit} lines`));
+        console.log(chalk.dim(`  Checked ${report.checkedFiles} source files`));
+        await refreshScanDashboard(cwd, 'scan file-size');
+        return;
+      }
+
+      report.oversized.slice(0, 30).forEach((entry) => {
+        console.log(chalk.yellow(`  ${entry.lines.toString().padStart(4)} lines  +${entry.overBy.toString().padEnd(4)}  ${entry.file}`));
+      });
+      if (report.oversized.length > 30) console.log(chalk.dim(`  ... and ${report.oversized.length - 30} more`));
+      console.log(chalk.bold(`\nSummary: ${report.oversized.length}/${report.checkedFiles} source files over ${report.limit} lines`));
+      await refreshScanDashboard(cwd, 'scan file-size');
     });
 
   // ── secrets ────────────────────────────────────────────────────────────────
