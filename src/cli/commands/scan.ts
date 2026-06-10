@@ -147,14 +147,21 @@ export function registerScan(program: Command): void {
     .command('seo')
     .description('Analyze SEO, analytics, crawler policy, and Next.js route coverage')
     .option('--json', 'print the SEO report as JSON')
-    .action(async (options: { json?: boolean }) => {
+    .option('--fail-under <score>', 'exit with code 1 when SEO score is below this threshold')
+    .action(async (options: { json?: boolean; failUnder?: string }) => {
       const cwd = process.cwd();
       const report = analyzeSeoAndCrawlers(cwd);
+      const failUnder = options.failUnder ? Math.max(0, Math.min(100, parseInt(options.failUnder, 10) || 0)) : 0;
       if (options.json) {
         console.log(JSON.stringify(report, null, 2));
+        if (failUnder > 0 && report.score < failUnder) process.exit(1);
         return;
       }
       printSeoReport(report);
+      if (failUnder > 0 && report.score < failUnder) {
+        console.error(chalk.red(`\nSEO score ${report.score}/100 is below required ${failUnder}/100`));
+        process.exitCode = 1;
+      }
       await refreshScanDashboard(cwd, 'scan seo');
     });
 

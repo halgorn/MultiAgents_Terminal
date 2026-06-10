@@ -81,8 +81,13 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
 
     const scanSeo = runSourceCli(repo, ['scan', 'seo', '--json']);
     assert.equal(scanSeo.status, 0, scanSeo.stderr);
-    assert.match(scanSeo.stdout, /"score"/);
-    assert.match(scanSeo.stdout, /"aiCrawlerPolicy"/);
+    const seoJson = JSON.parse(scanSeo.stdout) as { score: number; aiCrawlerPolicy: string };
+    assert.equal(typeof seoJson.score, 'number');
+    assert.equal(seoJson.aiCrawlerPolicy, 'missing');
+
+    const scanSeoGate = runSourceCli(repo, ['scan', 'seo', '--json', '--fail-under', '50']);
+    assert.equal(scanSeoGate.status, 1);
+    assert.equal(typeof (JSON.parse(scanSeoGate.stdout) as { score: number }).score, 'number');
 
     const docsAnalyze = runSourceCli(repo, ['docs', 'analyze', '--json']);
     assert.equal(docsAnalyze.status, 0, docsAnalyze.stderr);
