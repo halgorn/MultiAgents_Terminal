@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
 import { embedText } from '../infra/embeddings.js';
@@ -88,6 +88,12 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     const scanSeoGate = runSourceCli(repo, ['scan', 'seo', '--json', '--fail-under', '50']);
     assert.equal(scanSeoGate.status, 1);
     assert.equal(typeof (JSON.parse(scanSeoGate.stdout) as { score: number }).score, 'number');
+
+    const seoMarkdownPath = join(repo, 'seo-summary.md');
+    const scanSeoMarkdown = runSourceCli(repo, ['scan', 'seo', '--markdown', '--output', seoMarkdownPath]);
+    assert.equal(scanSeoMarkdown.status, 0, scanSeoMarkdown.stderr);
+    assert.equal(scanSeoMarkdown.stdout, '');
+    assert.match(readFileSync(seoMarkdownPath, 'utf8'), /SEO, Analytics & AI Crawlers/);
 
     const docsAnalyze = runSourceCli(repo, ['docs', 'analyze', '--json']);
     assert.equal(docsAnalyze.status, 0, docsAnalyze.stderr);

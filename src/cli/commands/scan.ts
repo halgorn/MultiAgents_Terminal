@@ -1,11 +1,12 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
+import { writeFileSync } from 'fs';
 import { buildApiMap, auditEnvVars, measureCognitiveLoad, scanCurrentSecrets } from '../../infra/code-metrics.js';
 import { buildSbom } from '../../infra/sbom.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 import { analyzeLineSize } from '../../infra/line-size-analyzer.js';
 import { analyzeSeoAndCrawlers } from '../../infra/seo-analyzer.js';
-import { printSeoReport } from './scan-seo.js';
+import { formatSeoMarkdown, printSeoReport } from './scan-seo.js';
 
 async function refreshScanDashboard(cwd: string, scanName: string): Promise<void> {
   await refreshUnifiedReport(cwd, {
@@ -147,13 +148,17 @@ export function registerScan(program: Command): void {
     .command('seo')
     .description('Analyze SEO, analytics, crawler policy, and Next.js route coverage')
     .option('--json', 'print the SEO report as JSON')
+    .option('--markdown', 'print the SEO report as Markdown')
+    .option('--output <file>', 'write JSON or Markdown output to a file')
     .option('--fail-under <score>', 'exit with code 1 when SEO score is below this threshold')
-    .action(async (options: { json?: boolean; failUnder?: string }) => {
+    .action(async (options: { json?: boolean; markdown?: boolean; output?: string; failUnder?: string }) => {
       const cwd = process.cwd();
       const report = analyzeSeoAndCrawlers(cwd);
       const failUnder = options.failUnder ? Math.max(0, Math.min(100, parseInt(options.failUnder, 10) || 0)) : 0;
-      if (options.json) {
-        console.log(JSON.stringify(report, null, 2));
+      if (options.json || options.markdown) {
+        const output = options.markdown ? formatSeoMarkdown(report) : JSON.stringify(report, null, 2) + '\n';
+        if (options.output) writeFileSync(options.output, output, 'utf8');
+        else process.stdout.write(output);
         if (failUnder > 0 && report.score < failUnder) process.exit(1);
         return;
       }
