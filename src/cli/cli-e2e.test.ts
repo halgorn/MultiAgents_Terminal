@@ -121,6 +121,16 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     assert.match(readFileSync(reportOutput, 'utf8'), /AI Analysis Context/);
     assert.equal((JSON.parse(reportJson.stdout) as { output: string }).output, reportOutput);
 
+    const healthOutput = join(repo, 'reports', 'health.json');
+    const healthJson = runSourceCli(repo, ['health', '--json', '--output', healthOutput]);
+    assert.equal(healthJson.status, 0, healthJson.stderr);
+    assert.match(readFileSync(healthOutput, 'utf8'), /"total"/);
+
+    const graphOutput = join(repo, 'reports', 'graph.html');
+    const graph = runSourceCli(repo, ['graph', '--no-open', '--output', graphOutput, '--rebuild'], 60_000);
+    assert.equal(graph.status, 0, graph.stderr);
+    assert.match(readFileSync(graphOutput, 'utf8'), /Dependency Graph/);
+
     const setupStatus = runSourceCli(repo, ['setup', '--status']);
     assert.equal(setupStatus.status, 0, setupStatus.stderr);
     assert.match(setupStatus.stdout, /"prepared": false/);

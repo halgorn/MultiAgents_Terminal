@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync, copyFileSync } from 'fs';
+import { dirname } from 'path';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
 import { GraphAgent } from '../../agents/graph-agent.js';
@@ -321,8 +322,9 @@ export function registerGraph(program: Command): void {
     .command('graph [target]')
     .description('Generate interactive dependency graph (HTML + D3.js, opens in browser)')
     .option('--no-open', 'generate HTML without opening browser')
+    .option('--output <file>', 'copy generated HTML to this file')
     .option('--rebuild', 'force rebuild of repo index before generating')
-    .action(async (_target: string = '.', options: { open: boolean; rebuild?: boolean }) => {
+    .action(async (_target: string = '.', options: { open: boolean; rebuild?: boolean; output?: string }) => {
       const cwd = process.cwd();
       const outDir = join(cwd, '.ai-runtime');
       mkdirSync(outDir, { recursive: true });
@@ -349,6 +351,12 @@ export function registerGraph(program: Command): void {
 
       console.log(`\nGraph: ${outFile}`);
       console.log(`  ${data.nodes.length} nodes · ${data.edges.length} edges`);
+
+      if (options.output) {
+        mkdirSync(dirname(options.output), { recursive: true });
+        copyFileSync(outFile, options.output);
+        console.log(`  Output: ${options.output}`);
+      }
 
       if (options.open !== false) {
         openFile(outFile);

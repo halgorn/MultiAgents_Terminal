@@ -27,6 +27,13 @@ test('database analyzer projects pagination, pooling, and relation loading risks
       '}',
       'export const pool = { connectionLimit: 10 };',
     ].join('\n'));
+    writeFileSync(join(cwd, 'src', 'all-users.ts'), [
+      'import { PrismaClient } from "@prisma/client";',
+      'const prisma = new PrismaClient();',
+      'export async function listAllUsers() {',
+      '  return prisma.user.findMany({ include: { posts: true } });',
+      '}',
+    ].join('\n'));
 
     const report = analyzeDatabase(cwd);
     assert.equal(report.ormSignals.includes('Prisma'), true);
@@ -34,6 +41,7 @@ test('database analyzer projects pagination, pooling, and relation loading risks
     assert.equal(report.paginationSignals > 0, true);
     assert.equal(report.poolSignals > 0, true);
     assert.equal(report.relationRiskSignals > 0, true);
+    assert.equal(report.unboundedListSignals > 0, true);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

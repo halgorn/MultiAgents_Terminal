@@ -20,6 +20,7 @@ export interface DatabaseReport {
   paginationSignals: number;
   poolSignals: number;
   relationRiskSignals: number;
+  unboundedListSignals: number;
   issues: DatabaseIssue[];
 }
 
@@ -73,6 +74,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
   let paginationSignals = 0;
   let poolSignals = 0;
   let relationRiskSignals = 0;
+  let unboundedListSignals = 0;
   for (const file of files) {
     let content = '';
     try { content = readFileSync(join(cwd, file), 'utf8'); } catch { continue; }
@@ -84,6 +86,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
     if (/LIMIT\s+\d+|OFFSET\s+\d+|take\s*:|skip\s*:|cursor\s*:|paginate|pageSize|perPage/i.test(content)) paginationSignals++;
     if (/pool|maxPoolSize|connectionLimit|pgbouncer|DATABASE_POOL|pool_timeout/i.test(content)) poolSignals++;
     if (/include\s*:\s*{|relations\s*:\s*\[|populate\(|preload\(|select_related|prefetch_related|JOIN\s+/i.test(content)) relationRiskSignals++;
+    if (/\bfindMany\s*\(|\bSELECT\s+\*\b|\bgetMany\s*\(|\ball\s*\(|\btoArray\s*\(\)/i.test(content) && !/LIMIT\s+\d+|OFFSET\s+\d+|take\s*:|skip\s*:|cursor\s*:|paginate|pageSize|perPage/i.test(content)) unboundedListSignals++;
   }
   const corpus = corpusParts.join('\n');
   const ormSignals = ORM_PATTERNS.filter(([, pattern]) => pattern.test(corpus)).map(([name]) => name);
@@ -98,6 +101,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
   if (likelyDb && paginationSignals === 0) issue(issues, 'medium', 'Growth projection', 'No pagination/cursor signal detected', 'Add cursor or limit/offset pagination before list endpoints grow unbounded.');
   if (likelyDb && poolSignals === 0) issue(issues, 'low', 'Connection scaling', 'No database pool configuration signal detected', 'Document connection pooling limits for serverless, workers, and production API concurrency.');
   if (relationRiskSignals > 0 && transactionSignals === 0) issue(issues, 'low', 'Relational loading', `${relationRiskSignals} relation loading signal(s) without transaction context`, 'Review relation loading for N+1 queries and consistency-sensitive reads.');
+  if (unboundedListSignals > 0) issue(issues, 'medium', 'List growth', `${unboundedListSignals} potentially unbounded list query signal(s)`, 'Add pagination or cursor limits to list queries before traffic grows.');
   if (!likelyDb) issue(issues, 'low', 'Visibility', 'No strong database signal detected', 'If this app uses an external DB indirectly, document the data model and access layer.');
   const deduction = issues.reduce((sum, item) => sum + (item.severity === 'high' ? 25 : item.severity === 'medium' ? 12 : 4), 0);
   return {
@@ -111,6 +115,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
     paginationSignals,
     poolSignals,
     relationRiskSignals,
+    unboundedListSignals,
     issues,
   };
 }

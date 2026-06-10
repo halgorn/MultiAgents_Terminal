@@ -1,5 +1,7 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
+import { mkdirSync, writeFileSync } from 'fs';
+import { dirname } from 'path';
 import { computeHealthScore } from '../../infra/health-score.js';
 import { buildChurnReport } from '../../infra/git-analysis.js';
 import { measureCognitiveLoad } from '../../infra/code-metrics.js';
@@ -17,7 +19,8 @@ export function registerHealth(program: Command): void {
     .option('--days <n>', 'git lookback period for churn/bus-factor', '90')
     .option('--trend', 'show historical score chart')
     .option('--json', 'output raw JSON')
-    .action(async (options: { threshold: string; days: string; trend?: boolean; json?: boolean }) => {
+    .option('--output <file>', 'write JSON output to a file')
+    .action(async (options: { threshold: string; days: string; trend?: boolean; json?: boolean; output?: string }) => {
       const cwd = process.cwd();
       const threshold = parseInt(options.threshold, 10) || 0;
       const days = parseInt(options.days, 10) || 90;
@@ -80,7 +83,13 @@ export function registerHealth(program: Command): void {
       });
 
       if (options.json) {
-        console.log(JSON.stringify(score, null, 2));
+        const output = JSON.stringify(score, null, 2) + '\n';
+        if (options.output) {
+          mkdirSync(dirname(options.output), { recursive: true });
+          writeFileSync(options.output, output, 'utf8');
+        } else {
+          console.log(output.trimEnd());
+        }
         if (threshold > 0 && score.total < threshold) process.exit(1);
         return;
       }
