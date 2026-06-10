@@ -194,6 +194,7 @@ aion scan cognitive-load
 aion scan seo
 aion scan seo --json --fail-under 70
 aion scan seo --markdown --output reports/seo-summary.md
+aion ci assist --seo-fail-under 70 --apply
 ```
 
 `aion scan seo` checks rendered/static Next.js route signals, robots.txt,
@@ -214,6 +215,7 @@ aion search "audit report generation" --rebuild
 aion search "where reports are saved" --semantic --rebuild
 aion tree --hotspots --rebuild
 aion graph
+aion release-check
 aion churn
 aion patterns
 aion trace
@@ -320,6 +322,7 @@ npm audit --audit-level=moderate
 aion scan secrets
 aion scan env-audit
 aion scan sbom --unpinned-only
+npm run release-check
 ```
 
 ## Development
@@ -346,6 +349,7 @@ Update the version, validate, then publish:
 npm version patch
 npm test
 npm audit --audit-level=moderate
+npm run release-check
 npm pack --dry-run
 npm publish --access public
 ```

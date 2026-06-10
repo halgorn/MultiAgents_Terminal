@@ -41,6 +41,7 @@ function remoteSteps(plan: Omit<AssistPlan, 'artifacts' | 'remoteSteps'>): Remot
 export function buildAssistPlan(cwd: string, options: AssistBuildOptions = {}): AssistPlan {
   const detection = detectProject(cwd);
   const target = defaultTarget(detection.name, { appPort: detection.port, ...options });
+  const ciSeoFailUnder = options.ciSeoFailUnder ? Math.max(0, Math.min(100, options.ciSeoFailUnder)) : undefined;
   const base = {
     version: 1 as const,
     mode: options.mode ?? 'full' as const,
@@ -58,6 +59,7 @@ export function buildAssistPlan(cwd: string, options: AssistBuildOptions = {}): 
       'aion audit . --dry-run --max-files 20',
     ].filter(Boolean) as string[],
     healthcheckUrl: `http://${target.domain}${target.healthPath}`,
+    ciSeoFailUnder,
     notes: [
       'Dry-run is the default. Remote deploy requires explicit apply confirmation.',
       'Secrets are referenced by name only and are never included in AI prompts.',

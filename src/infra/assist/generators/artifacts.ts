@@ -8,6 +8,7 @@ function installCommand(detection: ProjectDetection): string {
 }
 
 export function generateCiWorkflow(plan: AssistPlan): string {
+  const seoGate = plan.ciSeoFailUnder ? ` --fail-under ${plan.ciSeoFailUnder}` : '';
   const checks = [
     plan.detection.buildCommand,
     plan.detection.testCommand,
@@ -56,7 +57,7 @@ ${checkBlock || '      - name: Smoke\n        run: echo "No build/test scripts d
           npx aion scan secrets
           npx aion scan env-audit
           npx aion scan sbom --unpinned-only
-          npx aion scan seo --markdown --output aion-seo.md
+          npx aion scan seo --markdown --output aion-seo.md${seoGate}
           cat aion-seo.md >> "$GITHUB_STEP_SUMMARY"
           npx aion audit . --dry-run --max-files 20
 

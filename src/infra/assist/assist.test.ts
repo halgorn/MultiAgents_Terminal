@@ -71,6 +71,16 @@ test('buildAssistPlan generates valid CI, deploy, nginx, scripts, and required s
   }
 });
 
+test('generateCiWorkflow can include an SEO score gate', () => {
+  const dir = makeProject();
+  try {
+    const plan = buildAssistPlan(dir, { mode: 'ci', ciSeoFailUnder: 75 });
+    assert.match(generateCiWorkflow(plan), /aion scan seo --markdown --output aion-seo\.md --fail-under 75/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('AI prompt references secret names but never includes secret values', () => {
   const dir = makeProject();
   try {

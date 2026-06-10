@@ -36,6 +36,7 @@ export function isolatedEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     ANTHROPIC_API_KEY: '',
     OPENROUTER_API_KEY: '',
     QDRANT_URL: '',
+    npm_config_cache: join(tmpdir(), 'aion-npm-cache'),
     ...extra,
   };
 }

@@ -169,8 +169,10 @@ export function registerCi(program: Command): void {
     .option('--dry-run', 'show planned writes only', true)
     .option('--apply', 'write generated workflow')
     .option('--overwrite', 'overwrite existing workflow')
-    .action((options: { dryRun?: boolean; apply?: boolean; overwrite?: boolean }) => {
-      const plan = buildAssistPlan(process.cwd(), { mode: 'ci' });
+    .option('--seo-fail-under <score>', 'fail CI when SEO score is below this threshold')
+    .action((options: { dryRun?: boolean; apply?: boolean; overwrite?: boolean; seoFailUnder?: string }) => {
+      const seo = options.seoFailUnder ? Math.max(0, Math.min(100, parseInt(options.seoFailUnder, 10) || 0)) : undefined;
+      const plan = buildAssistPlan(process.cwd(), { mode: 'ci', ciSeoFailUnder: seo });
       const ciOnly = {
         ...plan,
         artifacts: plan.artifacts.filter((artifact) => artifact.path.includes('aion-ci.yml') || artifact.path.endsWith('README.md')),

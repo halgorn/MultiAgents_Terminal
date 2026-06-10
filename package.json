@@ -1,6 +1,6 @@
 {
   "name": "@aionlabsai/aion",
-  "version": "0.3.31",
+  "version": "0.3.32",
   "description": "Multi-agent AI engineering runtime — audit, fix, graph, analyze",
   "type": "module",
   "bin": {
@@ -16,12 +16,15 @@
     "smoke:manus": "npm run dev -- --cwd /home/bruno/Documents/GitHub/Manus_Private audit . -n 1",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
+    "release-check": "npm run build && node dist/index.js release-check --skip-build",
     "prepublishOnly": "npm run build",
     "install-global": "npm run build && npm link",
     "uninstall-global": "npm unlink -g @aionlabsai/aion"
   },
   "files": [
     "dist/**/*",
+    "!dist/**/*.map",
+    "!dist/test-utils/**",
     "README.md"
   ],
   "engines": {

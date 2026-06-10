@@ -111,6 +111,10 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     assert.equal(ciDryRun.status, 0, ciDryRun.stderr);
     assert.match(ciDryRun.stdout, /"dryRun": true/);
 
+    const releaseCheck = runSourceCli(WORKSPACE_ROOT, ['release-check', '--skip-build', '--json']);
+    assert.equal(releaseCheck.status, 0, releaseCheck.stderr);
+    assert.equal((JSON.parse(releaseCheck.stdout) as { passed: boolean }).passed, true);
+
     const setupStatus = runSourceCli(repo, ['setup', '--status']);
     assert.equal(setupStatus.status, 0, setupStatus.stderr);
     assert.match(setupStatus.stdout, /"prepared": false/);

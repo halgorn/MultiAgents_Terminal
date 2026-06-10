@@ -54,6 +54,7 @@ export interface AssistPlan {
   artifacts: AssistArtifact[];
   remoteSteps: RemoteStep[];
   healthcheckUrl: string;
+  ciSeoFailUnder?: number;
   notes: string[];
 }
 
@@ -64,4 +65,5 @@ export interface AssistBuildOptions {
   appPort?: number;
   deployPath?: string;
   healthPath?: string;
+  ciSeoFailUnder?: number;
 }
