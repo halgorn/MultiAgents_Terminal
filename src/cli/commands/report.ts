@@ -1,5 +1,7 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
+import { copyFileSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 import { latestAuditPointer, projectReportPath } from '../../infra/project-report.js';
 import { openReportFile, refreshUnifiedReport } from '../../infra/report-refresh.js';
 import { displayProjectName } from '../../infra/project-name.js';
@@ -58,19 +60,32 @@ export function registerReport(program: Command): void {
   report
     .option('--no-open', 'generate without opening browser')
     .option('--md', 'generate only Markdown (AI-ready context file)')
+    .option('--json', 'print generated report paths as JSON')
+    .option('--output <file>', 'copy generated HTML or Markdown report to this file')
     .option('--diagnostics', 'force a fresh zero-token local diagnostics HTML report')
     .option('--days <n>', 'git lookback for churn analysis', '90')
-    .action(async (options: { open: boolean; md?: boolean; diagnostics?: boolean; days: string }) => {
+    .action(async (options: { open: boolean; md?: boolean; json?: boolean; output?: string; diagnostics?: boolean; days: string }) => {
       const cwd = process.cwd();
       const days = parseInt(options.days, 10) || 90;
       const label = options.diagnostics ? 'diagnostics report' : 'report';
       const written = await refreshUnifiedReport(cwd, {
         days,
-        open: options.md ? false : options.open !== false,
+        open: options.json || options.output || options.md ? false : options.open !== false,
+        quiet: Boolean(options.json),
         mdOnly: Boolean(options.md),
         reason: `Building ${label} for ${displayProjectName(cwd)}`,
       });
+      const primary = options.md ? written.mdFile : written.htmlFile ?? written.mdFile;
+      if (options.output) {
+        mkdirSync(dirname(options.output), { recursive: true });
+        copyFileSync(primary, options.output);
+      }
+      if (options.json) {
+        process.stdout.write(JSON.stringify({ markdown: written.mdFile, html: written.htmlFile, output: options.output }, null, 2) + '\n');
+        return;
+      }
       console.log(chalk.gray(`Markdown: ${written.mdFile}`));
       if (written.htmlFile) console.log(chalk.gray(`Dashboard: ${projectReportPath(cwd)}`));
+      if (options.output) console.log(chalk.gray(`Output: ${options.output}`));
     });
 }

@@ -54,3 +54,48 @@ export default function robots() {
   assert.equal(report.signals.some((signal) => signal.name === 'Route SEO coverage'), true);
   assert.equal(report.issues.some((issue) => issue.issue.includes('No strong <title>')), false);
 });
+
+test('SEO analyzer normalizes Next.js route groups, dynamic routes, and source sitemap URLs', () => {
+  const cwd = makeFixtureRepo('aion-next-route-groups-');
+  mkdirSync(join(cwd, 'src/app/(marketing)/blog/[slug]'), { recursive: true });
+  mkdirSync(join(cwd, '.next/server/app/(marketing)/blog'), { recursive: true });
+  writeFileSync(join(cwd, 'package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }), 'utf8');
+  writeFileSync(join(cwd, 'src/app/layout.tsx'), `
+export async function generateMetadata() {
+  return {
+    title: 'Aion Marketing Website',
+    description: 'A complete inherited description for crawler and search engine validation.',
+    alternates: { canonical: 'https://example.com' },
+    openGraph: { title: 'Aion Marketing' },
+    twitter: { card: 'summary_large_image' },
+  };
+}
+export default function Layout({ children }) { return <html><body>{children}</body></html>; }
+`, 'utf8');
+  writeFileSync(join(cwd, 'src/app/(marketing)/blog/[slug]/page.tsx'), `
+export default function BlogPost() { return <main>Readable post content for crawlers.</main>; }
+`, 'utf8');
+  writeFileSync(join(cwd, 'src/app/robots.ts'), `
+export default function robots() {
+  return { rules: [{ userAgent: 'Googlebot', allow: '/' }, { userAgent: 'GPTBot', allow: '/' }, { userAgent: 'ClaudeBot', allow: '/' }, { userAgent: 'CCBot', allow: '/' }] };
+}
+`, 'utf8');
+  writeFileSync(join(cwd, 'src/app/sitemap.ts'), `
+export default function sitemap() {
+  return [{ url: 'https://example.com/blog/example-post' }];
+}
+`, 'utf8');
+  writeFileSync(join(cwd, '.next/server/app/(marketing)/blog/[slug].html'), '<html><head><title>Aion Blog Post</title></head><body>Readable post content for crawlers and search engines.</body></html>', 'utf8');
+  writeFileSync(join(cwd, '.next/server/app-paths-manifest.json'), JSON.stringify({ '/(marketing)/blog/[slug]/page': 'app/blog/[slug]/page.js' }), 'utf8');
+
+  const report = analyzeSeoAndCrawlers(cwd);
+  const dynamicRoute = report.next?.routes.find((route) => route.route === '/blog/:param');
+  assert.ok(dynamicRoute);
+  assert.equal(report.next?.manifestRoutes.includes('/blog/:param'), true);
+  assert.equal(report.next?.buildRoutes.includes('/blog/:param'), true);
+  assert.equal(dynamicRoute?.title, true);
+  assert.equal(dynamicRoute?.description, true);
+  assert.equal(dynamicRoute?.canonical, true);
+  assert.equal(report.next?.sitemapUrls.includes('https://example.com/blog/example-post'), true);
+  assert.equal(report.next?.sitemapMissingRoutes.includes('/blog/:param'), false);
+});

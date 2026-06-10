@@ -65,22 +65,33 @@ function walk(cwd: string, roots: string[], exts: Set<string>, limit = 300): str
   return out;
 }
 
+function normalizeRoutePath(path: string): string {
+  const clean = path
+    .replace(/\/?(page|layout|route)$/, '')
+    .replace(/\/\([^/]+\)(?=\/|$)/g, '')
+    .replace(/\([^/]+\)\//g, '')
+    .replace(/\[\[?\.\.\.[^/]+\]?\]/g, ':param')
+    .replace(/\[[^/]+\]/g, ':param')
+    .replace(/\/+/g, '/')
+    .replace(/\/$/, '');
+  return clean ? (clean.startsWith('/') ? clean : `/${clean}`) : '/';
+}
+
 function appRouteFromFile(file: string): string | null {
   const clean = file.replace(/^src\//, '').replace(/^app\//, '').replace(/\.(tsx?|jsx?|mjs)$/, '');
   if (!/(^|\/)(page|layout)$/.test(clean)) return null;
-  const route = clean.replace(/\/?(page|layout)$/, '').replace(/\([^/]+\)\//g, '').replace(/\[[^/]+\]/g, ':param');
-  return route ? `/${route}` : '/';
+  return normalizeRoutePath(clean);
 }
 
 function pagesRouteFromFile(file: string): string | null {
   const clean = file.replace(/^src\//, '').replace(/^pages\//, '').replace(/\.(tsx?|jsx?|mjs)$/, '');
   if (/^(_app|_document|_error|api\/)/.test(clean)) return null;
-  return clean === 'index' ? '/' : `/${clean.replace(/\/index$/, '').replace(/\[[^/]+\]/g, ':param')}`;
+  return clean === 'index' ? '/' : normalizeRoutePath(clean.replace(/\/index$/, ''));
 }
 
 function routeFromHtml(file: string): string {
   const clean = file.replace(/^\.next\/server\/(app|pages)\//, '').replace(/\.html$/, '').replace(/\/index$/, '');
-  return clean ? `/${clean}` : '/';
+  return normalizeRoutePath(clean);
 }
 
 function uniqueSorted(values: Array<string | null | undefined>): string[] {
@@ -90,27 +101,44 @@ function uniqueSorted(values: Array<string | null | undefined>): string[] {
 function manifestRoutes(cwd: string): string[] {
   const routes = new Set<string>();
   for (const path of ['.next/server/app-paths-manifest.json', '.next/server/pages-manifest.json']) {
-    Object.keys(readJson(cwd, path)).forEach((route) => routes.add(route.replace(/\/page$/, '') || '/'));
+    Object.keys(readJson(cwd, path)).forEach((route) => routes.add(normalizeRoutePath(route)));
   }
   const prerender = readJson(cwd, '.next/prerender-manifest.json');
-  Object.keys((prerender.routes as Record<string, unknown>) ?? {}).forEach((route) => routes.add(route));
-  Object.keys((prerender.dynamicRoutes as Record<string, unknown>) ?? {}).forEach((route) => routes.add(route.replace(/\[[^/]+\]/g, ':param')));
+  Object.keys((prerender.routes as Record<string, unknown>) ?? {}).forEach((route) => routes.add(normalizeRoutePath(route)));
+  Object.keys((prerender.dynamicRoutes as Record<string, unknown>) ?? {}).forEach((route) => routes.add(normalizeRoutePath(route)));
   return uniqueSorted([...routes]);
 }
 
 function sitemapUrls(cwd: string): string[] {
   const xml = read(cwd, 'sitemap.xml') || read(cwd, 'public/sitemap.xml') || read(cwd, '.next/server/app/sitemap.xml');
-  return [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((match) => match[1] ?? '').filter(Boolean);
+  const fromXml = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((match) => match[1] ?? '').filter(Boolean);
+  const source = read(cwd, 'app/sitemap.ts') || read(cwd, 'src/app/sitemap.ts') || read(cwd, 'app/sitemap.js') || read(cwd, 'src/app/sitemap.js');
+  const fromSource = [...source.matchAll(/url\s*:\s*['"`]([^'"`]+)['"`]/gi)].map((match) => match[1] ?? '').filter(Boolean);
+  return [...fromXml, ...fromSource];
 }
 
 function pathFromUrl(url: string): string {
   try { return new URL(url).pathname.replace(/\/$/, '') || '/'; } catch { return url.replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '') || '/'; }
 }
 
+function relatedSourceFiles(route: string, sourceFiles: string[]): string[] {
+  const routeParts = route === '/' ? [] : route.slice(1).split('/');
+  return sourceFiles.filter((file) => {
+    const fileRoute = appRouteFromFile(file) ?? pagesRouteFromFile(file);
+    if (fileRoute === route) return true;
+    if (!/(^|\/)layout\.(tsx?|jsx?|mjs)$/.test(file)) return false;
+    if (!fileRoute) return false;
+    if (fileRoute === '/') return true;
+    const layoutParts = fileRoute.slice(1).split('/');
+    return layoutParts.every((part, index) => routeParts[index] === part);
+  });
+}
+
 function routeContent(cwd: string, route: string, sourceFiles: string[], htmlFiles: string[]): { source?: string; rendered?: string; sourceText: string; html: string } {
   const source = sourceFiles.find((file) => appRouteFromFile(file) === route || pagesRouteFromFile(file) === route);
   const rendered = htmlFiles.find((file) => routeFromHtml(file) === route);
-  return { source, rendered, sourceText: source ? read(cwd, source) : '', html: rendered ? read(cwd, rendered) : '' };
+  const sourceText = relatedSourceFiles(route, sourceFiles).map((file) => read(cwd, file)).join('\n');
+  return { source, rendered, sourceText, html: rendered ? read(cwd, rendered) : '' };
 }
 
 function has(content: string, html: string, htmlRe: RegExp, sourceRe: RegExp): boolean {

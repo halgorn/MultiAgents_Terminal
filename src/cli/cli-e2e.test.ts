@@ -115,6 +115,12 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     assert.equal(releaseCheck.status, 0, releaseCheck.stderr);
     assert.equal((JSON.parse(releaseCheck.stdout) as { passed: boolean }).passed, true);
 
+    const reportOutput = join(repo, 'reports', 'context.md');
+    const reportJson = runSourceCli(repo, ['report', '--md', '--json', '--output', reportOutput], 60_000);
+    assert.equal(reportJson.status, 0, reportJson.stderr);
+    assert.match(readFileSync(reportOutput, 'utf8'), /AI Analysis Context/);
+    assert.equal((JSON.parse(reportJson.stdout) as { output: string }).output, reportOutput);
+
     const setupStatus = runSourceCli(repo, ['setup', '--status']);
     assert.equal(setupStatus.status, 0, setupStatus.stderr);
     assert.match(setupStatus.stdout, /"prepared": false/);
