@@ -34,10 +34,19 @@ test('database analyzer projects pagination, pooling, and relation loading risks
       '  return prisma.user.findMany({ include: { posts: true } });',
       '}',
     ].join('\n'));
+    writeFileSync(join(cwd, 'src', 'user.repository.test.ts'), [
+      'import assert from "node:assert/strict";',
+      'describe("user repository", () => {',
+      '  it("runs a query", () => {',
+      '    assert.equal(true, true);',
+      '  });',
+      '});',
+    ].join('\n'));
 
     const report = analyzeDatabase(cwd);
     assert.equal(report.ormSignals.includes('Prisma'), true);
     assert.equal(report.indexSignals > 0, true);
+    assert.equal(report.queryTestSignals > 0, true);
     assert.equal(report.paginationSignals > 0, true);
     assert.equal(report.poolSignals > 0, true);
     assert.equal(report.relationRiskSignals > 0, true);
@@ -50,10 +59,13 @@ test('database analyzer projects pagination, pooling, and relation loading risks
 test('performance analyzer detects uncached fetch and client rendering pressure', () => {
   const cwd = makeFixtureRepo('aion-perf-risk-');
   try {
+    mkdirSync(join(cwd, 'public'), { recursive: true });
     writeFileSync(join(cwd, 'package.json'), JSON.stringify({ dependencies: { next: '15.0.0' } }));
     for (let i = 0; i < 9; i++) {
       writeFileSync(join(cwd, 'src', `widget-${i}.tsx`), `'use client';\nexport function Widget${i}(){ return null; }\n`);
     }
+    const heroSvg = '<svg xmlns="http://www.w3.org/2000/svg">' + '<rect width="10" height="10" />'.repeat(15000) + '</svg>';
+    writeFileSync(join(cwd, 'public', 'hero.svg'), heroSvg);
     writeFileSync(join(cwd, 'src', 'feed.ts'), [
       'export async function feed() {',
       '  const data = await fetch("https://example.com/api/feed");',
@@ -64,8 +76,10 @@ test('performance analyzer detects uncached fetch and client rendering pressure'
     const report = analyzePerformance(cwd, []);
     assert.equal(report.clientRenderSignals, 9);
     assert.equal(report.uncachedFetchSignals, 1);
+    assert.equal(report.largeAssetFiles > 0, true);
     assert.equal(report.issues.some((issue) => issue.area === 'Rendering'), true);
     assert.equal(report.issues.some((issue) => issue.area === 'Data fetching'), true);
+    assert.equal(report.issues.some((issue) => issue.area === 'Bundle/runtime'), true);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

@@ -16,6 +16,7 @@ export interface DatabaseReport {
   migrationFiles: number;
   rawSqlFiles: number;
   indexSignals: number;
+  queryTestSignals: number;
   transactionSignals: number;
   paginationSignals: number;
   poolSignals: number;
@@ -70,6 +71,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
   let migrationFiles = 0;
   let rawSqlFiles = 0;
   let indexSignals = 0;
+  let queryTestSignals = 0;
   let transactionSignals = 0;
   let paginationSignals = 0;
   let poolSignals = 0;
@@ -82,6 +84,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
     if (/migration|migrate|schema\.prisma|liquibase|flyway/i.test(file)) migrationFiles++;
     if (/\bSELECT\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b|cursor\.execute|db\.execute|queryRaw/i.test(content)) rawSqlFiles++;
     if (/CREATE\s+INDEX|@@index|@Index|index=True|db_index=True|\.index\(/i.test(content)) indexSignals++;
+    if (/\.(test|spec)\.[tj]sx?$/.test(file) && /(db|query|repo|repository|orm)/i.test(file)) queryTestSignals++;
     if (/transaction|BEGIN TRANSACTION|COMMIT|ROLLBACK|atomic\(|session\.begin/i.test(content)) transactionSignals++;
     if (/LIMIT\s+\d+|OFFSET\s+\d+|take\s*:|skip\s*:|cursor\s*:|paginate|pageSize|perPage/i.test(content)) paginationSignals++;
     if (/pool|maxPoolSize|connectionLimit|pgbouncer|DATABASE_POOL|pool_timeout/i.test(content)) poolSignals++;
@@ -97,6 +100,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
   if (likelyDb && migrationFiles === 0 && !migrationsDir) issue(issues, 'high', 'Schema lifecycle', 'Database usage detected but no migrations found', 'Add migration tracking so future schema changes are reviewable and reversible.');
   if (rawSqlFiles > 0 && indexSignals === 0) issue(issues, 'medium', 'Indexes', 'Raw SQL/query usage found without index signals', 'Map query predicates to indexes and include index checks in migrations.');
   if (rawSqlFiles > 5) issue(issues, 'medium', 'Query ownership', `${rawSqlFiles} files contain raw SQL/query calls`, 'Centralize query access in repositories/services and add query-level tests.');
+  if (rawSqlFiles > 0 && queryTestSignals === 0) issue(issues, 'low', 'Query tests', 'Database query usage found without query test signals', 'Add focused tests for repositories, queries, and migration regressions.');
   if (likelyDb && transactionSignals === 0) issue(issues, 'medium', 'Consistency', 'No transaction handling signal detected', 'Use explicit transactions for multi-write workflows and critical domain operations.');
   if (likelyDb && paginationSignals === 0) issue(issues, 'medium', 'Growth projection', 'No pagination/cursor signal detected', 'Add cursor or limit/offset pagination before list endpoints grow unbounded.');
   if (likelyDb && poolSignals === 0) issue(issues, 'low', 'Connection scaling', 'No database pool configuration signal detected', 'Document connection pooling limits for serverless, workers, and production API concurrency.');
@@ -111,6 +115,7 @@ export function analyzeDatabase(cwd: string): DatabaseReport {
     migrationFiles,
     rawSqlFiles,
     indexSignals,
+    queryTestSignals,
     transactionSignals,
     paginationSignals,
     poolSignals,

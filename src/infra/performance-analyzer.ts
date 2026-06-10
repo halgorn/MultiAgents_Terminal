@@ -18,12 +18,15 @@ export interface PerformanceReport {
   clientRenderSignals: number;
   uncachedFetchSignals: number;
   largeAssetFiles: number;
+  staticAssetSignals: number;
   bundleRisk: 'low' | 'medium' | 'unknown';
   unrateLimitedApis: number;
   issues: PerformanceIssue[];
 }
 
 const PERF_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rb', '.java']);
+const ASSET_EXTS = new Set(['.css', '.html', '.htm', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif', '.ico', '.xml', '.txt', '.json']);
+const LARGE_ASSET_BYTES = 200_000;
 
 function walk(cwd: string): string[] {
   const files: string[] = [];
@@ -36,7 +39,8 @@ function walk(cwd: string): string[] {
       const rel = relative(cwd, full);
       if (entry.isDirectory()) { scan(full); continue; }
       if (isGeneratedArtifact(rel)) continue;
-      if (PERF_EXTS.has(extname(entry.name))) files.push(rel);
+      const ext = extname(entry.name).toLowerCase();
+      if (PERF_EXTS.has(ext) || ASSET_EXTS.has(ext)) files.push(rel);
     }
   };
   scan(cwd);
@@ -65,7 +69,21 @@ export function analyzePerformance(cwd: string, apiEndpoints: ApiEndpoint[]): Pe
   let clientRenderSignals = 0;
   let uncachedFetchSignals = 0;
   let largeAssetFiles = 0;
+  let staticAssetSignals = 0;
   for (const file of files) {
+    const ext = extname(file).toLowerCase();
+    if (ASSET_EXTS.has(ext)) {
+      try {
+        const size = statSync(join(cwd, file)).size;
+        if (size > LARGE_ASSET_BYTES && /(^|\/)(public|app|src)\//i.test(file)) {
+          largeAssetFiles++;
+          staticAssetSignals++;
+        }
+      } catch {
+        continue;
+      }
+      continue;
+    }
     let content = '';
     try { content = readFileSync(join(cwd, file), 'utf8'); } catch { continue; }
     if (/cache-control|revalidate|stale-while-revalidate|redis|memcached|lru|cache\(/i.test(content)) cacheSignals++;
@@ -83,7 +101,7 @@ export function analyzePerformance(cwd: string, apiEndpoints: ApiEndpoint[]): Pe
   if (clientRenderSignals > 8) push(issues, 'medium', 'Rendering', `${clientRenderSignals} client component signal(s) detected`, 'Keep public SEO pages server-first and isolate client components to interactive islands.');
   if (nPlusOneSignals > 0) push(issues, 'high', 'Database performance', `${nPlusOneSignals} possible looped query/await pattern(s)`, 'Batch reads, prefetch relations, or move fan-out work to jobs.');
   if (syncIoSignals > 0) push(issues, 'low', 'Runtime blocking', `${syncIoSignals} sync/blocking I/O signal(s)`, 'Avoid sync I/O on hot request paths and move heavy work off the event loop.');
-  if (largeAssetFiles > 0) push(issues, 'low', 'Bundle/runtime', `${largeAssetFiles} large source file(s) may inflate bundles`, 'Split heavy UI modules and add bundle analysis to CI.');
+  if (largeAssetFiles > 0) push(issues, 'low', 'Bundle/runtime', `${largeAssetFiles} large asset(s) may inflate page or bundle weight`, 'Compress, split, or lazy-load heavy assets and add size budgets to CI.');
   const risk = bundleRisk(cwd);
   if (risk === 'medium') push(issues, 'low', 'Bundle/runtime', 'Frontend bundler detected but no bundle budget validation', 'Add bundle-size or Lighthouse/PageSpeed budget checks for public pages.');
   const deduction = issues.reduce((sum, item) => sum + (item.severity === 'high' ? 20 : item.severity === 'medium' ? 10 : 4), 0);
@@ -95,6 +113,7 @@ export function analyzePerformance(cwd: string, apiEndpoints: ApiEndpoint[]): Pe
     clientRenderSignals,
     uncachedFetchSignals,
     largeAssetFiles,
+    staticAssetSignals,
     bundleRisk: risk,
     unrateLimitedApis,
     issues,
