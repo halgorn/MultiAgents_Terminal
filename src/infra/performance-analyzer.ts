@@ -15,6 +15,9 @@ export interface PerformanceReport {
   filesChecked: number;
   cacheSignals: number;
   asyncRiskSignals: number;
+  clientRenderSignals: number;
+  uncachedFetchSignals: number;
+  largeAssetFiles: number;
   bundleRisk: 'low' | 'medium' | 'unknown';
   unrateLimitedApis: number;
   issues: PerformanceIssue[];
@@ -59,19 +62,28 @@ export function analyzePerformance(cwd: string, apiEndpoints: ApiEndpoint[]): Pe
   let asyncRiskSignals = 0;
   let nPlusOneSignals = 0;
   let syncIoSignals = 0;
+  let clientRenderSignals = 0;
+  let uncachedFetchSignals = 0;
+  let largeAssetFiles = 0;
   for (const file of files) {
     let content = '';
     try { content = readFileSync(join(cwd, file), 'utf8'); } catch { continue; }
     if (/cache-control|revalidate|stale-while-revalidate|redis|memcached|lru|cache\(/i.test(content)) cacheSignals++;
     if (/for\s*\([^)]*\)\s*{[^}]*await|for\s+.*:\s*.*\n\s+.*(query|find|get)\(/is.test(content)) { asyncRiskSignals++; nPlusOneSignals++; }
     if (/readFileSync|writeFileSync|execSync|spawnSync|requests\.get\(|urllib\.request/i.test(content)) { asyncRiskSignals++; syncIoSignals++; }
+    if (/['"]use client['"]/.test(content)) clientRenderSignals++;
+    if (/fetch\([^)]*\)(?![\s\S]{0,120}(?:cache\s*:|next\s*:\s*{\s*revalidate))/i.test(content)) uncachedFetchSignals++;
+    if (/\.(tsx?|jsx?)$/.test(file) && Buffer.byteLength(content) > 80_000) largeAssetFiles++;
   }
   const issues: PerformanceIssue[] = [];
   const unrateLimitedApis = apiEndpoints.filter((endpoint) => !endpoint.hasRateLimit).length;
   if (unrateLimitedApis > 0) push(issues, 'medium', 'API pressure', `${unrateLimitedApis} endpoint(s) have no rate-limit signal`, 'Add throttling, cache policy, or abuse controls to public API routes.');
   if (cacheSignals === 0) push(issues, 'medium', 'Caching', 'No cache strategy signal detected', 'Define cache headers, data cache, or CDN strategy for read-heavy paths.');
+  if (uncachedFetchSignals > 0) push(issues, 'medium', 'Data fetching', `${uncachedFetchSignals} fetch call(s) without cache/revalidate signal`, 'Set explicit cache or revalidate behavior for public read paths.');
+  if (clientRenderSignals > 8) push(issues, 'medium', 'Rendering', `${clientRenderSignals} client component signal(s) detected`, 'Keep public SEO pages server-first and isolate client components to interactive islands.');
   if (nPlusOneSignals > 0) push(issues, 'high', 'Database performance', `${nPlusOneSignals} possible looped query/await pattern(s)`, 'Batch reads, prefetch relations, or move fan-out work to jobs.');
   if (syncIoSignals > 0) push(issues, 'low', 'Runtime blocking', `${syncIoSignals} sync/blocking I/O signal(s)`, 'Avoid sync I/O on hot request paths and move heavy work off the event loop.');
+  if (largeAssetFiles > 0) push(issues, 'low', 'Bundle/runtime', `${largeAssetFiles} large source file(s) may inflate bundles`, 'Split heavy UI modules and add bundle analysis to CI.');
   const risk = bundleRisk(cwd);
   if (risk === 'medium') push(issues, 'low', 'Bundle/runtime', 'Frontend bundler detected but no bundle budget validation', 'Add bundle-size or Lighthouse/PageSpeed budget checks for public pages.');
   const deduction = issues.reduce((sum, item) => sum + (item.severity === 'high' ? 20 : item.severity === 'medium' ? 10 : 4), 0);
@@ -80,6 +92,9 @@ export function analyzePerformance(cwd: string, apiEndpoints: ApiEndpoint[]): Pe
     filesChecked: files.length,
     cacheSignals,
     asyncRiskSignals,
+    clientRenderSignals,
+    uncachedFetchSignals,
+    largeAssetFiles,
     bundleRisk: risk,
     unrateLimitedApis,
     issues,
