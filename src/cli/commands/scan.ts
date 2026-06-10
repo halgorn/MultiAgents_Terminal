@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
-import { writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync } from 'fs';
+import { dirname } from 'path';
 import { buildApiMap, auditEnvVars, measureCognitiveLoad, scanCurrentSecrets } from '../../infra/code-metrics.js';
 import { buildSbom } from '../../infra/sbom.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
@@ -157,8 +158,12 @@ export function registerScan(program: Command): void {
       const failUnder = options.failUnder ? Math.max(0, Math.min(100, parseInt(options.failUnder, 10) || 0)) : 0;
       if (options.json || options.markdown) {
         const output = options.markdown ? formatSeoMarkdown(report) : JSON.stringify(report, null, 2) + '\n';
-        if (options.output) writeFileSync(options.output, output, 'utf8');
-        else process.stdout.write(output);
+        if (options.output) {
+          mkdirSync(dirname(options.output), { recursive: true });
+          writeFileSync(options.output, output, 'utf8');
+        } else {
+          process.stdout.write(output);
+        }
         if (failUnder > 0 && report.score < failUnder) process.exit(1);
         return;
       }

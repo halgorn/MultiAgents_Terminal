@@ -191,7 +191,15 @@ aion scan sbom
 aion scan sbom --unpinned-only
 aion scan api-map
 aion scan cognitive-load
+aion scan seo
+aion scan seo --json --fail-under 70
+aion scan seo --markdown --output reports/seo-summary.md
 ```
+
+`aion scan seo` checks rendered/static Next.js route signals, robots.txt,
+sitemap coverage, canonical metadata, analytics tags, Search Console hints, and
+AI crawler policy. JSON and Markdown modes are useful for CI artifacts and do
+not require AI tokens.
 
 ### Reports And Graphs
 

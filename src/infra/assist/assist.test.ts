@@ -62,6 +62,8 @@ test('buildAssistPlan generates valid CI, deploy, nginx, scripts, and required s
     assert.equal(plan.requiredSecrets.includes('SSH_PRIVATE_KEY'), true);
     assert.equal(plan.artifacts.some((artifact) => artifact.path === '.github/workflows/aion-ci.yml'), true);
     assert.match(generateCiWorkflow(plan), /node: \[18, 20, 22\]/);
+    assert.match(generateCiWorkflow(plan), /aion scan seo --markdown --output aion-seo\.md/);
+    assert.match(generateCiWorkflow(plan), /GITHUB_STEP_SUMMARY/);
     assert.match(generateNginxConfig(plan), /server_name app\.example\.com/);
     assert.equal(plan.remoteSteps.some((step) => step.command.includes('curl --fail')), true);
   } finally {

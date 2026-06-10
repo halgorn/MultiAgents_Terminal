@@ -56,7 +56,14 @@ ${checkBlock || '      - name: Smoke\n        run: echo "No build/test scripts d
           npx aion scan secrets
           npx aion scan env-audit
           npx aion scan sbom --unpinned-only
+          npx aion scan seo --markdown --output aion-seo.md
+          cat aion-seo.md >> "$GITHUB_STEP_SUMMARY"
           npx aion audit . --dry-run --max-files 20
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aion-seo-summary
+          path: aion-seo.md
 `;
 }
 
