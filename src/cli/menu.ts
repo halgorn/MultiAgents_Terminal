@@ -43,7 +43,7 @@ export const BUDGETS = [
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
 type AuditMode = 'local-only' | 'normal';
-type MenuAction = 'local-check' | 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'sep' | 'quit';
+type MenuAction = 'local-check' | 'seo' | 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'sep' | 'quit';
 
 const AUDIT_DOMAIN_ARGS: Record<AuditTrack, string> = {
   bugs: 'bugs,error-handling,architecture,testing',
@@ -206,7 +206,7 @@ export function runMenuFallback(cwd: string): void {
   console.log(chalk.dim('  ─────────────────────────────────────'));
   console.log(chalk.dim('  Run in an interactive terminal to access the menu.'));
   console.log('');
-  console.log(chalk.bold('  Zero token:  ') + chalk.cyan('aion health  · aion scan secrets  · aion scan env-audit  · aion report'));
+  console.log(chalk.bold('  Zero token:  ') + chalk.cyan('aion health  · aion scan seo  · aion scan secrets  · aion scan env-audit  · aion report'));
   console.log(chalk.bold('  Uses AI:     ') + chalk.cyan('aion audit . --budget normal  · aion fix <file>  · aion analyze "<problem>"  · aion chat'));
   console.log(chalk.bold('  Guided:      ') + chalk.cyan('aion menu'));
   console.log('');
@@ -216,6 +216,7 @@ export function runMenuFallback(cwd: string): void {
 
 export const MAIN_ITEMS: Array<MenuItem<MenuAction>> = [
   { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM + complexity', value: 'local-check' },
+  { label: '🌐 SEO & Crawlers',         hint: 'zero token · Next.js routes, sitemap, robots, analytics', value: 'seo' },
   { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',                      value: 'bugs' },
   { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',                      value: 'security' },
   { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',                      value: 'perf' },
@@ -281,6 +282,12 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'local-check') {
       run(['--cwd', cwd, 'report', '--diagnostics']);
+      await pressEnter();
+      continue;
+    }
+
+    if (action === 'seo') {
+      run(['--cwd', cwd, 'scan', 'seo']);
       await pressEnter();
       continue;
     }

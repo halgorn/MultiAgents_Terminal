@@ -7,7 +7,7 @@ test('main menu has the expected actionable items', () => {
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
 
-  assert.deepEqual(selectable, ['local-check', 'bugs', 'security', 'perf', 'fix', 'analyze', 'assistant', 'chat-qa', 'report']);
+  assert.deepEqual(selectable, ['local-check', 'seo', 'bugs', 'security', 'perf', 'fix', 'analyze', 'assistant', 'chat-qa', 'report']);
 });
 
 test('menu does not include old submenus', () => {
@@ -23,6 +23,7 @@ test('menu has the correct English labels', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
   assert.equal(labels.includes('📊 Automatic diagnostics'), true);
+  assert.equal(labels.includes('🌐 SEO & Crawlers'), true);
   assert.equal(labels.includes('🐛 Bugs & Quality'), true);
   assert.equal(labels.includes('🔐 Security'), true);
   assert.equal(labels.includes('⚡ Performance & Infra'), true);
@@ -52,6 +53,7 @@ test('non-TTY fallback prints actionable commands', () => {
 
   assert.match(output, /aion — example-project/);
   assert.match(output, /aion health/);
+  assert.match(output, /aion scan seo/);
   assert.match(output, /aion fix/);
   assert.match(output, /aion audit/);
   assert.match(output, /zero token/i);

@@ -146,9 +146,14 @@ export function registerScan(program: Command): void {
   scan
     .command('seo')
     .description('Analyze SEO, analytics, crawler policy, and Next.js route coverage')
-    .action(async () => {
+    .option('--json', 'print the SEO report as JSON')
+    .action(async (options: { json?: boolean }) => {
       const cwd = process.cwd();
       const report = analyzeSeoAndCrawlers(cwd);
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
       printSeoReport(report);
       await refreshScanDashboard(cwd, 'scan seo');
     });

@@ -79,6 +79,11 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     assert.equal(scanSecrets.status, 0, scanSecrets.stderr);
     assert.match(scanSecrets.stdout, /No hardcoded secrets detected/);
 
+    const scanSeo = runSourceCli(repo, ['scan', 'seo', '--json']);
+    assert.equal(scanSeo.status, 0, scanSeo.stderr);
+    assert.match(scanSeo.stdout, /"score"/);
+    assert.match(scanSeo.stdout, /"aiCrawlerPolicy"/);
+
     const docsAnalyze = runSourceCli(repo, ['docs', 'analyze', '--json']);
     assert.equal(docsAnalyze.status, 0, docsAnalyze.stderr);
     assert.match(docsAnalyze.stdout, /"score"/);
