@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import * as readline from 'readline';
 import { GraphAgent } from '../../agents/graph-agent.js';
-import { createRuntimePolicy } from '../../core/runtime-policy.js';
+import { createRuntimePolicy, BUDGET_NAMES, PROVIDER_NAMES, type ProviderName, type BudgetName } from '../../core/runtime-policy.js';
 import { displayProjectName } from '../../infra/project-name.js';
 import type { RuntimePolicy } from '../../core/runtime-policy.js';
 import { safeProcessEnv } from '../../providers/cli-provider.js';
@@ -57,23 +57,24 @@ export function registerChat(program: Command): void {
     .command('chat')
     .description('Interactive Q&A about the codebase using repo index as context')
     .option('--budget <budget>', 'low | normal | deep', 'normal')
-    .option('--provider <provider>', 'claude | openrouter')
-    .option('--model <model>', 'model override for openrouter')
+    .option('--provider <provider>', `AI provider: ${PROVIDER_NAMES.join(' | ')}`)
+    .option('--model <model>', 'model override for openrouter/kimi/minimax')
     .option('--context-limit <n>', 'max chars of repo context injected (default: 6000)', '6000')
     .action(async (options: { budget: string; provider?: string; model?: string; contextLimit: string }) => {
       const cwd = process.cwd();
       const contextLimit = Math.max(1000, Math.min(20000, parseInt(options.contextLimit, 10) || 6000));
-      const budget = (['low', 'normal', 'deep'].includes(options.budget) ? options.budget : 'normal') as 'low' | 'normal' | 'deep';
-      const provider = options.provider ?? (process.env['OPENROUTER_API_KEY'] ? 'openrouter' : 'claude');
+      const budget = ((BUDGET_NAMES as readonly string[]).includes(options.budget) ? options.budget : 'normal') as BudgetName;
+      const provider: ProviderName = (options.provider as ProviderName | undefined)
+        ?? (process.env['OPENROUTER_API_KEY'] ? 'openrouter' : process.env['MOONSHOT_API_KEY'] ? 'kimi' : process.env['MINIMAX_API_KEY'] ? 'minimax' : 'claude');
 
       const policyInput = {
         budget,
-        ...(options.model ? { openrouterModel: options.model } : {}),
-        ...(provider === 'openrouter' ? {
-          plannerProvider: 'openrouter' as const,
-          investigatorProvider: 'openrouter' as const,
-          developerProvider: 'openrouter' as const,
-          reviewerProvider: 'openrouter' as const,
+        ...(options.model ? { openrouterModel: options.model, kimiModel: options.model, minimaxModel: options.model } : {}),
+        ...(provider !== 'claude' ? {
+          plannerProvider: provider,
+          investigatorProvider: provider,
+          developerProvider: provider,
+          reviewerProvider: provider,
         } : {}),
       };
       const policy = createRuntimePolicy(policyInput);
