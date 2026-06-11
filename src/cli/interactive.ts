@@ -120,7 +120,7 @@ export async function runInteractive(cwd: string): Promise<void> {
       try {
         await runNaturalLanguage(trimmed, cwd);
       } catch (err) {
-        console.error(chalk.red('Error: ' + String(err)));
+        console.error(chalk.red('\n  ✗ Error: ') + chalk.red(err instanceof Error ? err.message : String(err)));
       }
 
       console.log();
