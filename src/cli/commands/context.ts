@@ -4,15 +4,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { renderAiContext, type FullSavedAuditReport } from '../../infra/audit-model.js';
+import { latestAuditPointer } from '../../infra/project-report.js';
 import { queryRepoIndex } from '../../infra/repo-query.js';
 import { AI_RUNTIME_DIR } from '../../infra/paths.js';
 
 function latestAudit(cwd: string): FullSavedAuditReport | null {
   try {
-    const pointerPath = join(cwd, AI_RUNTIME_DIR, 'reports', 'latest-audit.json');
-    if (!existsSync(pointerPath)) return null;
-    const pointer = JSON.parse(readFileSync(pointerPath, 'utf8')) as { runDir?: string; report?: string };
-    const reportPath = pointer.runDir ? join(pointer.runDir, 'report.json') : pointer.report;
+    const pointer = latestAuditPointer(cwd);
+    const reportPath = pointer?.runDir ? join(pointer.runDir, 'report.json') : pointer?.report;
     if (!reportPath || !existsSync(reportPath)) return null;
     return JSON.parse(readFileSync(reportPath, 'utf8')) as FullSavedAuditReport;
   } catch {
