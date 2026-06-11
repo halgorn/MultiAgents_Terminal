@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { BUDGET_NAMES, PROVIDER_NAMES } from '../core/runtime-policy.js';
+import { BUDGET_NAMES, PROVIDER_NAMES, DEFAULT_MODELS } from '../core/runtime-policy.js';
 import type { BudgetName, ProviderName, RuntimePolicyInput } from '../core/runtime-policy.js';
 
 export interface RuntimeCliOptions {
@@ -74,6 +74,6 @@ export function addRuntimeOptions(command: Command): Command {
     .option('--reviewer-provider <provider>', 'reviewer provider: claude, codex, openrouter, kimi, minimax')
     .option('--codex-model <model>', 'model passed to codex exec')
     .option('--openrouter-model <model>', 'model passed to openrouter')
-    .option('--kimi-model <model>', 'model passed to Kimi API (default: kimi-m3)')
-    .option('--minimax-model <model>', 'model passed to MiniMax API (default: MiniMax-Text-01)');
+    .option('--kimi-model <model>', `model passed to Kimi API (default: ${DEFAULT_MODELS.kimi})`)
+    .option('--minimax-model <model>', `model passed to MiniMax API (default: ${DEFAULT_MODELS.minimax})`);
 }
