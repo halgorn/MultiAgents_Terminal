@@ -291,7 +291,7 @@ export async function runMenu(cwd: string): Promise<void> {
     const setup = _setupReady ? chalk.green('setup ok') : chalk.dim('initial setup pending');
     const lf = `LangFuse ${currentLangfuseLabel()}`;
     const prov = `provider: ${chalk.cyan(currentProvider)}`;
-    return `  zero token: diagnostics/report/local audit   uses AI: fix/analyze/chat/normal audit   ${setup}   ${rag}   ${lf}   ${prov}`;
+    return `  ${setup}   ${rag}   ${lf}   ${prov}`;
   }
 
   while (true) {
