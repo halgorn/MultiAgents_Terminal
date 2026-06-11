@@ -69,7 +69,7 @@ const TOOLS = [
 async function handleSearchMemory(args: Record<string, unknown>): Promise<string> {
   const cwd = String(args['cwd'] ?? process.cwd());
   const query = String(args['query']);
-  const topK = Number(args['topK'] ?? 5);
+  const topK = Math.max(1, Math.min(50, Number(args['topK'] ?? 5) || 5));
 
   const { embedTextRemote, embedText } = await import('../infra/embeddings.js');
   const { createVectorStore } = await import('../infra/vector-store.js');
@@ -126,7 +126,7 @@ async function handleHealthScore(args: Record<string, unknown>): Promise<string>
 
 async function handleHotZones(args: Record<string, unknown>): Promise<string> {
   const cwd = String(args['cwd'] ?? process.cwd());
-  const limit = Number(args['limit'] ?? 10);
+  const limit = Math.max(1, Math.min(100, Number(args['limit'] ?? 10) || 10));
   const { collectAuditStats, fetchGitChurn, prioritizeFiles } = await import('../core/pipelines/audit-file-scanner.js');
   const stats = collectAuditStats(cwd, '.');
   const top = prioritizeFiles(cwd, stats.auditFiles, limit);
