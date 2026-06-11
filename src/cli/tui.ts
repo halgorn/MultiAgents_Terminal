@@ -47,7 +47,7 @@ function renderList<T>(
   });
 
   lines.push('');
-  lines.push(chalk.dim('  ↕ navigate  ↵ select  q quit'));
+  lines.push(chalk.dim('  ↕ navigate  ↵ select  q/esc quit'));
   lines.forEach((l) => process.stdout.write(l + '\n'));
   return lines.length;
 }
@@ -77,7 +77,7 @@ function renderMulti<T>(
   lines.push(selectedLabels
     ? chalk.green(`  Selected: ${selectedLabels}`)
     : chalk.dim('  None selected'));
-  lines.push(chalk.dim('  ↕ navigate  Space toggle  ↵ confirm  q cancel'));
+  lines.push(chalk.dim('  ↕ navigate  Space toggle  ↵ confirm  q/esc cancel'));
   lines.forEach((l) => process.stdout.write(l + '\n'));
   return lines.length;
 }
@@ -105,7 +105,7 @@ export async function selectOne<T>(
 
     const handler = (_: string | undefined, key: { name: string; ctrl?: boolean; sequence?: string }) => {
       if (!key) return;
-      if ((key.ctrl && key.name === 'c') || key.name === 'q') {
+      if ((key.ctrl && key.name === 'c') || key.name === 'q' || key.name === 'escape') {
         cleanup();
         resolve(null);
         return;
@@ -162,7 +162,7 @@ export async function selectMany<T>(
 
     const handler = (_: string | undefined, key: { name: string; ctrl?: boolean; sequence?: string }) => {
       if (!key) return;
-      if ((key.ctrl && key.name === 'c') || key.name === 'q') { cleanup(); resolve(null); return; }
+      if ((key.ctrl && key.name === 'c') || key.name === 'q' || key.name === 'escape') { cleanup(); resolve(null); return; }
       if (key.name === 'up') selected = Math.max(0, selected - 1);
       if (key.name === 'down') selected = Math.min(items.length - 1, selected + 1);
       if (key.name === 'space') {
