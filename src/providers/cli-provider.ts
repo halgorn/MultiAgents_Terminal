@@ -89,9 +89,13 @@ function runProcess(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (code !== 0 && !stdout.trim()) {
-        reject(new Error(`[${agentName}] ${command} exited with code ${code}: ${limitChars(stderr, maxOutputChars)}`));
-        return;
+      if (code !== 0) {
+        // If it exited with error, we only resolve if stdout looks like a structured JSON envelope
+        // that our caller (ClaudeCliProvider) is equipped to handle and extract the error from.
+        if (!stdout.trim().startsWith('{')) {
+          reject(new Error(`[${agentName}] ${command} exited with code ${code}: ${limitChars(stderr || stdout, maxOutputChars)}`));
+          return;
+        }
       }
       resolve(limitChars(stdout, maxOutputChars));
     });
