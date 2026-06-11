@@ -18,6 +18,7 @@ import {
   writeSetupState,
 } from '../../infra/setup/project-setup.js';
 import { installPostCommitHook, isHookInstalled } from '../../infra/git-hooks.js';
+import { parseBudget } from '../cli-utils.js';
 
 interface SetupRunOptions {
   budget?: 'low' | 'normal' | 'deep';
@@ -68,11 +69,6 @@ function runMemoryBuildWithFallback(cwd: string): boolean {
     VOYAGE_API_KEY: '',
   };
   return runSelfCommandWithEnv(cwd, ['memory', 'build'], fallbackEnv);
-}
-
-function parseBudget(v: string | undefined): 'low' | 'normal' | 'deep' {
-  if (v === 'normal' || v === 'deep') return v;
-  return 'low';
 }
 
 async function chooseBudget(): Promise<'low' | 'normal' | 'deep'> {
@@ -179,7 +175,7 @@ export function registerSetup(program: Command): void {
       process.stdout.write(chalk.bold.cyan('\nAion project setup wizard\n'));
       const scanners = options.scanners ? Number.parseInt(options.scanners, 10) : undefined;
       const result = await runProjectSetupWizard(cwd, {
-        budget: parseBudget(options.budget),
+        budget: parseBudget(options.budget ?? 'low'),
         domain: options.domain,
         scanners: Number.isFinite(scanners) ? scanners : undefined,
         semanticRag: options.semanticRag,
