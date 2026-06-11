@@ -204,6 +204,11 @@ export function registerAudit(program: Command): void {
           const { default: readline } = await import('readline');
           const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
           const answer = await new Promise<string>((resolve) => {
+            rl.on('SIGINT', () => {
+              process.stdout.write('\n');
+              rl.close();
+              resolve('n');
+            });
             rl.question(
               chalk.yellow(`\n  Deep budget: ~$${estimated.toFixed(2)} estimated (${maxAiScanners} scanners). Proceed? [y/N] `),
               (a) => { rl.close(); resolve(a.trim().toLowerCase()); },
