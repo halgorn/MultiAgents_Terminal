@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, append
 import { join } from 'path';
 import { homedir } from 'os';
 
-const STORE_DIR = process.env['AI_RUNTIME_DB_PATH'] ?? join(homedir(), '.ai-runtime');
+export const STORE_DIR = process.env['AI_RUNTIME_DB_PATH'] ?? join(homedir(), '.ai-runtime');
 const SAFE_NAME_RE = /^[A-Za-z0-9._-]+$/;
 
 function safeName(value: string, label: string): string {
