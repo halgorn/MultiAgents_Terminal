@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import type { ProviderName } from '../core/runtime-policy.js';
 
 const CONFIG_FILE = '.aionrc.json';
 
@@ -8,8 +9,8 @@ export interface AionConfig {
   preset?: string;
   /** Default budget: low | normal | deep */
   budget?: 'low' | 'normal' | 'deep';
-  /** Default AI provider: claude | openrouter */
-  provider?: string;
+  /** Default AI provider */
+  provider?: ProviderName;
   /** Default model override (for openrouter) */
   model?: string;
   /** Extra glob patterns to ignore during audit (merged with .aionignore) */
