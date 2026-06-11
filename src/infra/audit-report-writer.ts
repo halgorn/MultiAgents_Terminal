@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { AuditFinding, AuditReport } from '../schemas/audit.js';
 import { saveDomainSnapshot, projectReportPath } from './project-report.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 import {
   buildActionItems,
   buildFileHotspots,
@@ -389,7 +390,7 @@ export function saveAuditReport(
   aiContextBudget = 8000,
   costSummary?: CostSummary,
 ): SavedAuditPaths {
-  const dir = join(cwd, '.ai-runtime', 'reports');
+  const dir = join(cwd, AI_RUNTIME_DIR, 'reports');
   mkdirSync(dir, { recursive: true });
   const now = new Date();
   const stamp = now.toISOString().replace(/[:.]/g, '-');

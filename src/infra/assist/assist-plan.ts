@@ -3,8 +3,9 @@ import { dirname, join, resolve } from 'path';
 import { detectProject } from './project-detector.js';
 import { generateArtifacts } from './generators/artifacts.js';
 import type { AssistBuildOptions, AssistPlan, AssistTarget, RemoteStep } from './types.js';
+import { AI_RUNTIME_DIR } from '../paths.js';
 
-const PLAN_PATH = join('.ai-runtime', 'assist', 'deploy-plan.json');
+const PLAN_PATH = join(AI_RUNTIME_DIR, 'assist', 'deploy-plan.json');
 
 function slug(input: string): string {
   return input.replace(/[^a-z0-9-]/gi, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'app';

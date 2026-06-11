@@ -1,6 +1,7 @@
 import { spawnSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export type CloudProvider = 'aws' | 'azure' | 'gcp';
 
@@ -172,7 +173,7 @@ function detectGaps(cwd: string, resources: CloudResource[]): CloudGap[] {
   }
 
   // Check sbom for common services
-  const sbomPath = join(cwd, '.ai-runtime', 'sbom.json');
+  const sbomPath = join(cwd, AI_RUNTIME_DIR, 'sbom.json');
   let deps: string[] = [];
   if (existsSync(sbomPath)) {
     try { deps = Object.keys((JSON.parse(readFileSync(sbomPath, 'utf8')) as { packages?: Record<string, unknown> }).packages ?? {}); } catch { /* ok */ }

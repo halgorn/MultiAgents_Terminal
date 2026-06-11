@@ -1,8 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync, appendFileSync, renameSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { AI_RUNTIME_DIR } from '../paths.js';
 
-export const STORE_DIR = process.env['AI_RUNTIME_DB_PATH'] ?? join(homedir(), '.ai-runtime');
+export const STORE_DIR = process.env['AI_RUNTIME_DB_PATH'] ?? join(homedir(), AI_RUNTIME_DIR);
 const SAFE_NAME_RE = /^[A-Za-z0-9._-]+$/;
 
 function safeName(value: string, label: string): string {

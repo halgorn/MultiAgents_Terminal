@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { AionConfig } from '../aion-config.js';
+import { AI_RUNTIME_DIR } from '../paths.js';
 
 const SETUP_STATE_VERSION = 1;
 
@@ -23,7 +24,7 @@ export interface SetupState {
 }
 
 function statePath(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'setup-state.json');
+  return join(cwd, AI_RUNTIME_DIR, 'setup-state.json');
 }
 
 export function readSetupState(cwd: string): SetupState | null {
@@ -40,7 +41,7 @@ export function readSetupState(cwd: string): SetupState | null {
 
 export function writeSetupState(cwd: string, state: SetupState): string {
   const path = statePath(cwd);
-  mkdirSync(join(cwd, '.ai-runtime'), { recursive: true });
+  mkdirSync(join(cwd, AI_RUNTIME_DIR), { recursive: true });
   writeFileSync(path, JSON.stringify(state, null, 2) + '\n', 'utf8');
   return path;
 }
@@ -95,9 +96,9 @@ function hasJsonArrayEntries(path: string): boolean {
 }
 
 export function detectRagTrainingStatus(cwd: string): RagTrainingStatus {
-  const repoIndexReady = existsSync(join(cwd, '.ai-runtime', 'repo-index.json'));
+  const repoIndexReady = existsSync(join(cwd, AI_RUNTIME_DIR, 'repo-index.json'));
   const dependencyKnowledgeReady = existsSync(join(cwd, '.ai-memory', 'architecture', 'dep-graph.md'));
-  const semanticVectorsReady = hasJsonArrayEntries(join(cwd, '.ai-runtime', 'vectors.json'))
+  const semanticVectorsReady = hasJsonArrayEntries(join(cwd, AI_RUNTIME_DIR, 'vectors.json'))
     || existsSync(join(cwd, '.ai-memory', '.embeddings'));
   return { repoIndexReady, dependencyKnowledgeReady, semanticVectorsReady };
 }

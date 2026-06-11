@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { AuditFinding } from '../../schemas/audit.js';
 import { SEVERITY_RANK } from '../../schemas/audit.js';
+import { AI_RUNTIME_DIR } from '../../infra/paths.js';
 
 interface SavedAuditReport {
   findings: AuditFinding[];
@@ -18,12 +19,12 @@ interface SavedAuditReport {
 
 function loadReport(pathOrAlias: string, cwd: string): { report: SavedAuditReport; label: string } {
   // Support "latest", "prev", or absolute/relative file paths
-  const dir = join(cwd, '.ai-runtime', 'reports');
+  const dir = join(cwd, AI_RUNTIME_DIR, 'reports');
 
   if (pathOrAlias === 'latest' || pathOrAlias === 'prev') {
     if (!existsSync(dir)) throw new Error('No audit reports found. Run `aion audit` first.');
     const files = readdirSync(dir).filter((f) => f.startsWith('audit-') && f.endsWith('.json')).sort();
-    if (files.length === 0) throw new Error('No audit reports found in .ai-runtime/reports/');
+    if (files.length === 0) throw new Error(`No audit reports found in ${AI_RUNTIME_DIR}/reports/`);
     const idx = pathOrAlias === 'latest' ? files.length - 1 : Math.max(0, files.length - 2);
     const file = files[idx]!;
     const raw = readFileSync(join(dir, file), 'utf8');

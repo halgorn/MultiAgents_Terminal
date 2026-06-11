@@ -3,14 +3,15 @@ import chalk from 'chalk';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { displayProjectName } from '../../infra/project-name.js';
+import { AI_RUNTIME_DIR } from '../../infra/paths.js';
 
 function hasLatestAudit(cwd: string): boolean {
-  return existsSync(join(cwd, '.ai-runtime', 'reports', 'latest-audit.json'));
+  return existsSync(join(cwd, AI_RUNTIME_DIR, 'reports', 'latest-audit.json'));
 }
 
 function latestAiContext(cwd: string): string | undefined {
   try {
-    const pointer = JSON.parse(readFileSync(join(cwd, '.ai-runtime', 'reports', 'latest-audit.json'), 'utf8')) as { aiContext?: string };
+    const pointer = JSON.parse(readFileSync(join(cwd, AI_RUNTIME_DIR, 'reports', 'latest-audit.json'), 'utf8')) as { aiContext?: string };
     return pointer.aiContext;
   } catch {
     return undefined;

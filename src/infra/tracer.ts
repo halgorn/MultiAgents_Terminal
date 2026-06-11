@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export interface Span {
   traceId: string;
@@ -84,7 +85,7 @@ export class Tracer {
   flush(cwd: string, model?: string): void {
     this.flushPending(model);
     if (this.spans.length === 0) return;
-    const dir = join(cwd, '.ai-runtime');
+    const dir = join(cwd, AI_RUNTIME_DIR);
     mkdirSync(dir, { recursive: true });
 
     const endMs = Date.now();
@@ -105,7 +106,7 @@ export class Tracer {
 // ── Reader ────────────────────────────────────────────────────────────────────
 
 export function loadTraces(cwd: string, limit = 20): Trace[] {
-  const path = join(cwd, '.ai-runtime', 'traces.jsonl');
+  const path = join(cwd, AI_RUNTIME_DIR, 'traces.jsonl');
   if (!existsSync(path)) return [];
 
   return readFileSync(path, 'utf8')

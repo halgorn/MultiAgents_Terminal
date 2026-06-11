@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { cosineSimilarity, stringToUUID } from './embeddings.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export interface VectorResult {
   id: string;
@@ -144,7 +145,7 @@ export function createVectorStore(cwd: string): VectorStore {
     const projectSlug = cwd.split('/').filter(Boolean).pop()?.replace(/[^a-z0-9-]/gi, '-').toLowerCase() ?? 'project';
     return new QdrantStore(process.env.QDRANT_URL, `aion-${projectSlug}`);
   }
-  return new JsonFileStore(join(cwd, '.ai-runtime', 'vectors.json'));
+  return new JsonFileStore(join(cwd, AI_RUNTIME_DIR, 'vectors.json'));
 }
 
 export function vectorStoreBackend(): string {

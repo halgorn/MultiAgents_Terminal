@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { RepoFile, RepoImport, RepoIndex, RepoSymbol, TestLink } from './repo-index.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export interface RepoQueryResult {
   files: RepoFile[];
@@ -10,7 +11,7 @@ export interface RepoQueryResult {
 }
 
 export function loadRepoIndex(cwd: string): RepoIndex | null {
-  const path = join(cwd, '.ai-runtime', 'repo-index.json');
+  const path = join(cwd, AI_RUNTIME_DIR, 'repo-index.json');
   if (!existsSync(path)) return null;
   try {
     return JSON.parse(readFileSync(path, 'utf8')) as RepoIndex;

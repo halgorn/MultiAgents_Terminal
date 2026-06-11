@@ -1,8 +1,9 @@
 import { createHash } from 'crypto';
 import { readFileSync, writeFileSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { AI_RUNTIME_DIR } from './paths.js';
 
-const CACHE_FILE = '.ai-runtime/audit-cache.json';
+const CACHE_FILE = join(AI_RUNTIME_DIR, 'audit-cache.json');
 
 interface CacheEntry {
   mtime: number;
@@ -64,7 +65,7 @@ export function saveAuditCache(
   }
 
   const cache: AuditCache = { version: 3, files: entries, lastAuditAt: new Date().toISOString(), lastFindings };
-  mkdirSync(join(cwd, '.ai-runtime'), { recursive: true });
+  mkdirSync(join(cwd, AI_RUNTIME_DIR), { recursive: true });
   writeFileSync(join(cwd, CACHE_FILE), JSON.stringify(cache, null, 2), 'utf8');
 }
 

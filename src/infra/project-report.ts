@@ -18,6 +18,7 @@ import { buildProjectTrend, renderTrendHtml, renderTrendMarkdown, saveProjectTre
 import { projectReportCss } from './project-report-style.js';
 import { renderSeoHtml, renderSeoMarkdown } from './seo-report-render.js';
 import type { RepoIndex } from './repo-index.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export { projectReportPath, rebuildProjectHtml, saveDomainSnapshot } from './project-audit-dashboard.js';
 
@@ -225,7 +226,7 @@ function buildImprovementPerspectives(input: {
 
 export function latestAuditPointer(cwd: string): { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string } | null {
   try {
-    const reportsDir = join(cwd, '.ai-runtime', 'reports');
+    const reportsDir = join(cwd, AI_RUNTIME_DIR, 'reports');
     const pointerPath = join(reportsDir, 'latest-audit.json');
     const pointer = existsSync(pointerPath)
       ? JSON.parse(readFileSync(pointerPath, 'utf8')) as { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string }
@@ -257,7 +258,7 @@ export function latestAuditPointer(cwd: string): { runDir?: string; html?: strin
 }
 
 export function loadLatestAudit(cwd: string): AuditReport | null {
-  const dir = join(cwd, '.ai-runtime', 'reports');
+  const dir = join(cwd, AI_RUNTIME_DIR, 'reports');
   if (!existsSync(dir)) return null;
   try {
     const pointer = latestAuditPointer(cwd);
@@ -465,7 +466,7 @@ ${data.cognitive.length ? `<section id="complexity"><h2>Complexity</h2><table><t
 }
 
 export function writeProjectReport(cwd: string, data: Awaited<ReturnType<typeof buildProjectReportData>>, mdOnly: boolean): { mdFile: string; htmlFile?: string; md: string } {
-  const outDir = join(cwd, '.ai-runtime');
+  const outDir = join(cwd, AI_RUNTIME_DIR);
   const reportsDir = join(outDir, 'reports');
   mkdirSync(outDir, { recursive: true });
   mkdirSync(reportsDir, { recursive: true });

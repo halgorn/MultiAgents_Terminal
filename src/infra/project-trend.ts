@@ -5,6 +5,7 @@ import type { SeoCrawlerReport } from './seo-analyzer.js';
 import type { DatabaseReport } from './db-analyzer.js';
 import type { PerformanceReport } from './performance-analyzer.js';
 import type { LineSizeReport } from './line-size-analyzer.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export interface ProjectSnapshot {
   createdAt: string;
@@ -25,7 +26,7 @@ export interface ProjectTrend {
 }
 
 function historyPath(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'reports', 'project-history.json');
+  return join(cwd, AI_RUNTIME_DIR, 'reports', 'project-history.json');
 }
 
 function loadHistory(cwd: string): ProjectSnapshot[] {

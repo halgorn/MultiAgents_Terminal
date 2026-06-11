@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
+import { AI_RUNTIME_DIR } from '../infra/paths.js';
 
 export interface TokenUsage {
   inputTokens: number;
@@ -104,7 +105,7 @@ export class CostTracker {
 
 // ── Session Budget ────────────────────────────────────────────────────────────
 
-const SESSION_BUDGET_FILE = join('.ai-runtime', 'session-budget.json');
+const SESSION_BUDGET_FILE = join(AI_RUNTIME_DIR, 'session-budget.json');
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 const AVG_SCANNER_COST_USD: Record<string, number> = {

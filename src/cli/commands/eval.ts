@@ -7,6 +7,7 @@ import { embedTextRemote, embedText } from '../../infra/embeddings.js';
 import { createVectorStore } from '../../infra/vector-store.js';
 import { rerankWithLLM, rerankLocal } from '../../infra/reranker.js';
 import { BM25Index, rrfScore } from '../../infra/bm25.js';
+import { AI_RUNTIME_DIR } from '../../infra/paths.js';
 
 // ── Golden Set Schema ─────────────────────────────────────────────────────────
 // .ai-memory/eval/retrieval.json:
@@ -213,7 +214,7 @@ export function registerEval(program: Command): void {
       }
 
       // Save report
-      const outDir = join(cwd, '.ai-runtime', 'eval');
+      const outDir = join(cwd, AI_RUNTIME_DIR, 'eval');
       mkdirSync(outDir, { recursive: true });
       const outPath = join(outDir, `retrieval-${Date.now()}.json`);
       writeFileSync(outPath, JSON.stringify(report, null, 2), 'utf8');

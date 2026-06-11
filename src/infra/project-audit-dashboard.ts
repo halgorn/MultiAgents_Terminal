@@ -3,6 +3,7 @@ import { join } from 'path';
 import type { AuditFinding, AuditReport } from '../schemas/audit.js';
 import { SEVERITY_RANK } from './audit-model.js';
 import { displayProjectName } from './project-name.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 interface DomainSnapshot {
   domain: string;
@@ -33,11 +34,11 @@ function esc(value: unknown): string {
 }
 
 function domainsDir(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'reports', 'domains');
+  return join(cwd, AI_RUNTIME_DIR, 'reports', 'domains');
 }
 
 export function projectReportPath(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'reports', 'project.html');
+  return join(cwd, AI_RUNTIME_DIR, 'reports', 'project.html');
 }
 
 function loadAllDomains(cwd: string): DomainSnapshot[] {

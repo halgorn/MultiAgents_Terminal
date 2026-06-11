@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import type { RepoChunk, RepoIndex } from './repo-index.js';
 import { cosineSimilarity, embedBatch, embedText, embeddingProvider } from './embeddings.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 interface RepoVectorEntry {
   file: string;
@@ -33,7 +34,7 @@ export interface RepoVectorResult {
 }
 
 function indexPath(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'repo-vectors.json');
+  return join(cwd, AI_RUNTIME_DIR, 'repo-vectors.json');
 }
 
 function hashIndex(index: RepoIndex, provider: string): string {

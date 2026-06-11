@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
 import chalk from 'chalk';
+import { AI_RUNTIME_DIR } from '../../infra/paths.js';
 
 const DEEPEVAL_SCRIPT = `from deepeval import assert_test
 from deepeval.metrics import AnswerRelevancyMetric
@@ -29,7 +30,7 @@ export function registerDeepEval(program: Command): void {
     .description('Create starter DeepEval test script and requirements file')
     .action(() => {
       const cwd = process.cwd();
-      const dir = join(cwd, '.ai-runtime', 'eval', 'deepeval');
+      const dir = join(cwd, AI_RUNTIME_DIR, 'eval', 'deepeval');
       mkdirSync(dir, { recursive: true });
       const scriptPath = join(dir, 'quickcheck.py');
       const reqPath = join(dir, 'requirements.txt');
@@ -45,7 +46,7 @@ export function registerDeepEval(program: Command): void {
     .description('Run DeepEval quickcheck via python3 if installed')
     .action(() => {
       const cwd = process.cwd();
-      const scriptPath = join(cwd, '.ai-runtime', 'eval', 'deepeval', 'quickcheck.py');
+      const scriptPath = join(cwd, AI_RUNTIME_DIR, 'eval', 'deepeval', 'quickcheck.py');
       if (!existsSync(scriptPath)) {
         console.log(chalk.yellow('DeepEval quickcheck is not initialized.'));
         console.log(chalk.gray('Run: aion deepeval init'));

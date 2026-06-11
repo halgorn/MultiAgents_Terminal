@@ -10,6 +10,7 @@ import { displayProjectName } from '../../infra/project-name.js';
 
 import type { DepGraph } from '../../infra/dep-graph.js';
 import type { RepoIndex } from '../../infra/repo-index.js';
+import { AI_RUNTIME_DIR } from '../../infra/paths.js';
 
 interface GraphNode {
   id: string;
@@ -306,7 +307,7 @@ function openFile(filePath: string): void {
 }
 
 export function writeGraphHtml(cwd: string, index: RepoIndex, dep: DepGraph): string {
-  const outDir = join(cwd, '.ai-runtime');
+  const outDir = join(cwd, AI_RUNTIME_DIR);
   mkdirSync(outDir, { recursive: true });
   const d3Src = fetchD3(outDir);
   const data = buildGraphData(index, dep);
@@ -326,7 +327,7 @@ export function registerGraph(program: Command): void {
     .option('--rebuild', 'force rebuild of repo index before generating')
     .action(async (_target: string = '.', options: { open: boolean; rebuild?: boolean; output?: string }) => {
       const cwd = process.cwd();
-      const outDir = join(cwd, '.ai-runtime');
+      const outDir = join(cwd, AI_RUNTIME_DIR);
       mkdirSync(outDir, { recursive: true });
 
       console.log('Building repository index…');

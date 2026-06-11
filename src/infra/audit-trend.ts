@@ -2,8 +2,9 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
 import chalk from 'chalk';
+import { AI_RUNTIME_DIR } from './paths.js';
 
-const TREND_FILE = '.ai-runtime/health-trend.json';
+const TREND_FILE = join(AI_RUNTIME_DIR, 'health-trend.json');
 const MAX_ENTRIES = 90;
 
 export interface TrendEntry {
@@ -46,7 +47,7 @@ export function appendTrend(cwd: string, entry: Omit<TrendEntry, 'gitSha' | 'git
     trend.entries = trend.entries.slice(trend.entries.length - MAX_ENTRIES);
   }
 
-  mkdirSync(join(cwd, '.ai-runtime'), { recursive: true });
+  mkdirSync(join(cwd, AI_RUNTIME_DIR), { recursive: true });
   writeFileSync(join(cwd, TREND_FILE), JSON.stringify(trend, null, 2), 'utf8');
 }
 

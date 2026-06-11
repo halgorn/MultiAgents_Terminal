@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { ScanDomain } from '../prompts/scanner.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export interface PersonaPreset {
   name: string;
@@ -94,7 +95,7 @@ export function parseDomains(raw: string): ScanDomain[] {
 export function loadPersonaConfig(cwd: string): PersonaConfig | null {
   const paths = [
     join(cwd, '.ai-personas.json'),
-    join(cwd, '.ai-runtime', 'personas.json'),
+    join(cwd, AI_RUNTIME_DIR, 'personas.json'),
   ];
   for (const p of paths) {
     if (!existsSync(p)) continue;

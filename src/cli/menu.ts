@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { selectOne, printHeader } from './tui.js';
 import type { MenuItem } from './tui.js';
 import { displayProjectName } from '../infra/project-name.js';
+import { AI_RUNTIME_DIR } from '../infra/paths.js';
 
 // ── Kept for external consumers (audit command, tests) ────────────────────────
 export type { MenuItem };
@@ -182,7 +183,7 @@ async function loadCapState(cwd: string): Promise<void> {
 
 function checkIndexStaleness(root: string): string | null {
   try {
-    const idxPath = join(root, '.ai-runtime', 'repo-index.json');
+    const idxPath = join(root, AI_RUNTIME_DIR, 'repo-index.json');
     if (!existsSync(idxPath)) return null;
     const idxMtime = statSync(idxPath).mtimeMs;
     const srcDir = join(root, 'src');
@@ -191,7 +192,7 @@ function checkIndexStaleness(root: string): string | null {
     const walk = (dir: string, depth = 0) => {
       if (depth > 4) return;
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (['node_modules', 'dist', 'build', '.git', '.ai-runtime'].includes(entry.name)) continue;
+        if (['node_modules', 'dist', 'build', '.git', AI_RUNTIME_DIR].includes(entry.name)) continue;
         const full = join(dir, entry.name);
         if (entry.isDirectory()) { walk(full, depth + 1); continue; }
         if (!/\.(ts|tsx|js|jsx|py|go|rb|rs|java)$/.test(entry.name)) continue;
@@ -262,7 +263,7 @@ export async function runMenu(cwd: string): Promise<void> {
 
   try {
     const { existsSync: fsExists, readFileSync } = await import('fs');
-    const historyFile = join(cwd, '.ai-runtime', 'reports', 'audit-history.json');
+    const historyFile = join(cwd, AI_RUNTIME_DIR, 'reports', 'audit-history.json');
     if (fsExists(historyFile)) {
       const history = JSON.parse(readFileSync(historyFile, 'utf8')) as Array<{ criticalCount: number; highCount: number; createdAt: string }>;
       const last = history.at(-1);

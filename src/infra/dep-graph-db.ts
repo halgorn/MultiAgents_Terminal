@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { DepGraph } from './dep-graph.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 // ── Adjacency store ───────────────────────────────────────────────────────────
 // Stores dep-graph as { nodes: {file, loc, exports[]}, edges: [from, to][] }
@@ -15,7 +16,7 @@ interface StoredGraph {
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function storedPath(cwd: string): string {
-  return join(cwd, '.ai-runtime', 'dep-graph.json');
+  return join(cwd, AI_RUNTIME_DIR, 'dep-graph.json');
 }
 
 export function saveDepGraph(cwd: string, graph: DepGraph): void {
@@ -27,7 +28,7 @@ export function saveDepGraph(cwd: string, graph: DepGraph): void {
     for (const imp of node.imports) edges.push([node.file, imp]);
   }
   const stored: StoredGraph = { nodes, edges, builtAt: Date.now() };
-  mkdirSync(join(cwd, '.ai-runtime'), { recursive: true });
+  mkdirSync(join(cwd, AI_RUNTIME_DIR), { recursive: true });
   writeFileSync(storedPath(cwd), JSON.stringify(stored), 'utf8');
 }
 

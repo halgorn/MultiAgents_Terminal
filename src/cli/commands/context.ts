@@ -5,10 +5,11 @@ import { dirname, join } from 'path';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { renderAiContext, type FullSavedAuditReport } from '../../infra/audit-model.js';
 import { queryRepoIndex } from '../../infra/repo-query.js';
+import { AI_RUNTIME_DIR } from '../../infra/paths.js';
 
 function latestAudit(cwd: string): FullSavedAuditReport | null {
   try {
-    const pointerPath = join(cwd, '.ai-runtime', 'reports', 'latest-audit.json');
+    const pointerPath = join(cwd, AI_RUNTIME_DIR, 'reports', 'latest-audit.json');
     if (!existsSync(pointerPath)) return null;
     const pointer = JSON.parse(readFileSync(pointerPath, 'utf8')) as { runDir?: string; report?: string };
     const reportPath = pointer.runDir ? join(pointer.runDir, 'report.json') : pointer.report;
@@ -63,7 +64,7 @@ export function registerContext(program: Command): void {
       const topic = topicWords.join(' ').trim() || 'project architecture audit hotspots';
       const audit = options.audit || topicWords.length === 0 ? latestAudit(cwd) : null;
       const text = audit ? renderAiContext(audit, budget) : await buildTopicContext(cwd, topic, budget);
-      const out = options.out ?? join(cwd, '.ai-runtime', 'context', `${topic.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'project'}-context.md`);
+      const out = options.out ?? join(cwd, AI_RUNTIME_DIR, 'context', `${topic.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'project'}-context.md`);
       mkdirSync(dirname(out), { recursive: true });
       writeFileSync(out, text, 'utf8');
       console.log(chalk.bold.cyan('\nContext generated'));

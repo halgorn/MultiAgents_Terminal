@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'f
 import { dirname, join, relative } from 'path';
 import { chunkFile } from './chunker.js';
 import { isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.cs', '.php', '.kt', '.swift', '.c', '.cpp', '.h']);
 const MAX_FILE_SIZE = 200 * 1024;
@@ -297,7 +298,7 @@ export async function buildRepoIndex(cwd: string): Promise<RepoIndex> {
 }
 
 export function writeRepoIndex(cwd: string, index: RepoIndex): string {
-  const path = join(cwd, '.ai-runtime', 'repo-index.json');
+  const path = join(cwd, AI_RUNTIME_DIR, 'repo-index.json');
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(index, null, 2), 'utf8');
   return path;
