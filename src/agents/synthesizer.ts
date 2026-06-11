@@ -1,7 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildSynthesizerPrompt } from '../prompts/synthesizer.js';
 import { z } from 'zod';
-import { type AuditFinding, type AuditReport, type ScanReport, type DomainSection, SEVERITY_RANK } from '../schemas/audit.js';
+import { type AuditFinding, type AuditReport, type ScanReport, type DomainSection, SEVERITY_RANK, SEVERITY_ORDER } from '../schemas/audit.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
 
@@ -11,7 +11,6 @@ export interface SynthesizerInput {
   worktreePath: string;
 }
 
-const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
 const MIN_PER_DOMAIN = 2;
 
 // Compact schema — Claude only writes summary + topPriorities

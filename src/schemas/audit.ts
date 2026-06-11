@@ -53,6 +53,9 @@ export type ScanReport = z.infer<typeof ScanReportSchema>;
 export type AuditReport = z.infer<typeof AuditReportSchema>;
 export type DomainSection = z.infer<typeof DomainSectionSchema>;
 
+export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
+export type Severity = typeof SEVERITY_ORDER[number];
+
 export const SEVERITY_RANK: Record<string, number> = {
   critical: 5, high: 4, medium: 3, low: 2, info: 1,
 };
