@@ -7,6 +7,8 @@ import type { ProviderRunInput } from './types.js';
 import { createRuntimePolicy } from '../core/runtime-policy.js';
 import { ClaudeCliProvider, CodexCliProvider, safeProcessEnv } from './cli-provider.js';
 import { OpenRouterProvider } from './openrouter-provider.js';
+import { KimiProvider } from './kimi-provider.js';
+import { MiniMaxProvider } from './minimax-provider.js';
 import { SdkProvider, setAnthropicClientFactoryForTest } from './sdk-provider.js';
 
 function input(userMessage = 'user'): ProviderRunInput {
@@ -159,4 +161,58 @@ test('safeProcessEnv strips provider and cloud credentials from child processes'
 
   assert.equal(env['ANTHROPIC_API_KEY'], undefined);
   assert.equal(env['AWS_SECRET_ACCESS_KEY'], undefined);
+});
+
+test('KimiProvider throws when MOONSHOT_API_KEY is missing and streams correctly when set', async () => {
+  const originalFetch = globalThis.fetch;
+  const encoder = new TextEncoder();
+
+  await withEnv({ MOONSHOT_API_KEY: undefined }, async () => {
+    await assert.rejects(() => new KimiProvider('kimi-m3').run(input()), /MOONSHOT_API_KEY is not set/);
+  });
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"hi"}}],"usage":{"prompt_tokens":2,"completion_tokens":3}}\n\n'));
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+
+  await withEnv({ MOONSHOT_API_KEY: 'sk-kimi-test' }, async () => {
+    globalThis.fetch = async () => new Response(body, { status: 200 });
+    const chunks: string[] = [];
+    const out = await new KimiProvider('kimi-m3').run(input(), (_agent, text) => chunks.push(text));
+    assert.equal(out, 'hi');
+    assert.equal(chunks.join('').includes('tokens:2:3:0:0'), true);
+  });
+
+  globalThis.fetch = originalFetch;
+});
+
+test('MiniMaxProvider throws when MINIMAX_API_KEY is missing and streams correctly when set', async () => {
+  const originalFetch = globalThis.fetch;
+  const encoder = new TextEncoder();
+
+  await withEnv({ MINIMAX_API_KEY: undefined }, async () => {
+    await assert.rejects(() => new MiniMaxProvider('MiniMax-Text-01').run(input()), /MINIMAX_API_KEY is not set/);
+  });
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":5,"completion_tokens":6}}\n\n'));
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+
+  await withEnv({ MINIMAX_API_KEY: 'minimax-test-key' }, async () => {
+    globalThis.fetch = async () => new Response(body, { status: 200 });
+    const chunks: string[] = [];
+    const out = await new MiniMaxProvider('MiniMax-Text-01').run(input(), (_agent, text) => chunks.push(text));
+    assert.equal(out, 'ok');
+    assert.equal(chunks.join('').includes('tokens:5:6:0:0'), true);
+  });
+
+  globalThis.fetch = originalFetch;
 });
