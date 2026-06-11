@@ -68,6 +68,9 @@ export function registerChat(program: Command): void {
       const projectName = displayProjectName(cwd);
       console.log(chalk.bold.cyan(`\n  💬 Aion Chat — ${projectName}`));
       console.log(chalk.dim(`  Provider: ${provider}  Budget: ${budget}  Context: ${repoContext.length} chars`));
+      if (repoContext.startsWith('(No repo')) {
+        console.log(chalk.yellow('  ⚠ No repo index available. Code awareness is limited. Run "aion index" first.'));
+      }
       console.log(chalk.dim('  Type "exit" or Ctrl+C to quit.'));
       console.log(chalk.dim('  Special: "context" to show injected context, "/context <query>" to refresh it.\n'));
 
