@@ -1,6 +1,7 @@
 import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { WORKTREES_DIR } from './paths.js';
 
 export interface WorktreeInfo {
   path: string;
@@ -25,7 +26,7 @@ function assertGit(cwd: string, args: string[]): string {
 export function createWorktree(cwd: string, agentName: string, taskId: string): string {
   const shortId = taskId.slice(0, 8);
   const name = `${agentName}-${shortId}`;
-  const worktreePath = join(cwd, '.worktrees', name);
+  const worktreePath = join(cwd, WORKTREES_DIR, name);
   const branch = `ai/${name}`;
 
   if (existsSync(worktreePath)) return worktreePath;
@@ -39,7 +40,7 @@ export function createWorktree(cwd: string, agentName: string, taskId: string): 
 export function removeWorktree(cwd: string, agentName: string, taskId: string): void {
   const shortId = taskId.slice(0, 8);
   const name = `${agentName}-${shortId}`;
-  const worktreePath = join(cwd, '.worktrees', name);
+  const worktreePath = join(cwd, WORKTREES_DIR, name);
 
   if (!existsSync(worktreePath)) return;
 
