@@ -35,8 +35,10 @@ export function isGeneratedArtifact(path: string): boolean {
   return GENERATED_FILE_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+import { BUDGET_NAMES } from '../core/runtime-policy.js';
+
 export function parseBudget(v: string): 'low' | 'normal' | 'deep' {
-  return (['low', 'normal', 'deep'].includes(v) ? v : 'low') as 'low' | 'normal' | 'deep';
+  return ((BUDGET_NAMES as readonly string[]).includes(v) ? v : 'low') as 'low' | 'normal' | 'deep';
 }
 
 export function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
