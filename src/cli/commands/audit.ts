@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import { Orchestrator } from '../../core/orchestrator.js';
 import { AuditPipeline } from '../../core/pipelines/audit-pipeline.js';
-import { createRuntimePolicy } from '../../core/runtime-policy.js';
+import { createRuntimePolicy, type ProviderName } from '../../core/runtime-policy.js';
 import { CostTracker } from '../../core/cost-tracker.js';
 import { Renderer } from '../ui/renderer.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
@@ -14,7 +14,7 @@ import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 interface AuditOptions {
   scanners?: string;
   budget: string;
-  provider?: string;
+  provider?: ProviderName;
   model?: string;
   preset?: string;
   domains?: string;
@@ -154,7 +154,12 @@ export function registerAudit(program: Command): void {
       const policyInput = {
         budget,
         ...(mergedOptions.model ? { openrouterModel: mergedOptions.model } : {}),
-        ...(mergedOptions.provider === 'openrouter' ? { plannerProvider: 'openrouter' as const, investigatorProvider: 'openrouter' as const, developerProvider: 'openrouter' as const, reviewerProvider: 'openrouter' as const } : {}),
+        ...(mergedOptions.provider && mergedOptions.provider !== 'claude' ? {
+          plannerProvider: mergedOptions.provider,
+          investigatorProvider: mergedOptions.provider,
+          developerProvider: mergedOptions.provider,
+          reviewerProvider: mergedOptions.provider,
+        } : {}),
       };
       const policy = createRuntimePolicy(policyInput);
       if (options.dryRun) {
