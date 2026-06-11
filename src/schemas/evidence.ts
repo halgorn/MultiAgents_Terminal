@@ -9,7 +9,7 @@ export const EvidenceReportSchema = z.object({
     .array(
       z.object({
         path: z.string(),
-        line: z.number().int().nonnegative(),
+        line: z.number().int().nonnegative().nullable().optional(),
         snippet: z.string(),
       }),
     )

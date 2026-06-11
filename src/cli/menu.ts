@@ -43,7 +43,15 @@ export const BUDGETS = [
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
 type AuditMode = 'local-only' | 'normal';
-type MenuAction = 'local-check' | 'seo' | 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'sep' | 'quit';
+type MenuAction = 'local-check' | 'seo' | 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'change-provider' | 'sep' | 'quit';
+
+const PROVIDER_ITEMS = [
+  { label: 'claude',      hint: 'Anthropic Claude (default)',        value: 'claude' },
+  { label: 'minimax',     hint: 'MiniMax — requires MINIMAX_API_KEY', value: 'minimax' },
+  { label: 'kimi',        hint: 'Moonshot Kimi — requires MOONSHOT_API_KEY', value: 'kimi' },
+  { label: 'openrouter',  hint: 'OpenRouter — requires OPENROUTER_API_KEY', value: 'openrouter' },
+  { label: 'codex',       hint: 'OpenAI Codex CLI',                  value: 'codex' },
+];
 
 const AUDIT_DOMAIN_ARGS: Record<AuditTrack, string> = {
   bugs: 'bugs,error-handling,architecture,testing',
@@ -139,13 +147,14 @@ async function chooseAuditMode(track: AuditTrack): Promise<AuditMode | null> {
   return mode;
 }
 
-function runAuditTrack(cwd: string, track: AuditTrack, mode: AuditMode): void {
+function runAuditTrack(cwd: string, track: AuditTrack, mode: AuditMode, provider?: string): void {
   if (mode === 'local-only') {
     const args = ['--cwd', cwd, 'audit', '.', '--domains', AUDIT_DOMAIN_ARGS[track]];
     run([...args, '--local-only']);
     return;
   }
   const args = ['--cwd', cwd, 'audit', '.', '--domains', AUDIT_AI_DOMAIN_ARGS[track]];
+  if (provider && provider !== 'claude') args.push('--provider', provider);
   run([...args, '--budget', 'normal']);
 }
 
@@ -214,25 +223,34 @@ export function runMenuFallback(cwd: string): void {
 
 // ── Main menu items ───────────────────────────────────────────────────────────
 
-export const MAIN_ITEMS: Array<MenuItem<MenuAction>> = [
-  { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM + complexity', value: 'local-check' },
-  { label: '🌐 SEO & Crawlers',         hint: 'zero token · Next.js routes, sitemap, robots, analytics', value: 'seo' },
-  { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',                      value: 'bugs' },
-  { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',                      value: 'security' },
-  { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',                      value: 'perf' },
-  { label: '🔧 Fix file',              hint: 'uses AI · asks for a path and runs the fix pipeline',     value: 'fix' },
-  { label: '🔍 Analyze problem',       hint: 'uses AI · asks for a focused description',                value: 'analyze' },
-  { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',                     value: 'assistant' },
-  { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',                    value: 'chat-qa' },
-  { label: '📋 View report',           hint: 'zero token · opens the unified main report',              value: 'report' },
-  { label: '', value: 'sep', separator: true },
-  { label: '  Quit', value: 'quit' },
-];
+function buildMainItems(provider: string): Array<MenuItem<MenuAction>> {
+  return [
+    { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM + complexity', value: 'local-check' },
+    { label: '🌐 SEO & Crawlers',         hint: 'zero token · Next.js routes, sitemap, robots, analytics', value: 'seo' },
+    { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',                      value: 'bugs' },
+    { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',                      value: 'security' },
+    { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',                      value: 'perf' },
+    { label: '🔧 Fix file',              hint: 'uses AI · asks for a path and runs the fix pipeline',     value: 'fix' },
+    { label: '🔍 Analyze problem',       hint: 'uses AI · asks for a focused description',                value: 'analyze' },
+    { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',                     value: 'assistant' },
+    { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',                    value: 'chat-qa' },
+    { label: '📋 View report',           hint: 'zero token · opens the unified main report',              value: 'report' },
+    { label: '', value: 'sep', separator: true },
+    { label: `⚙️  Provider: ${chalk.cyan(provider)}`, hint: 'change AI provider for this session', value: 'change-provider' },
+    { label: '  Quit', value: 'quit' },
+  ];
+}
+
+export const MAIN_ITEMS: Array<MenuItem<MenuAction>> = buildMainItems('claude');
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
 export async function runMenu(cwd: string): Promise<void> {
   if (!process.stdin.isTTY) { runMenuFallback(cwd); return; }
+
+  const { loadAionConfig } = await import('../infra/aion-config.js');
+  const aionConfig = loadAionConfig(cwd);
+  let currentProvider: string = aionConfig.provider ?? 'claude';
 
   const projectName = displayProjectName(cwd);
   let info = projectName;
@@ -267,7 +285,8 @@ export async function runMenu(cwd: string): Promise<void> {
     const rag = _ragReady ? chalk.green('RAG ready') : chalk.dim('RAG optional');
     const setup = _setupReady ? chalk.green('setup ok') : chalk.dim('initial setup pending');
     const lf = `LangFuse ${currentLangfuseLabel()}`;
-    return `  zero token: diagnostics/report/local audit   uses AI: fix/analyze/chat/normal audit   ${setup}   ${rag}   ${lf}`;
+    const prov = `provider: ${chalk.cyan(currentProvider)}`;
+    return `  zero token: diagnostics/report/local audit   uses AI: fix/analyze/chat/normal audit   ${setup}   ${rag}   ${lf}   ${prov}`;
   }
 
   while (true) {
@@ -276,7 +295,7 @@ export async function runMenu(cwd: string): Promise<void> {
     console.log(buildStatusLine());
     if (staleWarning) console.log(`  ${staleWarning}`);
 
-    const action = await selectOne('What do you want to do?', MAIN_ITEMS);
+    const action = await selectOne('What do you want to do?', buildMainItems(currentProvider));
     if (!action || action === 'quit') break;
     if (action === 'sep') continue;
 
@@ -294,34 +313,50 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'bugs') {
       const mode = await chooseAuditMode('bugs');
-      if (mode) runAuditTrack(cwd, 'bugs', mode);
+      if (mode) runAuditTrack(cwd, 'bugs', mode, currentProvider);
       await pressEnter();
       continue;
     }
 
     if (action === 'security') {
       const mode = await chooseAuditMode('security');
-      if (mode) runAuditTrack(cwd, 'security', mode);
+      if (mode) runAuditTrack(cwd, 'security', mode, currentProvider);
       await pressEnter();
       continue;
     }
 
     if (action === 'perf') {
       const mode = await chooseAuditMode('perf');
-      if (mode) runAuditTrack(cwd, 'perf', mode);
+      if (mode) runAuditTrack(cwd, 'perf', mode, currentProvider);
       await pressEnter();
       continue;
     }
 
     if (action === 'fix') {
       const file = await promptLine('File to fix (relative path)');
-      if (file) { run(['--cwd', cwd, 'fix', file]); await pressEnter(); }
+      if (file) {
+        const args = ['--cwd', cwd, 'fix', file];
+        if (currentProvider !== 'claude') args.push('--provider', currentProvider);
+        run(args);
+        await pressEnter();
+      }
       continue;
     }
 
     if (action === 'analyze') {
       const target = await promptLine('Describe the problem');
-      if (target) { run(['--cwd', cwd, 'analyze', target]); await pressEnter(); }
+      if (target) {
+        const args = ['--cwd', cwd, 'analyze', target];
+        if (currentProvider !== 'claude') args.push('--provider', currentProvider);
+        run(args);
+        await pressEnter();
+      }
+      continue;
+    }
+
+    if (action === 'change-provider') {
+      const picked = await selectOne('Select AI provider', PROVIDER_ITEMS);
+      if (picked) currentProvider = picked;
       continue;
     }
 
