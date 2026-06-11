@@ -121,7 +121,7 @@ async function pressEnter(): Promise<void> {
       resolve();
     };
     const onData = cleanup;
-    const onSigint = cleanup;
+    const onSigint = () => { process.stdout.write('\n'); process.exit(0); };
     process.stdin.resume();
     process.stdin.once('data', onData);
     process.once('SIGINT', onSigint);
