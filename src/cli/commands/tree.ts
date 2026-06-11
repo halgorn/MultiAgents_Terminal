@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import type { AuditFinding } from '../../schemas/audit.js';
-import { AI_RUNTIME_DIR } from '../../infra/paths.js';
+import { latestAuditPointer } from '../../infra/project-report.js';
 
 interface Node {
   name: string;
@@ -21,10 +21,8 @@ function newNode(name: string, path: string): Node {
 
 function latestFindings(cwd: string): AuditFinding[] {
   try {
-    const pointerPath = join(cwd, AI_RUNTIME_DIR, 'reports', 'latest-audit.json');
-    if (!existsSync(pointerPath)) return [];
-    const pointer = JSON.parse(readFileSync(pointerPath, 'utf8')) as { runDir?: string; report?: string };
-    const reportPath = pointer.runDir ? join(pointer.runDir, 'report.json') : pointer.report;
+    const pointer = latestAuditPointer(cwd);
+    const reportPath = pointer?.runDir ? join(pointer.runDir, 'report.json') : pointer?.report;
     if (!reportPath || !existsSync(reportPath)) return [];
     return (JSON.parse(readFileSync(reportPath, 'utf8')) as { findings?: AuditFinding[] }).findings ?? [];
   } catch {
