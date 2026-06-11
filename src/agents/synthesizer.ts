@@ -3,6 +3,7 @@ import { buildSynthesizerPrompt } from '../prompts/synthesizer.js';
 import { z } from 'zod';
 import { type AuditFinding, type AuditReport, type ScanReport, type DomainSection, SEVERITY_RANK } from '../schemas/audit.js';
 import type { TaskState } from '../core/state-machine.js';
+import type { ProviderName } from '../core/runtime-policy.js';
 
 export interface SynthesizerInput {
   scanReports: ScanReport[];
@@ -115,7 +116,7 @@ export class SynthesizerAgent extends BaseAgent<SynthesizerInput, AuditReport> {
   private domainSections: DomainSection[] = [];
   private totalFiles = 0;
 
-  constructor(provider: import('../core/runtime-policy.js').ProviderName = 'claude') {
+  constructor(provider: ProviderName = 'claude') {
     super({
       name: 'synthesizer',
       provider,
