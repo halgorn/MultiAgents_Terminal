@@ -2,10 +2,9 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import * as readline from 'readline';
 import { GraphAgent } from '../../agents/graph-agent.js';
-import { createRuntimePolicy, BUDGET_NAMES, PROVIDER_NAMES, type ProviderName, type BudgetName } from '../../core/runtime-policy.js';
+import { createRuntimePolicy, BUDGET_NAMES, PROVIDER_NAMES, type ProviderName, type BudgetName, type RuntimePolicy } from '../../core/runtime-policy.js';
 import { displayProjectName } from '../../infra/project-name.js';
-import type { RuntimePolicy } from '../../core/runtime-policy.js';
-import { safeProcessEnv } from '../../providers/cli-provider.js';
+import { createProvider } from '../../providers/cli-provider.js';
 
 const SYSTEM_PROMPT = `You are an expert code assistant with deep knowledge of this repository.
 Answer questions concisely based on the provided repository context.
@@ -17,39 +16,16 @@ async function askAI(
   cwd: string,
   question: string,
   context: string,
-  provider: string,
+  provider: ProviderName,
   policy: RuntimePolicy,
   onChunk: (t: string) => void,
 ): Promise<void> {
   const systemPrompt = `${SYSTEM_PROMPT}\n\n--- REPOSITORY CONTEXT ---\n${context}\n--- END CONTEXT ---`;
-
-  const input = { agentName: 'chat', cwd, systemPrompt, userMessage: question, policy };
-
-  if (provider === 'openrouter') {
-    const { OpenRouterProvider } = await import('../../providers/openrouter-provider.js');
-    await new OpenRouterProvider(policy.openrouterModel).run(input, (_, text) => onChunk(text));
-    return;
-  }
-
-  // SDK provider (ANTHROPIC_API_KEY)
-  if (process.env['ANTHROPIC_API_KEY']) {
-    const { SdkProvider } = await import('../../providers/sdk-provider.js');
-    await new SdkProvider().run(input, (_, text) => onChunk(text));
-    return;
-  }
-
-  // Fallback: claude CLI
-  const { spawn } = await import('child_process');
-  await new Promise<void>((resolve) => {
-    const proc = spawn('claude', ['-p', question, '--system-prompt', systemPrompt], {
-      cwd,
-      stdio: ['ignore', 'pipe', 'ignore'],
-      env: safeProcessEnv(),
-    });
-    proc.stdout.on('data', (chunk: Buffer) => onChunk(chunk.toString()));
-    proc.on('close', () => resolve());
-    proc.on('error', () => resolve());
-  });
+  const providerInstance = createProvider(provider, policy);
+  await providerInstance.run(
+    { agentName: 'chat', cwd, systemPrompt, userMessage: question, policy },
+    (_, text) => onChunk(text),
+  );
 }
 
 export function registerChat(program: Command): void {
