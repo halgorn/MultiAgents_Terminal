@@ -102,6 +102,9 @@ function run(args: string[]): void {
   resetTty();
   drainStdin();
   if (result.error) console.error(chalk.red(result.error.message));
+  if (!result.error && result.status !== 0) {
+    console.error(chalk.red(`\n  ⚠ Command failed with status ${result.status}`));
+  }
 }
 
 async function pressEnter(): Promise<void> {
