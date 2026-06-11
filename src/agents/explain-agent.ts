@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildExplainPrompt, type ExplainMode } from '../prompts/explain.js';
 import type { TaskState } from '../core/state-machine.js';
+import type { ProviderName } from '../core/runtime-policy.js';
 
 export interface ExplainInput {
   worktreePath: string;
@@ -10,10 +11,10 @@ export interface ExplainInput {
 }
 
 export class ExplainAgent extends BaseAgent<ExplainInput, string> {
-  constructor(mode: ExplainMode) {
+  constructor(mode: ExplainMode, provider: ProviderName = 'claude') {
     super({
       name: `explain-${mode}`,
-      provider: 'claude',
+      provider,
       systemPrompt: buildExplainPrompt(mode),
     });
   }

@@ -93,7 +93,7 @@ export function registerExplain(program: Command): void {
       const policy = createRuntimePolicy(toRuntimePolicyInput(options));
       console.log(chalk.bold.cyan(`\nExplaining ${file}…\n`));
       const context = await buildFileContext(cwd, file);
-      const agent = new ExplainAgent('explain');
+      const agent = new ExplainAgent('explain', policy.plannerProvider);
       const run = await agent.run({ worktreePath: cwd, mode: 'explain', target: file, context }, policy);
       console.log(run.output);
     });
@@ -107,7 +107,7 @@ export function registerExplain(program: Command): void {
       const policy = createRuntimePolicy(toRuntimePolicyInput(options));
       console.log(chalk.bold.cyan(`\nImpact analysis: ${file}…\n`));
       const context = await buildImpactContext(cwd, file);
-      const agent = new ExplainAgent('impact');
+      const agent = new ExplainAgent('impact', policy.plannerProvider);
       const run = await agent.run({ worktreePath: cwd, mode: 'impact', target: file, context }, policy);
       console.log(run.output);
     });
@@ -122,7 +122,7 @@ export function registerExplain(program: Command): void {
       const projectName = displayProjectName(cwd);
       console.log(chalk.bold.cyan(`\nGenerating onboarding guide for ${projectName}…\n`));
       const context = await buildOnboardContext(cwd);
-      const agent = new ExplainAgent('onboard');
+      const agent = new ExplainAgent('onboard', policy.plannerProvider);
       const run = await agent.run({ worktreePath: cwd, mode: 'onboard', target: projectName, context }, policy);
       console.log(run.output);
     });
