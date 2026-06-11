@@ -1,12 +1,6 @@
 import type { AuditFinding, DomainSection } from '../schemas/audit.js';
-
-export const SEVERITY_RANK: Record<string, number> = {
-  critical: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
-  info: 0,
-};
+import { SEVERITY_RANK } from '../schemas/audit.js';
+export { SEVERITY_RANK } from '../schemas/audit.js';
 
 export interface CostSummary {
   totalUsd: number;

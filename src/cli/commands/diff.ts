@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { AuditFinding } from '../../schemas/audit.js';
+import { SEVERITY_RANK } from '../../schemas/audit.js';
 
 interface SavedAuditReport {
   findings: AuditFinding[];
@@ -41,7 +42,7 @@ function findingKey(f: AuditFinding): string {
 }
 
 function severityRank(s: string): number {
-  return { critical: 5, high: 4, medium: 3, low: 2, info: 1 }[s] ?? 0;
+  return SEVERITY_RANK[s] ?? 0;
 }
 
 const SEV_COLOR: Record<string, (s: string) => string> = {

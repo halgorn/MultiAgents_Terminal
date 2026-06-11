@@ -1,4 +1,5 @@
 import type { AuditReport, AuditFinding, FixSeverity } from '../../schemas/audit.js';
+import { SEVERITY_RANK } from '../../schemas/audit.js';
 import type { TaskResult } from '../task.js';
 import type { PipelineContext } from '../pipeline-context.js';
 import { runFixPipeline } from './fix-pipeline.js';
@@ -24,10 +25,6 @@ export interface AuditFixReport {
   skipped: number;
   results: AuditFixResult[];
 }
-
-const SEVERITY_RANK: Record<string, number> = {
-  critical: 4, high: 3, medium: 2, low: 1, info: 0,
-};
 
 function severityMeetsMin(severity: string, min: string): boolean {
   return (SEVERITY_RANK[severity] ?? 0) >= (SEVERITY_RANK[min] ?? 0);
