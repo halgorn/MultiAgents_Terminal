@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
 import { isIgnoredDirName } from '../cli/cli-utils.js';
+import { AI_RUNTIME_DIR } from './paths.js';
 
 export interface PatternSignal {
   pattern: string;
@@ -68,7 +69,7 @@ function grepCount(cwd: string, pattern: string): number {
     '--exclude=*.map',
     '--exclude=*.d.ts',
     '--exclude-dir=.git',
-    '--exclude-dir=.ai-runtime',
+    `--exclude-dir=${AI_RUNTIME_DIR}`,
     '--exclude-dir=.worktrees',
     '--include=*.py',
     '--include=*.ts',
@@ -98,7 +99,7 @@ function grepLines(cwd: string, pattern: string, ext = '*.py'): string[] {
     '--exclude=*.map',
     '--exclude=*.d.ts',
     '--exclude-dir=.git',
-    '--exclude-dir=.ai-runtime',
+    `--exclude-dir=${AI_RUNTIME_DIR}`,
     '--exclude-dir=.worktrees',
     `--include=${ext}`,
     pattern,

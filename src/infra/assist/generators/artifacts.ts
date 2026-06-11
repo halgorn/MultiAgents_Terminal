@@ -1,4 +1,5 @@
 import type { AssistArtifact, AssistPlan, ProjectDetection } from '../types.js';
+import { AI_RUNTIME_DIR } from '../../paths.js';
 
 function installCommand(detection: ProjectDetection): string {
   if (detection.packageManager === 'pnpm') return 'pnpm install --frozen-lockfile';
@@ -179,6 +180,6 @@ export function generateArtifacts(plan: AssistPlan): AssistArtifact[] {
     { path: 'deploy/nginx/aion-app.conf', kind: 'nginx', content: generateNginxConfig(plan) },
     { path: 'deploy/scripts/healthcheck.sh', kind: 'script', executable: true, content: generateHealthcheckScript(plan) },
     { path: 'deploy/scripts/rollback.sh', kind: 'script', executable: true, content: generateRollbackScript(plan) },
-    { path: '.ai-runtime/assist/README.md', kind: 'markdown', content: generateDeployReadme(plan) },
+    { path: `${AI_RUNTIME_DIR}/assist/README.md`, kind: 'markdown', content: generateDeployReadme(plan) },
   ];
 }
