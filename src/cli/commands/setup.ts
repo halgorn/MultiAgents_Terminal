@@ -90,6 +90,9 @@ async function chooseDomain(): Promise<string> {
 }
 
 export async function runProjectSetupWizard(cwd: string, options: SetupRunOptions = {}): Promise<SetupWizardResult> {
+  if (process.stdin.isTTY) {
+    process.stdout.write(chalk.bold.cyan('\n  🤖 Aion project setup wizard\n\n'));
+  }
   const budget = options.budget ?? (process.stdin.isTTY ? await chooseBudget() : 'low');
   const domain = options.domain ?? (process.stdin.isTTY ? await chooseDomain() : 'bugs');
   const scanners = Math.max(1, Math.min(2, options.scanners ?? (budget === 'normal' ? 2 : 1)));
@@ -173,7 +176,6 @@ export function registerSetup(program: Command): void {
         return;
       }
 
-      process.stdout.write(chalk.bold.cyan('\nAion project setup wizard\n'));
       const scanners = options.scanners ? Number.parseInt(options.scanners, 10) : undefined;
       const result = await runProjectSetupWizard(cwd, {
         budget: parseBudget(options.budget ?? 'low'),
