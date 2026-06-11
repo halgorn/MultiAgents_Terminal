@@ -69,7 +69,20 @@ export class Tracer {
     });
   }
 
-  flush(cwd: string): void {
+  flushPending(model = 'unknown'): void {
+    for (const [agent, p] of this.pending) {
+      const endMs = Date.now();
+      this.spans.push({
+        traceId: this.traceId, spanId: p.spanId, command: this.command,
+        agent, startMs: p.startMs, endMs, durationMs: endMs - p.startMs,
+        model, inputTokens: 0, outputTokens: 0, cacheTokens: 0, costUsd: 0, status: 'ok',
+      });
+    }
+    this.pending.clear();
+  }
+
+  flush(cwd: string, model?: string): void {
+    this.flushPending(model);
     if (this.spans.length === 0) return;
     const dir = join(cwd, '.ai-runtime');
     mkdirSync(dir, { recursive: true });

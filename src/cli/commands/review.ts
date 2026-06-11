@@ -18,7 +18,9 @@ export function registerReview(program: Command): void {
       orch.on('agent:done', ({ agentName, durationMs }) => renderer.agentDone(agentName, durationMs));
       orch.on('error', ({ message }) => renderer.showError(message));
 
+      orch.startTrace('review');
       const result = await runReviewViaLangGraph(orch, target);
+      await orch.flushTrace();
       renderer.showResult(result);
 
       process.exit(result.state === 'REVIEWED' ? 0 : 1);

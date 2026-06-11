@@ -55,7 +55,7 @@ export class Orchestrator extends EventEmitter {
   }
 
   async flushTrace(): Promise<void> {
-    this.tracer?.flush(this.cwd);
+    this.tracer?.flush(this.cwd, this.policy.claudeModel);
     this.tracer = null;
     const fallbackCommand = this.traceCommand ?? 'run';
     endLangfuseObservation(this.langfuseRoot, {
