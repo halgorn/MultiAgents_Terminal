@@ -52,3 +52,7 @@ export type AuditFinding = z.infer<typeof AuditFindingSchema>;
 export type ScanReport = z.infer<typeof ScanReportSchema>;
 export type AuditReport = z.infer<typeof AuditReportSchema>;
 export type DomainSection = z.infer<typeof DomainSectionSchema>;
+
+export const SEVERITY_RANK: Record<string, number> = {
+  critical: 5, high: 4, medium: 3, low: 2, info: 1,
+};

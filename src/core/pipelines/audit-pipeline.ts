@@ -7,6 +7,7 @@ import { createWorktree, removeWorktree } from '../../infra/worktree.js';
 import { ScannerAgent } from '../../agents/scanner.js';
 import { SynthesizerAgent } from '../../agents/synthesizer.js';
 import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.js';
+import { SEVERITY_RANK } from '../../schemas/audit.js';
 import { validateAuditFindings } from '../../infra/evidence-gate.js';
 import { loadRepoIndex } from '../../infra/repo-query.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
@@ -32,16 +33,6 @@ const MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS = 30;
 const MAX_FINDINGS_PER_SCANNER = 10;
 const MAX_FINDINGS_FOR_SYNTHESIS = 8;
 const MAX_FINDING_TEXT = 220;
-
-function severityRank(severity: string): number {
-  switch (severity) {
-    case 'critical': return 5;
-    case 'high': return 4;
-    case 'medium': return 3;
-    case 'low': return 2;
-    default: return 1;
-  }
-}
 
 export { type AuditFileStats } from './audit-file-scanner.js';
 
@@ -70,7 +61,7 @@ function compactFinding(finding: AuditFinding): AuditFinding {
 export function compactScanReport(report: ScanReport, maxFindings = MAX_FINDINGS_PER_SCANNER): ScanReport {
   const findings = report.findings
     .map(compactFinding)
-    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+    .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1))
     .slice(0, maxFindings);
   return {
     filesScanned: report.filesScanned.slice(0, 80),
@@ -90,7 +81,7 @@ export function fallbackAuditReport(scanReports: ScanReport[], totalFiles: numbe
       seen.add(key);
       return true;
     })
-    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+    .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1));
 
   return {
     findings,
@@ -225,7 +216,7 @@ export class AuditPipeline {
       this.emit('agent:output', { agentName: 'audit', text: '\nRunning Semgrep pre-scan (no API tokens)...\n' });
       const semgrepResult = runSemgrep(this.cwd);
       const semgrepFindings = semgrepResult.findings
-        .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+        .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1))
         .slice(0, MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS);
       const semgrepReport: ScanReport = {
         filesScanned: semgrepResult.available ? allFiles.slice(0, semgrepResult.filesScanned) : [],
@@ -306,7 +297,7 @@ export class AuditPipeline {
 
           const start = Date.now();
           try {
-            const run = await new ScannerAgent(domain, i, n, scannerCtx).run(
+            const run = await new ScannerAgent(domain, i, n, scannerCtx, this.policy.plannerProvider).run(
               { domain, worktreePath: wt, scannerIndex: i, totalScanners: n, context: scannerCtx },
               this.policy,
               this.onChunk,
@@ -340,7 +331,7 @@ export class AuditPipeline {
       ];
       const synthStart = Date.now();
       try {
-        const synthRun = await new SynthesizerAgent().run(
+        const synthRun = await new SynthesizerAgent(this.policy.plannerProvider).run(
           { scanReports: reports, totalFiles: allFiles.length, worktreePath: synthDir },
           this.policy,
           this.onChunk,
@@ -409,7 +400,7 @@ export class AuditPipeline {
       if (!existing) {
         seen.set(key, f);
       } else {
-        const keepNew = severityRank(f.severity) > severityRank(existing.severity);
+        const keepNew = (SEVERITY_RANK[f.severity] ?? 1) > (SEVERITY_RANK[existing.severity] ?? 1);
         const merged = keepNew ? f : existing;
         const otherPersona = keepNew ? existing.persona : f.persona;
         seen.set(key, {
@@ -420,7 +411,7 @@ export class AuditPipeline {
         });
       }
     }
-    return [...seen.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+    return [...seen.values()].sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1));
   }
 
   private applyEvidenceGate(report: AuditReport): AuditReport {
