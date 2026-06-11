@@ -5,12 +5,13 @@ import { createRuntimePolicy } from '../../core/runtime-policy.js';
 import { CostTracker } from '../../core/cost-tracker.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
 import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
+import { SEVERITY_ORDER, type Severity } from '../../schemas/audit.js';
 import { parseBudget } from '../cli-utils.js';
 import { buildAssistPlan, saveAssistPlan } from '../../infra/assist/assist-plan.js';
 import { applyArtifacts, formatArtifactSummary } from '../../infra/assist/apply-artifacts.js';
 
-const SEVERITY_LEVELS = ['critical', 'high', 'medium', 'low'] as const;
-type Severity = (typeof SEVERITY_LEVELS)[number];
+type FailSeverity = Exclude<Severity, 'info'>;
+const SEVERITY_LEVELS = SEVERITY_ORDER.filter((s): s is FailSeverity => s !== 'info');
 
 interface CiOptions {
   budget: string;
@@ -24,8 +25,8 @@ interface CiOptions {
   dryRun?: boolean;
 }
 
-function parseFailOn(v: string): Severity {
-  return (SEVERITY_LEVELS.includes(v as Severity) ? v : 'high') as Severity;
+function parseFailOn(v: string): FailSeverity {
+  return (SEVERITY_LEVELS.includes(v as FailSeverity) ? v : 'high') as FailSeverity;
 }
 
 export function registerCi(program: Command): void {
