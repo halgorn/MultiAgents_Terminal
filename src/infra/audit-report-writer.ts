@@ -18,6 +18,8 @@ import {
   SEVERITY_RANK,
 } from './audit-model.js';
 
+export const DEFAULT_AI_CONTEXT_BUDGET = 8000;
+
 function esc(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -387,7 +389,7 @@ export function saveAuditReport(
   cwd: string,
   report: AuditReport,
   durationMs: number,
-  aiContextBudget = 8000,
+  aiContextBudget = DEFAULT_AI_CONTEXT_BUDGET,
   costSummary?: CostSummary,
 ): SavedAuditPaths {
   const dir = join(cwd, AI_RUNTIME_DIR, 'reports');

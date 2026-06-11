@@ -3,7 +3,7 @@ import { Orchestrator } from '../../core/orchestrator.js';
 import { AuditPipeline } from '../../core/pipelines/audit-pipeline.js';
 import { createRuntimePolicy } from '../../core/runtime-policy.js';
 import { CostTracker } from '../../core/cost-tracker.js';
-import { saveAuditReport } from '../../infra/audit-report-writer.js';
+import { saveAuditReport, DEFAULT_AI_CONTEXT_BUDGET } from '../../infra/audit-report-writer.js';
 import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
 import { SEVERITY_ORDER, type Severity } from '../../schemas/audit.js';
 import { parseBudget } from '../cli-utils.js';
@@ -110,7 +110,7 @@ export function registerCi(program: Command): void {
             outputTokens: e.usage.outputTokens,
           })),
         };
-        const saved = saveAuditReport(process.cwd(), report, durationMs, 8000, costSummary);
+        const saved = saveAuditReport(process.cwd(), report, durationMs, DEFAULT_AI_CONTEXT_BUDGET, costSummary);
 
         const failingFindings = report.findings.filter((f) => (SEVERITY_RANK[f.severity] ?? 0) >= failRank);
 
