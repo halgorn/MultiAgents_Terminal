@@ -19,11 +19,13 @@ export function registerAnalyze(program: Command): void {
       orch.on('error', ({ message }) => renderer.showError(message));
 
       orch.startTrace('analyze');
-      const result = await runAnalyzeViaLangGraph(orch, target);
-      await orch.flushTrace();
-      renderer.showResult(result);
-      renderer.showCost(orch.costs.summary());
-
-      process.exit(result.state === 'DONE' || result.state === 'REPRODUCED' ? 0 : 1);
+      try {
+        const result = await runAnalyzeViaLangGraph(orch, target);
+        renderer.showResult(result);
+        renderer.showCost(orch.costs.summary());
+        process.exit(result.state === 'DONE' || result.state === 'REPRODUCED' ? 0 : 1);
+      } finally {
+        await orch.flushTrace();
+      }
     });
 }
