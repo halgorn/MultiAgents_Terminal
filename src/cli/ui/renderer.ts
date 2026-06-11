@@ -69,7 +69,9 @@ export class Renderer {
   showError(err: unknown): void {
     for (const [, spinner] of this.spinners) spinner.fail();
     this.spinners.clear();
-    console.error(chalk.red('\n✗ Error: ') + (err instanceof Error ? err.message : String(err)));
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const msg = rawMsg.split('\n').map((line, i) => (i === 0 ? line : `    ${line}`)).join('\n');
+    console.error(chalk.red('\n✗ Error: ') + chalk.red(msg));
   }
 
   showCost(summary: string): void {
