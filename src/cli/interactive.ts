@@ -11,7 +11,7 @@ export async function runNaturalLanguage(input: string, cwd: string): Promise<vo
 
   if (intent === 'unknown') {
     // Default to analyze when intent is unclear
-    console.log(chalk.gray(`→ analyzing: "${target}"`));
+    console.log(chalk.yellow('  ⚠ Intent unclear, falling back to general analysis...'));
     await runWithRenderer(cwd, 'analyze', target);
     return;
   }
