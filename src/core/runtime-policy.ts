@@ -1,6 +1,13 @@
 export type BudgetName = 'low' | 'normal' | 'deep';
-export type ProviderName = 'claude' | 'codex' | 'openrouter';
+export type ProviderName = 'claude' | 'codex' | 'openrouter' | 'kimi' | 'minimax';
 export type ClaudeModel = 'claude-haiku-4-5-20251001' | 'claude-sonnet-4-6' | 'claude-opus-4-8';
+
+export const DEFAULT_MODELS = {
+  codex: 'gpt-5-codex',
+  openrouter: 'moonshotai/kimi-k2',
+  kimi: 'kimi-m3',
+  minimax: 'MiniMax-Text-01',
+} as const;
 
 export interface RuntimePolicy {
   budget: BudgetName;
@@ -11,6 +18,8 @@ export interface RuntimePolicy {
   claudeModel: ClaudeModel;
   codexModel: string;
   openrouterModel: string;
+  kimiModel: string;
+  minimaxModel: string;
   plannerProvider: ProviderName;
   investigatorProvider: ProviderName;
   developerProvider: ProviderName;
@@ -30,6 +39,8 @@ export interface RuntimePolicyInput {
   reviewerProvider?: ProviderName;
   codexModel?: string;
   openrouterModel?: string;
+  kimiModel?: string;
+  minimaxModel?: string;
 }
 
 const DEFAULT_MAX_FILE_LINES = 500;
@@ -51,8 +62,10 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
     maxFileLines: input.maxFileLines ?? DEFAULT_MAX_FILE_LINES,
     maxOutputChars: input.maxOutputChars ?? defaults.maxOutputChars,
     claudeModel: defaults.claudeModel,
-    codexModel: input.codexModel ?? process.env['AI_RUNTIME_CODEX_MODEL'] ?? 'gpt-5-codex',
-    openrouterModel: input.openrouterModel ?? process.env['OPENROUTER_MODEL'] ?? 'moonshotai/kimi-k2',
+    codexModel: input.codexModel ?? process.env['AI_RUNTIME_CODEX_MODEL'] ?? DEFAULT_MODELS.codex,
+    openrouterModel: input.openrouterModel ?? process.env['OPENROUTER_MODEL'] ?? DEFAULT_MODELS.openrouter,
+    kimiModel: input.kimiModel ?? process.env['KIMI_MODEL'] ?? DEFAULT_MODELS.kimi,
+    minimaxModel: input.minimaxModel ?? process.env['MINIMAX_MODEL'] ?? DEFAULT_MODELS.minimax,
     plannerProvider: input.plannerProvider ?? 'claude',
     investigatorProvider: input.investigatorProvider ?? 'claude',
     developerProvider: input.developerProvider ?? 'claude',

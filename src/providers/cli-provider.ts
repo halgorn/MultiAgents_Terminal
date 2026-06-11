@@ -3,9 +3,11 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { spawn, spawnSync } from 'child_process';
 import type { ProviderName, RuntimePolicy } from '../core/runtime-policy.js';
-import { limitChars } from '../core/runtime-policy.js';
+import { limitChars, DEFAULT_MODELS } from '../core/runtime-policy.js';
 import { SdkProvider } from './sdk-provider.js';
 import { OpenRouterProvider } from './openrouter-provider.js';
+import { KimiProvider } from './kimi-provider.js';
+import { MiniMaxProvider } from './minimax-provider.js';
 export type { ProviderRunInput, AgentProvider } from './types.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -177,22 +179,34 @@ export class CodexCliProvider implements AgentProvider {
   }
 }
 
-export function createProvider(name: ProviderName, policy?: { openrouterModel?: string }): AgentProvider {
+export function createProvider(name: ProviderName, policy?: { openrouterModel?: string; kimiModel?: string; minimaxModel?: string }): AgentProvider {
   if (name === 'codex') return new CodexCliProvider();
   if (name === 'openrouter') {
-    const model = policy?.openrouterModel ?? process.env['OPENROUTER_MODEL'] ?? 'moonshotai/kimi-k2';
+    const model = policy?.openrouterModel ?? process.env['OPENROUTER_MODEL'] ?? DEFAULT_MODELS.openrouter;
     return new OpenRouterProvider(model);
+  }
+  if (name === 'kimi') {
+    const model = policy?.kimiModel ?? process.env['KIMI_MODEL'] ?? DEFAULT_MODELS.kimi;
+    return new KimiProvider(model);
+  }
+  if (name === 'minimax') {
+    const model = policy?.minimaxModel ?? process.env['MINIMAX_MODEL'] ?? DEFAULT_MODELS.minimax;
+    return new MiniMaxProvider(model);
   }
   // SDK provider when key is set: enables prompt caching + real streaming
   // Falls back to CLI provider when no key (uses claude CLI session auth)
   if (process.env['ANTHROPIC_API_KEY']) return new SdkProvider();
-  if (process.env['OPENROUTER_API_KEY']) return new OpenRouterProvider(process.env['OPENROUTER_MODEL'] ?? 'moonshotai/kimi-k2');
+  if (process.env['OPENROUTER_API_KEY']) return new OpenRouterProvider(process.env['OPENROUTER_MODEL'] ?? DEFAULT_MODELS.openrouter);
+  if (process.env['MOONSHOT_API_KEY']) return new KimiProvider(process.env['KIMI_MODEL'] ?? DEFAULT_MODELS.kimi);
+  if (process.env['MINIMAX_API_KEY']) return new MiniMaxProvider(process.env['MINIMAX_MODEL'] ?? DEFAULT_MODELS.minimax);
   const which = spawnSync('which', ['claude'], { encoding: 'utf8' });
   if (which.status !== 0) {
     throw new Error(
       'No AI provider configured.\n' +
       '  • Set ANTHROPIC_API_KEY=sk-ant-...\n' +
       '  • or OPENROUTER_API_KEY=sk-or-...\n' +
+      '  • or MOONSHOT_API_KEY=sk-... (Kimi M3)\n' +
+      '  • or MINIMAX_API_KEY=... (MiniMax)\n' +
       '  • or install Claude CLI: https://claude.ai/download'
     );
   }
