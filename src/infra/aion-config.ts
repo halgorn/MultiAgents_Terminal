@@ -1,14 +1,14 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import type { ProviderName } from '../core/runtime-policy.js';
+import type { ProviderName, BudgetName } from '../core/runtime-policy.js';
 
 const CONFIG_FILE = '.aionrc.json';
 
 export interface AionConfig {
   /** Default persona preset: security | ai | backend | devops | quality | saas | fintech | full */
   preset?: string;
-  /** Default budget: low | normal | deep */
-  budget?: 'low' | 'normal' | 'deep';
+  /** Default budget */
+  budget?: BudgetName;
   /** Default AI provider */
   provider?: ProviderName;
   /** Default model override (for openrouter) */
