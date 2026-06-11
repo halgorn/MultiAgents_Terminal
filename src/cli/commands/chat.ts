@@ -40,7 +40,9 @@ export function registerChat(program: Command): void {
       const cwd = process.cwd();
       const contextLimit = Math.max(1000, Math.min(20000, parseInt(options.contextLimit, 10) || 6000));
       const budget = ((BUDGET_NAMES as readonly string[]).includes(options.budget) ? options.budget : 'normal') as BudgetName;
-      const provider: ProviderName = (options.provider as ProviderName | undefined)
+      const provider: ProviderName = ((PROVIDER_NAMES as readonly string[]).includes(options.provider ?? '')
+        ? options.provider as ProviderName
+        : undefined)
         ?? (process.env['OPENROUTER_API_KEY'] ? 'openrouter' : process.env['MOONSHOT_API_KEY'] ? 'kimi' : process.env['MINIMAX_API_KEY'] ? 'minimax' : 'claude');
 
       const policyInput = {
