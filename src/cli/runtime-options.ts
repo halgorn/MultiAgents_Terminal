@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { BUDGET_NAMES, PROVIDER_NAMES } from '../core/runtime-policy.js';
 import type { BudgetName, ProviderName, RuntimePolicyInput } from '../core/runtime-policy.js';
 
 export interface RuntimeCliOptions {
@@ -13,6 +14,8 @@ export interface RuntimeCliOptions {
   reviewerProvider?: ProviderName;
   codexModel?: string;
   openrouterModel?: string;
+  kimiModel?: string;
+  minimaxModel?: string;
   provider?: string;
 }
 
@@ -27,14 +30,14 @@ function parsePositiveInt(value: string | undefined, label: string): number | un
 
 function parseBudget(value: string | undefined): BudgetName | undefined {
   if (!value) return undefined;
-  if (value === 'low' || value === 'normal' || value === 'deep') return value;
-  throw new Error('--budget must be one of: low, normal, deep');
+  if ((BUDGET_NAMES as readonly string[]).includes(value)) return value as BudgetName;
+  throw new Error(`--budget must be one of: ${BUDGET_NAMES.join(', ')}`);
 }
 
 function parseProvider(value: string | undefined, label: string): ProviderName | undefined {
   if (!value) return undefined;
-  if (value === 'claude' || value === 'codex' || value === 'openrouter') return value;
-  throw new Error(`${label} must be one of: claude, codex, openrouter`);
+  if ((PROVIDER_NAMES as readonly string[]).includes(value)) return value as ProviderName;
+  throw new Error(`${label} must be one of: ${PROVIDER_NAMES.join(', ')}`);
 }
 
 export function toRuntimePolicyInput(options: RuntimeCliOptions): RuntimePolicyInput {
@@ -51,6 +54,8 @@ export function toRuntimePolicyInput(options: RuntimeCliOptions): RuntimePolicyI
     reviewerProvider: parseProvider(options.reviewerProvider, '--reviewer-provider') ?? globalProvider,
     codexModel: options.codexModel,
     openrouterModel: options.openrouterModel,
+    kimiModel: options.kimiModel,
+    minimaxModel: options.minimaxModel,
   };
 }
 
@@ -58,15 +63,17 @@ export function addRuntimeOptions(command: Command): Command {
   return command
     .option('--budget <budget>', 'runtime budget: low, normal, deep', 'low')
     .option('--deep', 'run deeper multi-agent fan-out')
-    .option('--provider <provider>', 'global provider: claude, codex, openrouter')
+    .option('--provider <provider>', 'global provider: claude, codex, openrouter, kimi, minimax')
     .option('--model <model>', 'model override for openrouter (e.g. moonshotai/kimi-k2)')
     .option('--max-agents <n>', 'maximum agents to fan out')
     .option('--max-lines <n>', 'maximum lines per file/context block', '500')
     .option('--max-output-chars <n>', 'maximum output chars kept per CLI call')
-    .option('--planner-provider <provider>', 'planner provider: claude, codex, openrouter')
-    .option('--investigator-provider <provider>', 'investigator provider: claude, codex, openrouter')
-    .option('--developer-provider <provider>', 'developer provider: claude, codex, openrouter')
-    .option('--reviewer-provider <provider>', 'reviewer provider: claude, codex, openrouter')
+    .option('--planner-provider <provider>', 'planner provider: claude, codex, openrouter, kimi, minimax')
+    .option('--investigator-provider <provider>', 'investigator provider: claude, codex, openrouter, kimi, minimax')
+    .option('--developer-provider <provider>', 'developer provider: claude, codex, openrouter, kimi, minimax')
+    .option('--reviewer-provider <provider>', 'reviewer provider: claude, codex, openrouter, kimi, minimax')
     .option('--codex-model <model>', 'model passed to codex exec')
-    .option('--openrouter-model <model>', 'model passed to openrouter');
+    .option('--openrouter-model <model>', 'model passed to openrouter')
+    .option('--kimi-model <model>', 'model passed to Kimi API (default: kimi-m3)')
+    .option('--minimax-model <model>', 'model passed to MiniMax API (default: MiniMax-Text-01)');
 }

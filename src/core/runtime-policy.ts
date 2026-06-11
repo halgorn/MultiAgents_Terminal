@@ -1,5 +1,7 @@
 export type BudgetName = 'low' | 'normal' | 'deep';
+export const BUDGET_NAMES = ['low', 'normal', 'deep'] as const;
 export type ProviderName = 'claude' | 'codex' | 'openrouter' | 'kimi' | 'minimax';
+export const PROVIDER_NAMES = ['claude', 'codex', 'openrouter', 'kimi', 'minimax'] as const;
 export type ClaudeModel = 'claude-haiku-4-5-20251001' | 'claude-sonnet-4-6' | 'claude-opus-4-8';
 
 export const DEFAULT_MODELS = {
