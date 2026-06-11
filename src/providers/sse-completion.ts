@@ -71,10 +71,15 @@ export async function runSseCompletion(opts: SseCompletionOptions): Promise<stri
     }
 
     if (inputTokens > 0 || outputTokens > 0) {
-      onChunk?.(input.agentName, ` tokens:${inputTokens}:${outputTokens}:0:0 `);
+      onChunk?.(input.agentName, `\0tokens:${inputTokens}:${outputTokens}:0:0\0`);
     } else {
       onChunk?.(input.agentName, '\0usage-unavailable\0');
     }
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`[${input.agentName}] ${providerName} API timed out after ${AGENT_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
