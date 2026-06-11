@@ -98,7 +98,7 @@ test('OpenRouterProvider handles streamed content, auth errors, and malformed SS
     assert.equal(chunks.join('').includes('tokens:4:5:0:0'), true);
 
     globalThis.fetch = async () => new Response('nope', { status: 401 });
-    await assert.rejects(() => new OpenRouterProvider('test-model').run(input()), /OpenRouter error 401/);
+    await assert.rejects(() => new OpenRouterProvider('test-model').run(input()), /OpenRouter API error 401/);
   });
 
   globalThis.fetch = originalFetch;

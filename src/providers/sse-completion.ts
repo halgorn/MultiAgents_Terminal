@@ -10,10 +10,11 @@ export interface SseCompletionOptions {
   model: string;
   input: ProviderRunInput;
   onChunk?: (agentName: string, text: string) => void;
+  extraHeaders?: Record<string, string>;
 }
 
 export async function runSseCompletion(opts: SseCompletionOptions): Promise<string> {
-  const { url, apiKey, providerName, model, input, onChunk } = opts;
+  const { url, apiKey, providerName, model, input, onChunk, extraHeaders } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AGENT_TIMEOUT_MS);
   let fullText = '';
@@ -22,7 +23,7 @@ export async function runSseCompletion(opts: SseCompletionOptions): Promise<stri
     const res = await fetch(url, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, ...extraHeaders },
       body: JSON.stringify({
         model,
         stream: true,
