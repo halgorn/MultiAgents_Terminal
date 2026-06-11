@@ -7,6 +7,7 @@ import { selectOne, printHeader } from './tui.js';
 import type { MenuItem } from './tui.js';
 import { displayProjectName } from '../infra/project-name.js';
 import { AI_RUNTIME_DIR } from '../infra/paths.js';
+import { isIgnoredDirName } from './cli-utils.js';
 
 // ── Kept for external consumers (audit command, tests) ────────────────────────
 export type { MenuItem };
@@ -192,7 +193,7 @@ function checkIndexStaleness(root: string): string | null {
     const walk = (dir: string, depth = 0) => {
       if (depth > 4) return;
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (['node_modules', 'dist', 'build', '.git', AI_RUNTIME_DIR].includes(entry.name)) continue;
+        if (isIgnoredDirName(entry.name)) continue;
         const full = join(dir, entry.name);
         if (entry.isDirectory()) { walk(full, depth + 1); continue; }
         if (!/\.(ts|tsx|js|jsx|py|go|rb|rs|java)$/.test(entry.name)) continue;
