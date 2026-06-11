@@ -2,8 +2,9 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { ProviderName, BudgetName } from '../core/runtime-policy.js';
 import type { FixSeverity } from '../schemas/audit.js';
+import { AION_CONFIG_FILE } from './paths.js';
 
-const CONFIG_FILE = '.aionrc.json';
+const CONFIG_FILE = AION_CONFIG_FILE;
 
 export interface AionConfig {
   /** Default persona preset: security | ai | backend | devops | quality | saas | fintech | full */

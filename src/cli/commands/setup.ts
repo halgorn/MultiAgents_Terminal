@@ -19,6 +19,7 @@ import {
 } from '../../infra/setup/project-setup.js';
 import { installPostCommitHook, isHookInstalled } from '../../infra/git-hooks.js';
 import { parseBudget } from '../cli-utils.js';
+import { AION_CONFIG_FILE } from '../../infra/paths.js';
 
 interface SetupRunOptions {
   budget?: 'low' | 'normal' | 'deep';
@@ -94,7 +95,7 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
   const scanners = Math.max(1, Math.min(2, options.scanners ?? (budget === 'normal' ? 2 : 1)));
   const preSetupRagStatus = detectRagTrainingStatus(cwd);
 
-  const hadConfig = existsSync(join(cwd, '.aionrc.json'));
+  const hadConfig = existsSync(join(cwd, AION_CONFIG_FILE));
   if (!hadConfig) writeDefaultConfig(cwd);
   const merged = mergeSetupDefaultsIntoConfig(loadAionConfig(cwd), { domain, budget, scanners });
   const setupFile = writeAionConfig(cwd, merged);
