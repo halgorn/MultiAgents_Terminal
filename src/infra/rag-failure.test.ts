@@ -6,27 +6,12 @@ import { tmpdir } from 'os';
 import { embedBatch, embedText, embedTextRemote, EmbeddingStore } from './embeddings.js';
 import { JsonFileStore, QdrantStore } from './vector-store.js';
 import { rerankLocal, rerankWithLLM, setRerankerClientFactoryForTest } from './reranker.js';
+import { withEnv } from '../test-utils/fixtures.js';
 
 function makeDir(): string {
   return mkdtempSync(join(tmpdir(), 'aion-rag-'));
 }
 
-async function withEnv<T>(env: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
-  const previous = new Map<string, string | undefined>();
-  for (const [key, value] of Object.entries(env)) {
-    previous.set(key, process.env[key]);
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-  try {
-    return await fn();
-  } finally {
-    for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
-}
 
 test('local embeddings are deterministic and remote embedding failures surface clearly', async () => {
   const first = Array.from(embedText('semantic retrieval context', 2_000));

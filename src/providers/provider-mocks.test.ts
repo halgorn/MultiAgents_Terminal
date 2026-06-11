@@ -10,6 +10,7 @@ import { OpenRouterProvider } from './openrouter-provider.js';
 import { KimiProvider } from './kimi-provider.js';
 import { MiniMaxProvider } from './minimax-provider.js';
 import { SdkProvider, setAnthropicClientFactoryForTest } from './sdk-provider.js';
+import { withEnv } from '../test-utils/fixtures.js';
 
 function input(userMessage = 'user'): ProviderRunInput {
   return {
@@ -21,30 +22,6 @@ function input(userMessage = 'user'): ProviderRunInput {
   };
 }
 
-function withEnv<T>(env: Record<string, string | undefined>, fn: () => Promise<T> | T): Promise<T> | T {
-  const previous = new Map<string, string | undefined>();
-  for (const [key, value] of Object.entries(env)) {
-    previous.set(key, process.env[key]);
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
-  }
-  const restore = () => {
-    for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  };
-
-  try {
-    const result = fn();
-    if (result instanceof Promise) return result.finally(restore);
-    restore();
-    return result;
-  } catch (err) {
-    restore();
-    throw err;
-  }
-}
 
 function makeBin(name: string, body: string): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'aion-provider-bin-'));

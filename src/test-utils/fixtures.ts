@@ -49,3 +49,35 @@ export function runSourceCli(repo: string, args: string[], timeout = 30_000) {
     timeout,
   });
 }
+
+/**
+ * Temporarily sets environment variables for the duration of a callback,
+ * restoring the previous values (or deleting them) when done.
+ * Supports both sync and async callbacks; env is restored even on throw.
+ */
+export function withEnv<T>(
+  env: Record<string, string | undefined>,
+  fn: () => Promise<T> | T,
+): Promise<T> | T {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(env)) {
+    previous.set(key, process.env[key]);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  const restore = () => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+  try {
+    const result = fn();
+    if (result instanceof Promise) return result.finally(restore);
+    restore();
+    return result;
+  } catch (err) {
+    restore();
+    throw err;
+  }
+}
