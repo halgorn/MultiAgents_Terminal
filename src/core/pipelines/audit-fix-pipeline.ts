@@ -1,11 +1,11 @@
-import type { AuditReport, AuditFinding } from '../../schemas/audit.js';
+import type { AuditReport, AuditFinding, FixSeverity } from '../../schemas/audit.js';
 import type { TaskResult } from '../task.js';
 import type { PipelineContext } from '../pipeline-context.js';
 import { runFixPipeline } from './fix-pipeline.js';
 
 export interface AuditFixOptions {
   maxFixes?: number;
-  minSeverity?: 'critical' | 'high' | 'medium';
+  minSeverity?: FixSeverity;
   dryRun?: boolean;
 }
 

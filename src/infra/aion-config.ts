@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { ProviderName, BudgetName } from '../core/runtime-policy.js';
+import type { FixSeverity } from '../schemas/audit.js';
 
 const CONFIG_FILE = '.aionrc.json';
 
@@ -20,7 +21,7 @@ export interface AionConfig {
   /** Default max auto-fixes */
   fixMax?: number;
   /** Default minimum severity to auto-fix */
-  fixMinSeverity?: 'critical' | 'high' | 'medium';
+  fixMinSeverity?: FixSeverity;
   /** Default scanner count override */
   scanners?: number;
 }

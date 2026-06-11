@@ -55,6 +55,8 @@ export type DomainSection = z.infer<typeof DomainSectionSchema>;
 
 export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export type Severity = typeof SEVERITY_ORDER[number];
+export type FixSeverity = Exclude<Severity, 'low' | 'info'>;
+export const FIX_SEVERITIES = SEVERITY_ORDER.filter((s): s is FixSeverity => s !== 'low' && s !== 'info');
 
 export const SEVERITY_RANK: Record<string, number> = {
   critical: 5, high: 4, medium: 3, low: 2, info: 1,

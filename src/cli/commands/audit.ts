@@ -7,7 +7,8 @@ import { CostTracker } from '../../core/cost-tracker.js';
 import { Renderer } from '../ui/renderer.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
 import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
-import type { AuditFinding, AuditReport } from '../../schemas/audit.js';
+import type { AuditFinding, AuditReport, FixSeverity } from '../../schemas/audit.js';
+import { FIX_SEVERITIES } from '../../schemas/audit.js';
 import { parseBudget, parsePositiveInt } from '../cli-utils.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 
@@ -103,8 +104,8 @@ async function printPersonas(): Promise<void> {
 async function maybeAutoFix(options: AuditOptions, report: AuditReport, orch: Orchestrator): Promise<void> {
   if (!options.fix) return;
   const maxFixes = parsePositiveInt(options.fixMax, 5, 20);
-  const minSev = (['critical', 'high', 'medium'].includes(options.fixMinSeverity)
-    ? options.fixMinSeverity : 'high') as 'critical' | 'high' | 'medium';
+  const minSev = (FIX_SEVERITIES.includes(options.fixMinSeverity as FixSeverity)
+    ? options.fixMinSeverity : 'high') as FixSeverity;
   const eligible = report.findings
     .filter((f: AuditFinding) => f.file && f.line && ((SEVERITY_RANK[f.severity] ?? 0) >= (SEVERITY_RANK[minSev] ?? 0)))
     .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0))
