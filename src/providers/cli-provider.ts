@@ -8,6 +8,7 @@ import { SdkProvider } from './sdk-provider.js';
 import { OpenRouterProvider } from './openrouter-provider.js';
 import { KimiProvider } from './kimi-provider.js';
 import { MiniMaxProvider } from './minimax-provider.js';
+import type { ProviderRunInput, AgentProvider } from './types.js';
 export type { ProviderRunInput, AgentProvider } from './types.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -26,9 +27,6 @@ export const AGENT_TOOLS: Record<string, string[]> = {
 };
 
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
-
-// ProviderRunInput and AgentProvider are defined in ./types.ts
-import type { ProviderRunInput, AgentProvider } from './types.js';
 
 export function safeProcessEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   const allowed = [
