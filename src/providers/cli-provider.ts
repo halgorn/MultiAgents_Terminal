@@ -125,7 +125,7 @@ export class ClaudeCliProvider implements AgentProvider {
     ];
 
     // Use a large cap for raw so the outer JSON envelope isn't truncated
-    const raw = await runProcess('claude', args, input.cwd, input.agentName, 200_000, onChunk);
+    const raw = await runProcess('claude', args, input.cwd, input.agentName, STRUCTURED_RESULT_MAX_CHARS, onChunk);
     onChunk?.(input.agentName, USAGE_UNAVAILABLE);
     try {
       const event = JSON.parse(raw) as { result?: string; is_error?: boolean };
