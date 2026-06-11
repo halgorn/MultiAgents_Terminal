@@ -3,7 +3,6 @@ import chalk from 'chalk';
 import * as readline from 'readline';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { createRuntimePolicy } from '../../core/runtime-policy.js';
-import { CostTracker } from '../../core/cost-tracker.js';
 import { displayProjectName } from '../../infra/project-name.js';
 import type { RuntimePolicy } from '../../core/runtime-policy.js';
 import { safeProcessEnv } from '../../providers/cli-provider.js';
@@ -78,9 +77,6 @@ export function registerChat(program: Command): void {
         } : {}),
       };
       const policy = createRuntimePolicy(policyInput);
-      const costs = new CostTracker();
-      void costs;
-
       console.log(chalk.dim('\nBuilding repository index…'));
       const graph = new GraphAgent(cwd);
       let repoContext = '';
