@@ -1,10 +1,32 @@
 node_modules/
 dist/
-.worktrees/
-.ai-memory/
+
+# aion runtime outputs
 .ai-runtime/
+.ai-memory/
+.worktrees/
 evidence/
 history/
 tasks/
+
+# aion generated files at project root
+repo-vectors.json
+repo-index.json
+dep-graph.json
+audit-cache.json
+context.md
+report.html
+graph.html
+health-trend.json
+session-budget.json
+setup-state.json
+traces.jsonl
+*.aion-report.json
+
+# secrets / env
 .env
+*.env.local
+*.env.*.local
+
+# build artefacts
 *.js.map
