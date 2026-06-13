@@ -158,7 +158,7 @@ export class Orchestrator extends EventEmitter {
       this.cwd,
       this.policy,
       this.costs,
-      (event, payload) => this.emit(event, payload),
+      this.pipelineContext.emit,
       this.onChunk,
     );
     return pipeline.run(target, numScanners, explicitDomains, options);
