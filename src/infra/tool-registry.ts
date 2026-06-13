@@ -28,7 +28,7 @@ export const ToolRegistry = [
   },
   {
     name: 'get_health_score',
-    description: 'Run zero-token_s_prompt_c_evaluation_check (security, architecture, tests, churn)',
+    description: 'Run zero-token composite health check (security, architecture, tests, churn)',
     inputSchema: {
       type: 'object',
       properties: { cwd: { type: 'string', description: 'Project directory (default: current)' } },
