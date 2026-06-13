@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { AGENT_REGISTRY } from '../agents/index.js';
 import { FLOW_REGISTRY } from '../core/pipelines/index.js';
 import { ToolRegistry } from '../infra/tool-registry.js';
+import { ZOD_SCHEMA_REGISTRY, KNOWN_OUTPUT_SCHEMAS } from './registry.js';
 
 test('AGENT_REGISTRY: all manifests have required fields', () => {
   for (const m of AGENT_REGISTRY) {
@@ -71,4 +72,47 @@ test('ToolRegistry: tool names are unique', () => {
   const names = ToolRegistry.map((t) => t.name);
   const unique = new Set(names);
   assert.equal(unique.size, names.length, `duplicate tool names: ${names.filter((n, i) => names.indexOf(n) !== i).join(', ')}`);
+});
+
+// ── SchemaRegistry: contract governance ──────────────────────────────────────
+
+test('ZOD_SCHEMA_REGISTRY: all entries are valid Zod schemas', () => {
+  for (const [name, schema] of Object.entries(ZOD_SCHEMA_REGISTRY)) {
+    assert.ok(
+      typeof (schema as { parse?: unknown }).parse === 'function',
+      `ZOD_SCHEMA_REGISTRY["${name}"] is missing .parse — not a Zod schema`,
+    );
+  }
+});
+
+test('AGENT_REGISTRY: all outputSchema strings are in KNOWN_OUTPUT_SCHEMAS', () => {
+  for (const m of AGENT_REGISTRY) {
+    assert.ok(
+      KNOWN_OUTPUT_SCHEMAS.has(m.outputSchema),
+      `agent "${m.name}": outputSchema "${m.outputSchema}" not in KNOWN_OUTPUT_SCHEMAS`,
+    );
+  }
+});
+
+test('FLOW_REGISTRY: all outputSchema strings are in KNOWN_OUTPUT_SCHEMAS', () => {
+  for (const f of FLOW_REGISTRY) {
+    assert.ok(
+      KNOWN_OUTPUT_SCHEMAS.has(f.outputSchema),
+      `flow "${f.name}": outputSchema "${f.outputSchema}" not in KNOWN_OUTPUT_SCHEMAS`,
+    );
+  }
+});
+
+test('ZOD_SCHEMA_REGISTRY: key count matches number of unique Zod-backed outputSchemas', () => {
+  const zodBacked = new Set(
+    [...AGENT_REGISTRY, ...FLOW_REGISTRY]
+      .map((m) => m.outputSchema)
+      .filter((s) => ZOD_SCHEMA_REGISTRY[s] !== undefined),
+  );
+  for (const name of zodBacked) {
+    assert.ok(
+      ZOD_SCHEMA_REGISTRY[name] !== undefined,
+      `outputSchema "${name}" used in manifests but missing from ZOD_SCHEMA_REGISTRY`,
+    );
+  }
 });
