@@ -25,9 +25,10 @@ import {
   prioritizeFiles,
   type AuditFileStats,
 } from './audit-file-scanner.js';
+import type { PipelineEmitter } from '../pipeline-context.js';
 
 type OnChunk = (agentName: string, text: string) => void;
-type Emitter = (event: string, payload: unknown) => void;
+type Emitter = PipelineEmitter;
 
 const MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS = 30;
 const MAX_FINDINGS_PER_SCANNER = 10;

@@ -5,20 +5,21 @@ import type { TaskState } from './state-machine.js';
 import { assertTransition } from './state-machine.js';
 import { updateTaskState, logStateHistory } from '../infra/db/task-repo.js';
 import { createWorktree, removeWorktree } from '../infra/worktree.js';
-import type { EventEmitter } from 'events';
+
+export type PipelineEmitter = (event: string, payload: unknown) => void;
 
 export interface PipelineContext {
   cwd: string;
   policy: RuntimePolicy;
   knowledge: KnowledgeStore;
-  emit: EventEmitter['emit'];
+  emit: PipelineEmitter;
   onChunk: (agentName: string, text: string) => void;
 }
 
 export async function transition(
   task: TaskRecord,
   to: TaskState,
-  emit: EventEmitter['emit'],
+  emit: PipelineEmitter,
   agentName?: string,
 ): Promise<void> {
   assertTransition(task.state, to);

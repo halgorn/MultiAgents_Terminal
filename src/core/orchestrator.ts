@@ -12,7 +12,7 @@ import { runAnalyzePipeline } from './pipelines/analyze-pipeline.js';
 import { runReviewPipeline } from './pipelines/review-pipeline.js';
 import { runAuditFixPipeline, type AuditFixOptions, type AuditFixReport } from './pipelines/audit-fix-pipeline.js';
 import type { ScanDomain } from '../prompts/scanner.js';
-import type { PipelineContext } from './pipeline-context.js';
+import type { PipelineContext, PipelineEmitter } from './pipeline-context.js';
 import {
   startLangfuseRootObservation,
   startLangfuseChildObservation,
@@ -107,8 +107,7 @@ export class Orchestrator extends EventEmitter {
   };
 
   private get pipelineContext(): PipelineContext {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const emit: any = (event: string, payload: unknown) => {
+    const emit: PipelineEmitter = (event: string, payload: unknown) => {
       if (event === 'agent:start' && payload && typeof payload === 'object') {
         const agentName = (payload as Record<string, string>)['agentName'] ?? '';
         this.tracer?.startSpan(agentName);
@@ -122,13 +121,13 @@ export class Orchestrator extends EventEmitter {
           );
         }
       }
-      return this.emit(event, payload);
+      this.emit(event, payload);
     };
     return {
       cwd: this.cwd,
       policy: this.policy,
       knowledge: this.knowledge,
-      emit: emit as typeof this.emit,
+      emit,
       onChunk: this.onChunk,
     };
   }
