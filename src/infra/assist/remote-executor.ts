@@ -47,12 +47,22 @@ export function validateRemoteSteps(steps: RemoteStep[]): string[] {
     .map((result) => result.reason ?? 'invalid remote step');
 }
 
-function sshTarget(plan: AssistPlan): string {
+// Returns the display form used in dry-run output (CI template, not expanded)
+function sshTargetTemplate(plan: AssistPlan): string {
   return `\${${plan.target.sshUserSecret}}@\${${plan.target.sshHostSecret}}`;
 }
 
+// Resolves secrets from env for actual SSH execution (shell: false — no shell expansion)
+function resolveSshTarget(plan: AssistPlan): { target: string; error?: string } {
+  const user = process.env[plan.target.sshUserSecret];
+  const host = process.env[plan.target.sshHostSecret];
+  if (!user) return { target: '', error: `${plan.target.sshUserSecret} is not set in environment` };
+  if (!host) return { target: '', error: `${plan.target.sshHostSecret} is not set in environment` };
+  return { target: `${user}@${host}` };
+}
+
 export function buildSshCommands(plan: AssistPlan): string[] {
-  return plan.remoteSteps.map((step) => `ssh ${sshTarget(plan)} ${JSON.stringify(step.command)}`);
+  return plan.remoteSteps.map((step) => `ssh ${sshTargetTemplate(plan)} ${JSON.stringify(step.command)}`);
 }
 
 export function executeRemotePlan(plan: AssistPlan, options: { dryRun?: boolean; yes?: boolean } = {}): RemoteExecutionResult {
@@ -67,9 +77,14 @@ export function executeRemotePlan(plan: AssistPlan, options: { dryRun?: boolean;
     return { dryRun: true, commands, ok: true, output: commands.join('\n') };
   }
 
+  const { target, error: targetError } = resolveSshTarget(plan);
+  if (targetError) {
+    return { dryRun: false, commands, ok: false, output: `SSH target resolution failed: ${targetError}` };
+  }
+
   const output: string[] = [];
   for (const step of plan.remoteSteps) {
-    const result = spawnSync('ssh', [sshTarget(plan), step.command], {
+    const result = spawnSync('ssh', [target, step.command], {
       encoding: 'utf8',
       shell: false,
       timeout: 120_000,
