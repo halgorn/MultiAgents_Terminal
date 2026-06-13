@@ -1,6 +1,6 @@
 import { spawnSync } from 'child_process';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, rmSync } from 'fs';
 import { WORKTREES_DIR } from './paths.js';
 
 export interface WorktreeInfo {
@@ -46,6 +46,8 @@ export function removeWorktree(cwd: string, agentName: string, taskId: string): 
 
   assertGit(cwd, ['worktree', 'remove', '--force', worktreePath]);
   assertGit(cwd, ['branch', '-D', `ai/${name}`]);
+  // git worktree remove leaves behind app-written files (e.g. .claude/CLAUDE.md)
+  if (existsSync(worktreePath)) rmSync(worktreePath, { recursive: true, force: true });
 }
 
 export function listWorktrees(cwd: string): WorktreeInfo[] {
