@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildPlannerPrompt } from '../prompts/planner.js';
 import { PlanReportSchema, type PlanReport } from '../schemas/plan.js';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
 
@@ -55,3 +56,12 @@ Then output the plan JSON.`;
     return 'INVESTIGATING';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'planner',
+  description: 'Produces a structured fix plan with file targets and steps',
+  outputSchema: 'PlanReportSchema',
+  retryStrategy: 'context-reduction',
+  requiresWorktree: true,
+  failureBehavior: 'throw',
+};

@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildReviewerPrompt } from '../prompts/reviewer.js';
 import { ReviewReportSchema, type ReviewReport } from '../schemas/review.js';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { PatchReport } from '../schemas/patch.js';
 import type { EvidenceReport } from '../schemas/evidence.js';
 import type { TaskState } from '../core/state-machine.js';
@@ -59,3 +60,12 @@ Then output the review JSON.`;
     return output.approved ? 'REVIEWED' : 'FAILED';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'reviewer',
+  description: 'Reviews a code patch for correctness, security, and style',
+  outputSchema: 'ReviewReportSchema',
+  retryStrategy: 'context-reduction',
+  requiresWorktree: true,
+  failureBehavior: 'throw',
+};

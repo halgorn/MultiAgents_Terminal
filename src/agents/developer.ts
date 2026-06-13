@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildDeveloperPrompt } from '../prompts/developer.js';
 import { PatchReportSchema, type PatchReport } from '../schemas/patch.js';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { EvidenceReport } from '../schemas/evidence.js';
 import type { PlanReport } from '../schemas/plan.js';
 import type { TaskState } from '../core/state-machine.js';
@@ -65,3 +66,12 @@ Output patch JSON with buildCommand: "${buildCmd}" and testCommand: "${testCmd}"
     return 'PATCH_CREATED';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'developer',
+  description: 'Implements the planned fix and writes the code patch',
+  outputSchema: 'PatchReportSchema',
+  retryStrategy: 'context-reduction',
+  requiresWorktree: true,
+  failureBehavior: 'throw',
+};

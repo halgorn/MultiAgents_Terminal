@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildQAPrompt } from '../prompts/qa.js';
 import { QAResultSchema, type QAResult } from '../schemas/qa.js';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { PatchReport } from '../schemas/patch.js';
 import type { EvidenceReport } from '../schemas/evidence.js';
 import type { TaskState } from '../core/state-machine.js';
@@ -55,3 +56,12 @@ Then output the QA result JSON with the real command outputs.`;
     return output.buildOk && output.testsOk && !output.reproductionStillFails ? 'TESTED' : 'FAILED';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'qa',
+  description: 'Verifies that a patch fixes the issue without breaking tests',
+  outputSchema: 'QAResultSchema',
+  retryStrategy: 'context-reduction',
+  requiresWorktree: true,
+  failureBehavior: 'fallback',
+};

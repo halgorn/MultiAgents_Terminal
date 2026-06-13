@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildSynthesizerPrompt } from '../prompts/synthesizer.js';
 import { z } from 'zod';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 import { type AuditFinding, type AuditReport, type ScanReport, type DomainSection, SEVERITY_RANK, SEVERITY_ORDER } from '../schemas/audit.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
@@ -167,3 +168,12 @@ Write the summary and topPriorities for this audit. Output ONLY valid JSON:
     return 'DONE';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'synthesizer',
+  description: 'Merges scanner outputs into a ranked, deduplicated audit report',
+  outputSchema: 'SynthOutputSchema',
+  retryStrategy: 'context-reduction',
+  requiresWorktree: true,
+  failureBehavior: 'throw',
+};

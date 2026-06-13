@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import { buildInvestigatorPrompt, type InvestigatorDomain } from '../prompts/investigator.js';
 import { EvidenceReportSchema, type EvidenceReport } from '../schemas/evidence.js';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { PlanReport } from '../schemas/plan.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
@@ -58,3 +59,12 @@ Then output the evidence JSON.`;
     return output.reproduced ? 'REPRODUCED' : 'FAILED';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'investigator',
+  description: 'Reproduces a finding and gathers evidence for the fix agent',
+  outputSchema: 'EvidenceReportSchema',
+  retryStrategy: 'context-reduction',
+  requiresWorktree: true,
+  failureBehavior: 'throw',
+};

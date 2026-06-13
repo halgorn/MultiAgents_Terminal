@@ -2,6 +2,7 @@ import { BaseAgent } from './base-agent.js';
 import { buildExplainPrompt, type ExplainMode } from '../prompts/explain.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 
 export interface ExplainInput {
   worktreePath: string;
@@ -41,3 +42,12 @@ Output your analysis directly — no JSON wrapper needed.`;
     return 'DONE';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'explain',
+  description: 'Produces a human-readable explanation of code or findings',
+  outputSchema: 'string',
+  retryStrategy: 'none',
+  requiresWorktree: true,
+  failureBehavior: 'throw',
+};

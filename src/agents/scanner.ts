@@ -3,6 +3,7 @@ import { join } from 'path';
 import { BaseAgent } from './base-agent.js';
 import { buildScannerPrompt, type ScanDomain, type ScannerContext } from '../prompts/scanner.js';
 import { ScanReportSchema, type ScanReport } from '../schemas/audit.js';
+import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
 
@@ -60,3 +61,12 @@ export class ScannerAgent extends BaseAgent<ScannerInput, ScanReport> {
     return 'INVESTIGATING';
   }
 }
+
+export const manifest: AgentManifest = {
+  name: 'scanner',
+  description: 'Finds security and quality issues within a single scan domain',
+  outputSchema: 'ScanReportSchema',
+  retryStrategy: 'context-reduction',
+  requiresWorktree: true,
+  failureBehavior: 'fallback',
+};
