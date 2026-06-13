@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildProjectTrend, saveProjectTrend, renderTrendMarkdown, renderTrendHtml } from './project-trend.js';
@@ -76,7 +76,6 @@ test('buildProjectTrend: shows delta when health improved', () => {
   try {
     // Save a previous snapshot with lower health
     const prev = { createdAt: '2026-01-01T00:00:00Z', health: 70, grade: 'B', critical: 3, high: 10, seo: 60, database: 80, performance: 70, oversizedFiles: 2 };
-    mkdirSync(join(dir, '.ai-runtime', 'reports'), { recursive: true });
     saveProjectTrend(dir, prev);
 
     const trend = buildProjectTrend({ cwd: dir, generatedAt: '2026-02-01T00:00:00Z', health: { ...HEALTH, total: 85, grade: 'A' }, auditCriticals: 1, auditHighs: 5, seo: SEO, database: DB, performance: PERF, lineSize: LINE });
@@ -92,7 +91,6 @@ test('buildProjectTrend: grade change is reported when grade differs', () => {
   const dir = makeDir();
   try {
     const prev = { createdAt: '2026-01-01T00:00:00Z', health: 65, grade: 'C', critical: 0, high: 0, seo: 70, database: 80, performance: 70, oversizedFiles: 0 };
-    mkdirSync(join(dir, '.ai-runtime', 'reports'), { recursive: true });
     saveProjectTrend(dir, prev);
 
     const trend = buildProjectTrend({ cwd: dir, generatedAt: '2026-02-01T00:00:00Z', health: HEALTH, auditCriticals: 0, auditHighs: 0, seo: SEO, database: DB, performance: PERF, lineSize: LINE });
@@ -106,7 +104,6 @@ test('buildProjectTrend: no changes when values are identical', () => {
   const dir = makeDir();
   try {
     const snap = { createdAt: '2026-01-01T00:00:00Z', health: 82, grade: 'B', critical: 0, high: 0, seo: 75, database: 90, performance: 80, oversizedFiles: 0 };
-    mkdirSync(join(dir, '.ai-runtime', 'reports'), { recursive: true });
     saveProjectTrend(dir, snap);
 
     const trend = buildProjectTrend({ cwd: dir, generatedAt: '2026-02-01T00:00:00Z', health: HEALTH, auditCriticals: 0, auditHighs: 0, seo: SEO, database: DB, performance: PERF, lineSize: LINE });

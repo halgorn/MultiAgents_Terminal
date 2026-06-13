@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { HealthScore } from './health-score.js';
 import type { SeoCrawlerReport } from './seo-analyzer.js';
@@ -88,7 +88,9 @@ export function buildProjectTrend(input: {
 export function saveProjectTrend(cwd: string, snapshot: ProjectSnapshot): void {
   const history = loadHistory(cwd).filter((entry) => entry.createdAt !== snapshot.createdAt);
   history.push(snapshot);
-  writeFileSync(historyPath(cwd), JSON.stringify(history.slice(-30), null, 2), 'utf8');
+  const path = historyPath(cwd);
+  mkdirSync(join(path, '..'), { recursive: true });
+  writeFileSync(path, JSON.stringify(history.slice(-30), null, 2), 'utf8');
 }
 
 export function renderTrendMarkdown(trend: ProjectTrend): string {
