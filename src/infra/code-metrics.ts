@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative, extname } from 'path';
 import { spawnSync } from 'child_process';
-import { SOURCE_EXTS as SRC_EXTS, isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { SOURCE_EXTS as SRC_EXTS, isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 
 // ── Hot Zone Ranking ──────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative, extname } from 'path';
-import { SOURCE_EXTS, isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { SOURCE_EXTS, isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 
 export interface DocGap {
   type: 'missing-file' | 'missing-section' | 'undocumented-export' | 'missing-docstring';

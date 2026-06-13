@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { chunkFile } from './chunker.js';
-import { isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 import { AI_RUNTIME_DIR } from './paths.js';
 
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.cs', '.php', '.kt', '.swift', '.c', '.cpp', '.h']);

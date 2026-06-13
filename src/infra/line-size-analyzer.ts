@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'fs';
 import { extname, join, relative } from 'path';
-import { SOURCE_EXTS, isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { SOURCE_EXTS, isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 
 export interface LineSizeEntry {
   file: string;

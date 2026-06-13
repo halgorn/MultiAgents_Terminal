@@ -3,7 +3,7 @@ import { join as pathJoin } from 'path';
 import { spawnSync } from 'child_process';
 import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
 import { rankFilesByRisk, buildCognitiveScores } from '../../infra/code-metrics.js';
-import { SOURCE_EXTS, IGNORE_DIRS, isGeneratedArtifact, isIgnoredDirName } from '../../cli/cli-utils.js';
+import { SOURCE_EXTS, IGNORE_DIRS, isGeneratedArtifact, isIgnoredDirName } from '../../infra/file-filter.js';
 export { SOURCE_EXTS, IGNORE_DIRS };
 export const IGNORE_PATTERNS = [
   /\.min\.[jt]sx?$/,

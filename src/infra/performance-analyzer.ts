@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { extname, join, relative } from 'path';
-import { isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 import type { ApiEndpoint } from './code-metrics.js';
 
 export interface PerformanceIssue {

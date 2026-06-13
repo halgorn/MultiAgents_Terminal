@@ -1,7 +1,7 @@
 import { Project } from 'ts-morph';
 import { join, relative, dirname } from 'path';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { isGeneratedArtifact, isIgnoredDirName } from '../cli/cli-utils.js';
+import { isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 
 export interface DepNode {
   file: string;           // relative path

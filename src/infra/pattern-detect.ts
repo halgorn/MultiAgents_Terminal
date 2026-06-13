@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
-import { isIgnoredDirName } from '../cli/cli-utils.js';
+import { isIgnoredDirName } from './file-filter.js';
 import { AI_RUNTIME_DIR, WORKTREES_DIR } from './paths.js';
 
 export interface PatternSignal {
