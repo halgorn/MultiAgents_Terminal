@@ -44,8 +44,10 @@ export function removeWorktree(cwd: string, agentName: string, taskId: string): 
 
   if (!existsSync(worktreePath)) return;
 
-  assertGit(cwd, ['worktree', 'remove', '--force', worktreePath]);
-  assertGit(cwd, ['branch', '-D', `ai/${name}`]);
+  try {
+    assertGit(cwd, ['worktree', 'remove', '--force', worktreePath]);
+  } catch { /* worktree may not be registered; proceed to directory cleanup */ }
+  git(cwd, ['branch', '-D', `ai/${name}`]); // best-effort; branch may already be gone
   // git worktree remove leaves behind app-written files (e.g. .claude/CLAUDE.md)
   if (existsSync(worktreePath)) rmSync(worktreePath, { recursive: true, force: true });
 }
