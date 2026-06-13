@@ -41,7 +41,7 @@ export function loadDepGraph(cwd: string): StoredGraph | null {
 }
 
 export function isDepGraphCached(cwd: string): boolean {
-  return existsSync(storedPath(cwd));
+  return loadDepGraph(cwd) !== null;
 }
 
 // ── Impact Analysis ───────────────────────────────────────────────────────────

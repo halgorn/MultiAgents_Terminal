@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { saveDepGraph, loadDepGraph, isDepGraphCached, computeImpact, formatImpactReport } from './dep-graph-db.js';
@@ -59,6 +59,23 @@ test('isDepGraphCached: false before save, true after', () => {
     assert.equal(isDepGraphCached(dir), false);
     saveDepGraph(dir, makeGraph([{ file: 'src/a.ts' }]));
     assert.equal(isDepGraphCached(dir), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('isDepGraphCached: false for a stale cache (builtAt in the past)', () => {
+  const dir = makeDir();
+  try {
+    const cacheDir = join(dir, '.ai-runtime');
+    mkdirSync(cacheDir, { recursive: true });
+    const staleEntry = {
+      nodes: [],
+      edges: [],
+      builtAt: Date.now() - 2 * 60 * 60 * 1000, // 2 hours ago — past 1-hour TTL
+    };
+    writeFileSync(join(cacheDir, 'dep-graph.json'), JSON.stringify(staleEntry), 'utf8');
+    assert.equal(isDepGraphCached(dir), false, 'stale cache should not count as cached');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
