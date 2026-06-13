@@ -152,6 +152,51 @@ test('executeRemotePlan defaults to dry-run and builds SSH commands without exec
   }
 });
 
+test('executeRemotePlan fails clearly when SSH env vars are missing', () => {
+  const dir = makeProject();
+  try {
+    const plan = buildAssistPlan(dir, { domain: 'app.example.com' });
+    const saved = { user: process.env['SSH_USER'], host: process.env['SSH_HOST'] };
+    delete process.env['SSH_USER'];
+    delete process.env['SSH_HOST'];
+    try {
+      const result = executeRemotePlan(plan, { dryRun: false, yes: true });
+      assert.equal(result.ok, false);
+      assert.match(result.output, /SSH_USER.*not set|SSH_HOST.*not set/);
+    } finally {
+      if (saved.user !== undefined) process.env['SSH_USER'] = saved.user;
+      if (saved.host !== undefined) process.env['SSH_HOST'] = saved.host;
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('executeRemotePlan resolves SSH target from env in non-dry-run mode', () => {
+  const dir = makeProject();
+  const fake = makeBin('ssh', "process.stdout.write(process.argv.slice(2).join(' '));");
+  const originalPath = process.env.PATH;
+  const saved = { user: process.env['SSH_USER'], host: process.env['SSH_HOST'] };
+  try {
+    process.env.PATH = `${fake.dir}:${originalPath ?? ''}`;
+    process.env['SSH_USER'] = 'deploy';
+    process.env['SSH_HOST'] = 'example.com';
+    const plan = buildAssistPlan(dir, { domain: 'example.com' });
+    const result = executeRemotePlan(plan, { dryRun: false, yes: true });
+    assert.equal(result.dryRun, false);
+    assert.match(result.output, /deploy@example\.com/);
+  } finally {
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+    if (saved.user === undefined) delete process.env['SSH_USER'];
+    else process.env['SSH_USER'] = saved.user;
+    if (saved.host === undefined) delete process.env['SSH_HOST'];
+    else process.env['SSH_HOST'] = saved.host;
+    fake.cleanup();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('runHealthcheck uses curl without shell and reports status', () => {
   const fake = makeBin('curl', "process.stdout.write('ok');");
   const originalPath = process.env.PATH;
