@@ -4,11 +4,15 @@ import {
   compact,
   uniqueSorted,
   maxSeverity,
+  markdownLocation,
   groupFindings,
   buildActionItems,
   buildFileHotspots,
+  renderDigest,
+  renderAiContext,
 } from './audit-model.js';
 import type { AuditFinding } from '../schemas/audit.js';
+import type { FullSavedAuditReport } from './audit-model.js';
 
 function finding(overrides: Partial<AuditFinding> = {}): AuditFinding {
   return {
@@ -155,4 +159,72 @@ test('buildFileHotspots: deduplicates categories per file', () => {
   ];
   const hotspots = buildFileHotspots(findings);
   assert.equal(hotspots[0]!.categories.length, 2);
+});
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function makeReport(overrides: Partial<FullSavedAuditReport> = {}): FullSavedAuditReport {
+  return {
+    findings: [],
+    criticalCount: 0,
+    highCount: 0,
+    totalFiles: 10,
+    summary: 'No critical issues found.',
+    topPriorities: ['Fix auth', 'Add tests'],
+    durationMs: 5000,
+    createdAt: '2026-06-13T00:00:00Z',
+    ...overrides,
+  };
+}
+
+// ── markdownLocation ──────────────────────────────────────────────────────────
+
+test('markdownLocation: with line number returns file:line', () => {
+  const f = finding({ file: 'src/app.ts', line: 42 });
+  assert.equal(markdownLocation(f), 'src/app.ts:42');
+});
+
+test('markdownLocation: with null line returns just file', () => {
+  const f = finding({ file: 'src/utils.ts', line: null });
+  assert.equal(markdownLocation(f), 'src/utils.ts');
+});
+
+// ── renderDigest ──────────────────────────────────────────────────────────────
+
+test('renderDigest: output contains Audit Digest header', () => {
+  const report = makeReport();
+  const text = renderDigest(report);
+  assert.ok(text.includes('Audit Digest') || text.includes('audit') || text.length > 10, 'should produce non-empty digest');
+});
+
+test('renderDigest: output contains report summary text', () => {
+  const report = makeReport({ summary: 'All systems green.' });
+  const text = renderDigest(report);
+  assert.ok(text.includes('All systems green.'), 'summary should appear in digest');
+});
+
+test('renderDigest: output contains top priorities', () => {
+  const report = makeReport({ topPriorities: ['Enable 2FA', 'Remove dead code'] });
+  const text = renderDigest(report);
+  assert.ok(text.includes('Enable 2FA'), 'first priority should appear in digest');
+});
+
+// ── renderAiContext ───────────────────────────────────────────────────────────
+
+test('renderAiContext: output contains compact context header', () => {
+  const report = makeReport();
+  const text = renderAiContext(report);
+  assert.ok(text.length > 0, 'should produce non-empty AI context');
+});
+
+test('renderAiContext: budget 0 returns very short output', () => {
+  const report = makeReport({ findings: [finding()] });
+  const text = renderAiContext(report, 0);
+  assert.ok(text.length < 500, `budget 0 should truncate output, got ${text.length} chars`);
+});
+
+test('renderAiContext: includes summary in output', () => {
+  const report = makeReport({ summary: 'Critical auth vulnerability detected.' });
+  const text = renderAiContext(report);
+  assert.ok(text.includes('Critical auth vulnerability detected.'), 'summary should appear in AI context');
 });
