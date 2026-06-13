@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { ToolRegistry } from '../infra/tool-registry.js';
 
 function getCurrentVersion(): string {
   try {
@@ -10,61 +11,6 @@ function getCurrentVersion(): string {
     return pkg.version;
   } catch { return '0.0.0'; }
 }
-
-const TOOLS = [
-  {
-    name: 'search_memory',
-    description: 'Semantic search over project source code and knowledge base',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Search query' },
-        topK: { type: 'number', description: 'Number of results (default: 5)' },
-        cwd: { type: 'string', description: 'Project directory (default: current)' },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'get_dep_graph',
-    description: 'Get dependency hotspots and cycles for a project',
-    inputSchema: {
-      type: 'object',
-      properties: { cwd: { type: 'string', description: 'Project directory (default: current)' } },
-    },
-  },
-  {
-    name: 'get_health_score',
-    description: 'Run zero-token composite health check (security, architecture, tests, churn)',
-    inputSchema: {
-      type: 'object',
-      properties: { cwd: { type: 'string', description: 'Project directory (default: current)' } },
-    },
-  },
-  {
-    name: 'get_hot_zones',
-    description: 'Get highest-risk files ranked by churn + complexity + dependency centrality',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        cwd: { type: 'string', description: 'Project directory (default: current)' },
-        limit: { type: 'number', description: 'Max files to return (default: 10)' },
-      },
-    },
-  },
-  {
-    name: 'get_impact',
-    description: 'Show which files break if a given file is changed (transitive dependency analysis)',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        file: { type: 'string', description: 'Relative file path to analyze' },
-        cwd: { type: 'string', description: 'Project directory (default: current)' },
-      },
-      required: ['file'],
-    },
-  },
-] as const;
 
 async function handleSearchMemory(args: Record<string, unknown>): Promise<string> {
   const cwd = String(args['cwd'] ?? process.cwd());
@@ -164,7 +110,7 @@ export async function startMcpServer(): Promise<void> {
     { capabilities: { tools: {} } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [...ToolRegistry] }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
