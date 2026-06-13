@@ -151,6 +151,7 @@ Read only matching sections (offset/limit 30 lines) to confirm. Report file+line
 
 function buildContextBlock(ctx: ScannerContext): string {
   const parts: string[] = [];
+  if (ctx.projectContext) parts.push(ctx.projectContext);
   if (ctx.targetFiles && ctx.targetFiles.length > 0) {
     parts.push(`## Target Files For This Audit\nFocus your Read calls on these files first. Use Grep/Bash only to find evidence that points back to these files unless the user explicitly requested a broader run.\n${ctx.targetFiles.map((f) => `- ${f}`).join('\n')}`);
   }
@@ -169,6 +170,7 @@ export interface ScannerContext {
   hotspotFiles?: string[];   // top files by coupling score — read these first
   targetFiles?: string[];    // prioritized source files for AI scanners
   ragContext?: string;       // semantic RAG snippets relevant to this domain
+  projectContext?: string;   // project identity: type, execution model, trust boundaries
 }
 
 export function buildScannerPrompt(domain: ScanDomain, scannerIndex: number, totalScanners: number, ctx?: ScannerContext): string {

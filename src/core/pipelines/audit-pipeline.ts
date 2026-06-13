@@ -16,6 +16,8 @@ import { buildDepGraphAuto } from '../../infra/dep-graph.js';
 import { KnowledgeStore } from '../../infra/knowledge.js';
 
 import { detectLang } from '../../infra/lang-detect.js';
+import { detectProjectIdentity, formatIdentityForPrompt } from '../../infra/project-identity.js';
+import { reclassifyFindings, reclassStats, formatReclassNote } from '../../infra/finding-reclassifier.js';
 import type { ScannerContext } from '../../prompts/scanner.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
@@ -114,6 +116,10 @@ export class AuditPipeline {
 
   private async buildScannerContext(domains?: import('../../prompts/scanner.js').ScanDomain[]): Promise<ScannerContext> {
     const ctx: ScannerContext = {};
+    try {
+      const identity = detectProjectIdentity(this.cwd);
+      ctx.projectContext = formatIdentityForPrompt(identity);
+    } catch { /* best-effort */ }
     try {
       const graph = new GraphAgent(this.cwd);
       ctx.repoSummary = await graph.queryWithContext('architecture structure modules', 15, 3000);
@@ -340,7 +346,8 @@ export class AuditPipeline {
         );
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
         const gated = this.applyEvidenceGate({ ...synthRun.output, totalFiles: allFiles.length });
-        const deduped = this.deduplicateFindings([...cachedFindings, ...gated.findings]);
+        const reclassed = this.applyContextReclassification(gated.findings);
+        const deduped = this.deduplicateFindings([...cachedFindings, ...reclassed]);
         const finalReport = recount({ ...gated, findings: deduped });
         saveAuditCache(this.cwd, allFiles, finalReport.findings);
         sessionBudget.record(this.costs.totalUsd());
@@ -350,7 +357,8 @@ export class AuditPipeline {
         this.emit('agent:output', { agentName: 'synthesizer', text: `Synthesizer failed; using local fallback: ${message}\n` });
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: Date.now() - synthStart });
         const fallback = this.applyEvidenceGate(fallbackAuditReport(reports, allFiles.length));
-        const deduped = this.deduplicateFindings([...cachedFindings, ...fallback.findings]);
+        const reclassed = this.applyContextReclassification(fallback.findings);
+        const deduped = this.deduplicateFindings([...cachedFindings, ...reclassed]);
         const finalReport = recount({ ...fallback, findings: deduped });
         saveAuditCache(this.cwd, allFiles, finalReport.findings);
         sessionBudget.record(this.costs.totalUsd());
@@ -414,6 +422,21 @@ export class AuditPipeline {
       }
     }
     return [...seen.values()].sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1));
+  }
+
+  private applyContextReclassification(findings: AuditFinding[]): AuditFinding[] {
+    try {
+      const identity = detectProjectIdentity(this.cwd);
+      const reclassed = reclassifyFindings(findings, identity);
+      const stats = reclassStats(findings, reclassed);
+      const note = formatReclassNote(stats);
+      if (note) {
+        this.emit('agent:output', { agentName: 'audit', text: `${note}\n` });
+      }
+      return reclassed;
+    } catch {
+      return findings;
+    }
   }
 
   private applyEvidenceGate(report: AuditReport): AuditReport {

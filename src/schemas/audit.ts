@@ -20,7 +20,9 @@ export const AuditFindingSchema = z.object({
   ),
   finding: z.string(),
   recommendation: z.string().default('Review the finding and add a focused remediation.'),
-  persona: z.string().optional(),  // which scanner domain found this
+  persona: z.string().optional(),      // which scanner domain found this
+  rawSeverity: z.string().optional(),  // original severity before contextual reclassification
+  contextNote: z.string().optional(),  // reason for reclassification
 });
 
 export const ScanReportSchema = z.object({
