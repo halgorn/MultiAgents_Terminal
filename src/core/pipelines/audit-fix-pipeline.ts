@@ -1,6 +1,7 @@
 import type { AuditReport, AuditFinding, FixSeverity } from '../../schemas/audit.js';
 import { SEVERITY_RANK } from '../../schemas/audit.js';
 import type { TaskResult } from '../task.js';
+import type { FlowManifest } from '../../schemas/flow-manifest.js';
 import type { PipelineContext } from '../pipeline-context.js';
 import { runFixPipeline } from './fix-pipeline.js';
 
@@ -117,3 +118,12 @@ export async function runAuditFixPipeline(
     results,
   };
 }
+
+export const manifest: FlowManifest = {
+  name: 'audit-fix',
+  description: 'Iterates over audit findings and runs fix pipeline for each eligible issue',
+  inputDescription: 'AuditReport with findings ranked by severity',
+  outputSchema: 'AuditFixReport',
+  agentSequence: ['planner', 'investigator', 'developer', 'reviewer', 'qa'],
+  failureStrategy: 'skip-and-continue',
+};

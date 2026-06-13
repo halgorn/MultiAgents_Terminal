@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { createTask, saveTaskResult } from '../../infra/db/task-repo.js';
+import type { FlowManifest } from '../../schemas/flow-manifest.js';
 import { ReviewerAgent } from '../../agents/reviewer.js';
 import { transition, makeWorktreeTracker } from '../pipeline-context.js';
 import type { PipelineContext } from '../pipeline-context.js';
@@ -82,3 +83,12 @@ export async function runReviewPipeline(ctx: PipelineContext, target: string): P
     wt.cleanup();
   }
 }
+
+export const manifest: FlowManifest = {
+  name: 'review',
+  description: 'Reviews a target file or diff using the reviewer agent',
+  inputDescription: 'target: file path or git diff reference',
+  outputSchema: 'TaskResult',
+  agentSequence: ['reviewer'],
+  failureStrategy: 'abort',
+};

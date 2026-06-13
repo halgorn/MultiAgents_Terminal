@@ -6,6 +6,7 @@ import { spawnSync } from 'child_process';
 import { createWorktree, removeWorktree } from '../../infra/worktree.js';
 import { ScannerAgent } from '../../agents/scanner.js';
 import { SynthesizerAgent } from '../../agents/synthesizer.js';
+import type { FlowManifest } from '../../schemas/flow-manifest.js';
 import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.js';
 import { SEVERITY_RANK } from '../../schemas/audit.js';
 import { validateAuditFindings } from '../../infra/evidence-gate.js';
@@ -448,3 +449,12 @@ export class AuditPipeline {
     return prioritizeFiles(this.cwd, files, max, extra);
   }
 }
+
+export const manifest: FlowManifest = {
+  name: 'audit',
+  description: 'Multi-domain security and quality audit using parallel scanners and a synthesizer',
+  inputDescription: 'target: directory or file path to audit',
+  outputSchema: 'AuditReport',
+  agentSequence: ['scanner', 'synthesizer'],
+  failureStrategy: 'skip-and-continue',
+};

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { createTask, saveTaskResult } from '../../infra/db/task-repo.js';
 import { saveEvidence } from '../../infra/db/evidence-repo.js';
+import type { FlowManifest } from '../../schemas/flow-manifest.js';
 import { KnowledgeStore } from '../../infra/knowledge.js';
 import { PlannerAgent } from '../../agents/planner.js';
 import { InvestigatorAgent } from '../../agents/investigator.js';
@@ -88,3 +89,12 @@ export async function runAnalyzePipeline(ctx: PipelineContext, target: string): 
     wt.cleanup();
   }
 }
+
+export const manifest: FlowManifest = {
+  name: 'analyze',
+  description: 'Deep-analyzes a target file or directory using planner and investigator agents',
+  inputDescription: 'target: file path or directory',
+  outputSchema: 'TaskResult',
+  agentSequence: ['planner', 'investigator'],
+  failureStrategy: 'abort',
+};

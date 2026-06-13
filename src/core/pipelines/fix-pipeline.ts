@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { createTask, saveTaskResult } from '../../infra/db/task-repo.js';
 import { saveEvidence } from '../../infra/db/evidence-repo.js';
+import type { FlowManifest } from '../../schemas/flow-manifest.js';
 import { KnowledgeStore } from '../../infra/knowledge.js';
 import { PlannerAgent } from '../../agents/planner.js';
 import { InvestigatorAgent } from '../../agents/investigator.js';
@@ -193,3 +194,12 @@ export async function runFixPipeline(ctx: PipelineContext, target: string): Prom
     wt.cleanup();
   }
 }
+
+export const manifest: FlowManifest = {
+  name: 'fix',
+  description: 'Plans, implements, reviews, and tests a fix for a given target finding',
+  inputDescription: 'target: file path or finding description',
+  outputSchema: 'TaskResult',
+  agentSequence: ['planner', 'investigator', 'developer', 'reviewer', 'qa'],
+  failureStrategy: 'abort',
+};
