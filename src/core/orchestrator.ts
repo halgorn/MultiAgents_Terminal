@@ -12,7 +12,7 @@ import { runAnalyzePipeline } from './pipelines/analyze-pipeline.js';
 import { runReviewPipeline } from './pipelines/review-pipeline.js';
 import { runAuditFixPipeline, type AuditFixOptions, type AuditFixReport } from './pipelines/audit-fix-pipeline.js';
 import type { ScanDomain } from '../prompts/scanner.js';
-import type { PipelineContext, PipelineEmitter } from './pipeline-context.js';
+import type { PipelineContext, PipelineEmitter, PipelineEventMap } from './pipeline-context.js';
 import {
   startLangfuseRootObservation,
   startLangfuseChildObservation,
@@ -107,9 +107,9 @@ export class Orchestrator extends EventEmitter {
   };
 
   private get pipelineContext(): PipelineContext {
-    const emit: PipelineEmitter = (event: string, payload: unknown) => {
-      if (event === 'agent:start' && payload && typeof payload === 'object') {
-        const agentName = (payload as Record<string, string>)['agentName'] ?? '';
+    const emit: PipelineEmitter = (event, payload) => {
+      if (event === 'agent:start') {
+        const { agentName } = payload as PipelineEventMap['agent:start'];
         this.tracer?.startSpan(agentName);
         if (!this.langfuseRoot) {
           this.langfuseRoot = startLangfuseRootObservation('runtime', this.cwd);

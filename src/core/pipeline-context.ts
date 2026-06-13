@@ -6,7 +6,18 @@ import { assertTransition } from './state-machine.js';
 import { updateTaskState, logStateHistory } from '../infra/db/task-repo.js';
 import { createWorktree, removeWorktree } from '../infra/worktree.js';
 
-export type PipelineEmitter = (event: string, payload: unknown) => void;
+export type PipelineEventMap = {
+  'state:change': { taskId: string; state: TaskState };
+  'agent:output': { agentName: string; text: string };
+  'agent:start': { agentName: string };
+  'agent:done': { agentName: string; durationMs: number };
+  error: { taskId: string; message: string };
+};
+
+export type PipelineEmitter = <K extends keyof PipelineEventMap>(
+  event: K,
+  payload: PipelineEventMap[K],
+) => void;
 
 export interface PipelineContext {
   cwd: string;
