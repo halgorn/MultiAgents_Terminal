@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { AION_CONFIG_FILE, AION_IGNORE_FILE } from '../../infra/paths.js';
+import { ensureGitignore } from '../../infra/gitignore-guard.js';
 
 export function registerInit(program: Command): void {
   program
@@ -47,6 +48,13 @@ export function registerInit(program: Command): void {
           '',
         ].join('\n'), 'utf8');
         console.log(chalk.green(`  ✓ ${AION_IGNORE_FILE} created`));
+      }
+
+      const { added } = ensureGitignore(cwd);
+      if (added.length > 0) {
+        console.log(chalk.green(`  ✓ .gitignore updated (${added.length} aion entries added)`));
+      } else {
+        console.log(chalk.dim('  .gitignore already up to date'));
       }
 
       console.log('');

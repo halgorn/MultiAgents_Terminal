@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
+import { ensureGitignore } from '../../infra/gitignore-guard.js';
 import { computeHealthScore } from '../../infra/health-score.js';
 import { buildChurnReport } from '../../infra/git-analysis.js';
 import { measureCognitiveLoad } from '../../infra/code-metrics.js';
@@ -22,6 +23,7 @@ export function registerHealth(program: Command): void {
     .option('--output <file>', 'write JSON output to a file')
     .action(async (options: { threshold: string; days: string; trend?: boolean; json?: boolean; output?: string }) => {
       const cwd = process.cwd();
+      ensureGitignore(cwd);
       const threshold = parseInt(options.threshold, 10) || 0;
       const days = parseInt(options.days, 10) || 90;
 

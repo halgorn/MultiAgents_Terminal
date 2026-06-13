@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
+import { ensureGitignore } from '../../infra/gitignore-guard.js';
 import { Orchestrator } from '../../core/orchestrator.js';
 import { AuditPipeline } from '../../core/pipelines/audit-pipeline.js';
 import { createRuntimePolicy, type ProviderName } from '../../core/runtime-policy.js';
@@ -144,6 +145,7 @@ export function registerAudit(program: Command): void {
     .option('--incremental', 'only scan files changed since last audit')
     .action(async (target: string = '.', options: AuditOptions) => {
       if (options.listPersonas) return printPersonas();
+      ensureGitignore(process.cwd());
       const { loadAionConfig, mergeConfig } = await import('../../infra/aion-config.js');
       const mergedOptions = mergeConfig(options as AuditOptions & Record<string, unknown>, loadAionConfig(process.cwd())) as AuditOptions;
       const explicitN = mergedOptions.scanners ? Math.max(1, Math.min(15, parseInt(String(mergedOptions.scanners), 10) || 5)) : undefined;

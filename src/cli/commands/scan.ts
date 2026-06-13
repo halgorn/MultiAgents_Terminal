@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import chalk from 'chalk';
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
+import { ensureGitignore } from '../../infra/gitignore-guard.js';
 import { buildApiMap, auditEnvVars, measureCognitiveLoad, scanCurrentSecrets } from '../../infra/code-metrics.js';
 import { buildSbom } from '../../infra/sbom.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
@@ -26,6 +27,7 @@ export function registerScan(program: Command): void {
     .description('Extract all API endpoints with auth and rate-limit status')
     .action(async () => {
       const cwd = process.cwd();
+      ensureGitignore(cwd);
       console.log(chalk.bold.cyan('\nAPI Map\n'));
       const endpoints = buildApiMap(cwd);
 
