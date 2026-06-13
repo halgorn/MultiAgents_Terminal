@@ -17,6 +17,10 @@ const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
 
 const SHELL_METACHAR_RE = /[;&|`$><\\!]/;
 
+export function sanitizeCommandForTest(cmd: string, fallback: string): string {
+  return sanitizeCommand(cmd, fallback);
+}
+
 function sanitizeCommand(cmd: string, fallback: string): string {
   const trimmed = (cmd ?? '').trim();
   if (!trimmed) return fallback;
