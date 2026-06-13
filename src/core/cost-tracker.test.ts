@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { CostTracker, SessionBudget } from './cost-tracker.js';
@@ -148,8 +148,9 @@ test('SessionBudget: stale budget file resets to zero spent', () => {
       spentUsd: 0.90,
       updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
     };
-    writeFileSync(join(dir, '.ai-runtime', 'session-budget.json'), JSON.stringify(stale), { recursive: true } as never);
-  } catch { /* dir creation may fail, handled below */ }
+    mkdirSync(join(dir, '.ai-runtime'), { recursive: true });
+    writeFileSync(join(dir, '.ai-runtime', 'session-budget.json'), JSON.stringify(stale));
+  } catch { /* handled below */ }
   try {
     const b = new SessionBudget(dir, 1.00);
     // Stale budget should reset spent to 0, making full capacity available
