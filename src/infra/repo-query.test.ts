@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { RepoIndex } from './repo-index.js';
-import { formatRepoQuery, queryRepoIndex } from './repo-query.js';
+import { writeRepoIndex } from './repo-index.js';
+import { formatRepoQuery, queryRepoIndex, loadRepoIndex, ensureRepoIndex } from './repo-query.js';
 
 const index: RepoIndex = {
   version: 1,
@@ -36,4 +40,25 @@ test('formatRepoQuery renders deterministic evidence', () => {
 
   assert.match(text, /Symbols:/);
   assert.match(text, /helper function src\/util.ts:1/);
+});
+
+test('loadRepoIndex returns null when no index exists', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-query-'));
+  try {
+    assert.equal(loadRepoIndex(dir), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('ensureRepoIndex returns cached index without rebuilding', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-query-'));
+  try {
+    writeRepoIndex(dir, index);
+    const result = await ensureRepoIndex(dir);
+    assert.equal(result.stats.files, index.stats.files);
+    assert.equal(result.version, index.version);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

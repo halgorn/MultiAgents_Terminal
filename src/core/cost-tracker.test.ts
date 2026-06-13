@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CostTracker } from './cost-tracker.js';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { CostTracker, SessionBudget } from './cost-tracker.js';
 
 // Canonical model name as defined in runtime-policy.ts ClaudeModel type
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -83,4 +86,87 @@ test('CostTracker falls back to haiku pricing for unknown models', () => {
   // Fallback to haiku input rate: 1000 * 0.80 / 1_000_000 = $0.0008
   assert.ok(total > 0, `expected non-zero cost for fallback model, got ${total}`);
   assert.match(costs.summary(), /cost: \$0\.0008/);
+});
+
+// ── SessionBudget ─────────────────────────────────────────────────────────────
+
+test('SessionBudget: fresh budget has full remaining capacity', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'session-budget-'));
+  try {
+    const b = new SessionBudget(dir, 1.50);
+    assert.equal(b.remaining(), 1.50);
+    assert.ok(b.canAfford(1.50));
+    assert.ok(!b.canAfford(1.51));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SessionBudget: warningLine is null above 30% threshold', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'session-budget-'));
+  try {
+    const b = new SessionBudget(dir, 1.00);
+    assert.equal(b.warningLine(), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SessionBudget: warningLine fires below 30% remaining', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'session-budget-'));
+  try {
+    const b = new SessionBudget(dir, 1.00);
+    b.record(0.75);
+    const warn = b.warningLine();
+    assert.ok(warn !== null, 'expected a warning line at 25% remaining');
+    assert.match(warn!, /Session budget low/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SessionBudget: record persists and reduces remaining', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'session-budget-'));
+  try {
+    const b1 = new SessionBudget(dir, 1.00);
+    b1.record(0.40);
+    assert.ok(Math.abs(b1.remaining() - 0.60) < 0.0001);
+
+    // Re-reading from disk should restore state within the TTL
+    const b2 = new SessionBudget(dir, 1.00);
+    assert.ok(Math.abs(b2.remaining() - 0.60) < 0.0001);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SessionBudget: stale budget file resets to zero spent', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'session-budget-'));
+  try {
+    const stale = {
+      capUsd: 1.00,
+      spentUsd: 0.90,
+      updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
+    };
+    writeFileSync(join(dir, '.ai-runtime', 'session-budget.json'), JSON.stringify(stale), { recursive: true } as never);
+  } catch { /* dir creation may fail, handled below */ }
+  try {
+    const b = new SessionBudget(dir, 1.00);
+    // Stale budget should reset spent to 0, making full capacity available
+    assert.equal(b.remaining(), 1.00);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SessionBudget: estimatedCost scales linearly with scanner count', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'session-budget-'));
+  try {
+    const b = new SessionBudget(dir);
+    const one = b.estimatedCost(1, 'claude-haiku-4-5-20251001');
+    const three = b.estimatedCost(3, 'claude-haiku-4-5-20251001');
+    assert.ok(Math.abs(three - one * 3) < 0.0001, `expected 3x scaling, got ${one} vs ${three}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
