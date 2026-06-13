@@ -40,11 +40,11 @@ export async function refreshUnifiedReport(cwd: string, options: RefreshReportOp
   if (!options.mdOnly) {
     try {
       if (progress) console.log(chalk.gray('  • generating interactive graph'));
-      const { GraphAgent } = await import('../agents/graph-agent.js');
+      const { ensureRepoIndex } = await import('./repo-query.js');
       const { detectLang } = await import('./lang-detect.js');
       const { buildDepGraphAuto } = await import('./dep-graph.js');
       const { writeGraphHtml } = await import('../cli/commands/graph.js');
-      const index = await new GraphAgent(cwd).ensureIndex();
+      const index = await ensureRepoIndex(cwd);
       const dep = buildDepGraphAuto(cwd, detectLang(cwd).lang);
       writeGraphHtml(cwd, index, dep);
     } catch {

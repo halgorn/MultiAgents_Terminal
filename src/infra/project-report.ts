@@ -5,7 +5,7 @@ import { buildSbom } from './sbom.js';
 import { buildChurnReport } from './git-analysis.js';
 import { detectPatterns } from './pattern-detect.js';
 import { computeHealthScore } from './health-score.js';
-import { GraphAgent } from '../agents/graph-agent.js';
+import { ensureRepoIndex } from './repo-query.js';
 import type { AuditFinding, AuditReport } from '../schemas/audit.js';
 import { displayProjectName } from './project-name.js';
 import { analyzeSeoAndCrawlers, type SeoCrawlerReport } from './seo-analyzer.js';
@@ -272,8 +272,7 @@ export function loadLatestAudit(cwd: string): AuditReport | null {
 export async function buildProjectReportData(cwd: string, days: number, onProgress?: (message: string) => void) {
   const projectName = displayProjectName(cwd);
   onProgress?.('indexing files and symbols');
-  const graph = new GraphAgent(cwd);
-  const index = await graph.ensureIndex();
+  const index = await ensureRepoIndex(cwd);
   let hotspots: Array<{ file: string; fanIn: number; fanOut: number }> = [];
   let cycles = 0;
   let detectedLang = 'unknown';

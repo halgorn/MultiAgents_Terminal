@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { RepoFile, RepoImport, RepoIndex, RepoSymbol, TestLink } from './repo-index.js';
+import { buildRepoIndex, writeRepoIndex } from './repo-index.js';
 import { AI_RUNTIME_DIR } from './paths.js';
 
 export interface RepoQueryResult {
@@ -84,4 +85,12 @@ export function formatRepoQuery(result: RepoQueryResult): string {
   }
 
   return lines.join('\n') || 'No repository index matches.';
+}
+
+export async function ensureRepoIndex(cwd: string): Promise<RepoIndex> {
+  const existing = loadRepoIndex(cwd);
+  if (existing) return existing;
+  const index = await buildRepoIndex(cwd);
+  writeRepoIndex(cwd, index);
+  return index;
 }
