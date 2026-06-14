@@ -19,6 +19,8 @@ import { projectReportCss } from './project-report-style.js';
 import { renderSeoHtml, renderSeoMarkdown } from './seo-report-render.js';
 import type { RepoIndex } from './repo-index.js';
 import { AI_RUNTIME_DIR } from './paths.js';
+import { detectProjectIdentity, type ProjectType } from './project-identity.js';
+import { buildImprovementPerspectives, WEB_TYPES, type ImprovementPerspective } from './project-report-perspectives.js';
 
 export { projectReportPath, rebuildProjectHtml, saveDomainSnapshot } from './project-audit-dashboard.js';
 
@@ -39,14 +41,6 @@ interface ArchitectureEdge {
   from: string;
   to: string;
   weight: number;
-}
-
-interface ImprovementPerspective {
-  persona: string;
-  focus: string;
-  risk: string;
-  recommendation: string;
-  projection: string;
 }
 
 function moduleName(path: string): string {
@@ -134,94 +128,6 @@ ${edgeSvg}${nodeSvg}
 </svg></div>`;
 }
 
-function buildImprovementPerspectives(input: {
-  healthTotal: number;
-  cycles: number;
-  hotspots: number;
-  totalFiles: number;
-  cognitiveAvg: number;
-  apiEndpoints: number;
-  unauthenticatedApis: number;
-  unrateLimitedApis: number;
-  seo: SeoCrawlerReport;
-  audit?: AuditReport | null;
-  unpinnedDeps: number;
-}): ImprovementPerspective[] {
-  const growth = input.totalFiles > 120 ? 'as the codebase grows' : 'when the project starts scaling';
-  return [
-    {
-      persona: 'SEO Engineer',
-      focus: 'Google discoverability and public metadata',
-      risk: input.seo.score < 70 ? 'Search engines may index incomplete or duplicated content.' : 'SEO baseline is acceptable, but should be monitored per release.',
-      recommendation: 'Keep robots.txt, sitemap.xml, canonical tags, title, description, OpenGraph, and JSON-LD in the report checklist.',
-      projection: input.seo.score < 70 ? 'Future landing pages can ship without crawlability and lose organic traffic.' : 'Future pages can be validated automatically before release.',
-    },
-    {
-      persona: 'AI Crawler Policy Lead',
-      focus: 'GPTBot, ClaudeBot, PerplexityBot, CCBot, and Google-Extended policy',
-      risk: input.seo.aiCrawlerPolicy === 'missing' ? 'AI crawlers have no explicit allow/block guidance.' : 'AI crawler policy exists but should track product/legal decisions.',
-      recommendation: 'Document crawler policy in robots.txt and keep it aligned with content licensing and product strategy.',
-      projection: 'Without explicit policy, future content may be used or blocked inconsistently by AI search and answer engines.',
-    },
-    {
-      persona: 'Analytics Engineer',
-      focus: 'Google Analytics, Tag Manager, and Search Console instrumentation',
-      risk: input.seo.googleAnalytics || input.seo.googleTagManager ? 'Analytics exists; conversion events still need validation.' : 'Production traffic may be invisible after launch.',
-      recommendation: 'Add GA4/GTM, Search Console verification, conversion events, and crawler/organic dashboards.',
-      projection: 'Future release impact will be hard to measure without baseline traffic and event data.',
-    },
-    {
-      persona: 'Performance Engineer',
-      focus: 'Rendering, bundle size, API latency, and crawler-friendly pages',
-      risk: input.apiEndpoints > 0 && input.unrateLimitedApis > 0 ? `${input.unrateLimitedApis} API endpoint(s) show no rate-limit signal.` : 'Performance risk is mostly architectural and should be tracked with synthetic checks.',
-      recommendation: 'Add route-level latency budgets, cache strategy, rate limits, and SSR/SSG checks for public pages.',
-      projection: `${growth}, unbounded APIs and client-only rendering can increase latency and reduce crawler extraction quality.`,
-    },
-    {
-      persona: 'Database Architect',
-      focus: 'Data model, query growth, indexes, and API-to-DB pressure',
-      risk: input.apiEndpoints > 0 ? 'API growth can create hidden N+1 queries, missing indexes, and transactional coupling.' : 'Database risk is unknown because no API surface was detected.',
-      recommendation: 'Map each API/domain module to tables, expected cardinality, indexes, read/write paths, and slow-query budgets.',
-      projection: 'At higher traffic, missing indexes and unclear ownership boundaries usually become latency spikes and migration risk.',
-    },
-    {
-      persona: 'Software Architect',
-      focus: 'Coupling, module boundaries, and graph health',
-      risk: input.cycles > 0 ? `${input.cycles} dependency cycle(s) can block refactors.` : `${input.hotspots} hotspot module(s) should be watched.`,
-      recommendation: 'Use the architecture graph to define module boundaries and reduce hotspot fan-in/fan-out before adding major features.',
-      projection: 'If central modules keep absorbing responsibilities, future changes will require broader regression testing.',
-    },
-    {
-      persona: 'Security Engineer',
-      focus: 'Authentication, authorization, supply chain, and exposed metadata',
-      risk: input.audit?.criticalCount || input.audit?.highCount ? `${input.audit.criticalCount} critical and ${input.audit.highCount} high audit finding(s) remain.` : 'No high-severity audit signal in the latest report.',
-      recommendation: 'Keep local secrets/SBOM scans zero-token and run focused AI audits only for high-risk domains.',
-      projection: 'Unpinned dependencies and unauthenticated endpoints become higher-impact as deployment surface grows.',
-    },
-    {
-      persona: 'SRE',
-      focus: 'Observability, reliability, and future incident detection',
-      risk: input.healthTotal < 70 ? `Health score ${input.healthTotal}/100 indicates operational fragility.` : 'Health score is acceptable, but trend data should be monitored.',
-      recommendation: 'Add health trend gates, error budgets, logs/traces coverage, and release dashboards.',
-      projection: 'Without trend history, regressions in churn, bus factor, and maintainability will appear late.',
-    },
-    {
-      persona: 'QA Lead',
-      focus: 'Coverage, regression risk, and generated-file noise',
-      risk: input.cognitiveAvg > 25 ? `Average cognitive score ${input.cognitiveAvg} suggests harder test design.` : 'Complexity is manageable but should be tracked per hotspot.',
-      recommendation: 'Prioritize tests around hotspots, high-churn files, and public API/database boundaries.',
-      projection: 'As complexity grows, low coverage around central modules will turn small changes into broad regressions.',
-    },
-    {
-      persona: 'Developer Experience Lead',
-      focus: 'Actionability, onboarding, and report signal quality',
-      risk: input.unpinnedDeps > 0 ? `${input.unpinnedDeps} unpinned dependency signal(s) can distract or create supply-chain drift.` : 'Report noise is lower after excluding generated artifacts.',
-      recommendation: 'Keep generated/build artifacts excluded, add suppressions for accepted risks, and make each report section actionable.',
-      projection: 'Cleaner reports reduce triage time and make the tool easier for other devs to adopt in daily workflows.',
-    },
-  ];
-}
-
 // ── Original report functions ─────────────────────────────────────────────────
 
 export function latestAuditPointer(cwd: string): { runDir?: string; html?: string; digest?: string; aiContext?: string; report?: string; createdAt?: string } | null {
@@ -271,6 +177,7 @@ export function loadLatestAudit(cwd: string): AuditReport | null {
 
 export async function buildProjectReportData(cwd: string, days: number, onProgress?: (message: string) => void) {
   const projectName = displayProjectName(cwd);
+  const projectType: ProjectType = (() => { try { return detectProjectIdentity(cwd).primary_type; } catch { return 'npm_package' as ProjectType; } })();
   onProgress?.('indexing files and symbols');
   const index = await ensureRepoIndex(cwd);
   let hotspots: Array<{ file: string; fanIn: number; fanOut: number }> = [];
@@ -334,6 +241,7 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
     seo,
     audit,
     unpinnedDeps: sbom.unpinned.length,
+    projectType,
   });
   const insights = buildProjectInsights({
     projectName,
@@ -348,7 +256,7 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   const generatedAt = new Date().toLocaleString();
   const trend = buildProjectTrend({ cwd, generatedAt, health, auditCriticals: audit?.criticalCount ?? 0, auditHighs: audit?.highCount ?? 0, seo, database, performance, lineSize });
   onProgress?.('generating HTML report');
-  return { projectName, health, audit, churn, patterns, cognitive, generatedAt, trend,
+  return { projectName, projectType, health, audit, churn, patterns, cognitive, generatedAt, trend,
     totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom, seo, database, performance, improvementPerspectives, insights };
 }
 
@@ -439,7 +347,10 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const sbomRows = data.sbom.unpinned.slice(0, 50).map((p) => `<tr><td>${esc(p.lang)}</td><td class="mono">${esc(p.name)}</td><td>${esc(p.version)}</td></tr>`).join('');
   const apiRows = data.apiEndpoints.slice(0, 50).map((ep) => `<tr><td>${esc(ep.method)}</td><td class="mono">${esc(ep.path)}</td><td>${ep.hasAuth ? 'yes' : 'no'}</td><td>${ep.hasRateLimit ? 'yes' : 'no'}</td><td class="mono">${esc(ep.file)}:${ep.line}</td></tr>`).join('');
   const architectureSvg = renderArchitectureSvg(data.architecture.nodes, data.architecture.edges);
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>${projectReportCss(gradeColor)}</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a><a href="#seo">SEO & Crawlers</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">10 Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
+  const isWeb = WEB_TYPES.includes(data.projectType);
+  const seoNavLink = isWeb ? '<a href="#seo">SEO & Crawlers</a>' : '';
+  const seoSection = isWeb ? renderSeoHtml(data.seo) : '';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>${projectReportCss(gradeColor)}</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a>${seoNavLink}<a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score" title="Health Score"><strong>${data.health.total}/100</strong><span>Grade ${data.health.grade}</span></div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
 ${renderTrendHtml(data.trend)}
@@ -450,7 +361,7 @@ ${architectureSvg}
 <div class="split"><div><h3>Detected Architecture Patterns</h3><table><tr><th>Pattern</th><th>Category</th><th>Confidence</th><th>Evidence</th></tr>${patternRows || '<tr><td colspan="4">No explicit architecture patterns detected.</td></tr>'}</table></div>
 <div><h3>Architecture Risks</h3><table><tr><th>Name</th><th>Severity</th><th>Description</th><th>Evidence</th></tr>${antiPatternRows || '<tr><td colspan="4">No architecture anti-patterns detected.</td></tr>'}</table></div></div>
 <h3>Module Coupling</h3><table><tr><th>Module</th><th>Files</th><th>Symbols</th><th>LOC</th><th>Fan-in</th><th>Fan-out</th></tr>${architectureRows || '<tr><td colspan="6">No module data available.</td></tr>'}</table></section>
-${renderSeoHtml(data.seo)}
+${seoSection}
 <section id="diagnostics"><h2>Local Diagnostics <span class="muted">(zero token)</span></h2><div class="grid"><div class="card"><strong class="${data.secrets.length ? 'warn' : 'ok'}">${data.secrets.length}</strong><br>Secrets</div><div class="card"><strong>${data.envAudit.vars.length}</strong><br>Env vars</div><div class="card"><strong class="${data.sbom.unpinned.length ? 'warn' : 'ok'}">${data.sbom.unpinned.length}</strong><br>Unpinned deps</div><div class="card"><strong>${data.apiEndpoints.length}</strong><br>API endpoints</div></div>
 <h3>Secrets</h3><table><tr><th>Location</th><th>Pattern</th><th>Preview</th></tr>${secretRows}</table>
 <h3>Environment Variables</h3><table><tr><th>Documented</th><th>Name</th><th>Location</th></tr>${envRows || '<tr><td colspan="3">No environment variables detected.</td></tr>'}</table>
