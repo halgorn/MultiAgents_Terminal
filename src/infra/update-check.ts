@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
@@ -50,7 +51,7 @@ async function fetchLatest(): Promise<string | null> {
   } catch { return null; }
 }
 
-function isNewer(a: string, b: string): boolean {
+export function isNewer(a: string, b: string): boolean {
   const pa = a.split('.').map(Number);
   const pb = b.split('.').map(Number);
   for (let i = 0; i < 3; i++) {
@@ -68,19 +69,128 @@ export function shouldRefreshUpdateCache(cache: UpdateCache | null, current: str
   return now - cache.checkedAt > CHECK_INTERVAL_MS;
 }
 
-function blockOnUpdate(current: string, latest: string): never {
-  console.error(
+// ── Non-TTY fallback: print warning, do not block ────────────────────────────
+
+function warnUpdate(current: string, latest: string): void {
+  process.stderr.write(
     '\n' +
-    chalk.red.bold(`  ┌─ Atualização obrigatória: ${current} → ${latest}`) +
-    '\n' +
-    chalk.white(`  │  Execute o comando abaixo e tente novamente:`) +
-    '\n' +
-    chalk.cyan.bold(`  │    npm install -g ${PACKAGE_NAME}@latest`) +
-    '\n' +
-    chalk.red('  └─────────────────────────────────────────') +
-    '\n'
+    chalk.yellow.bold(`  ┌─ Nova versão disponível: ${current} → ${latest}`) + '\n' +
+    chalk.white(`  │  Execute: npm install -g ${PACKAGE_NAME}@latest`) + '\n' +
+    chalk.yellow('  └' + '─'.repeat(50)) + '\n\n',
   );
-  process.exit(1);
+}
+
+// ── Interactive TTY menu ─────────────────────────────────────────────────────
+
+const MENU_LINES = 8;
+
+function renderMenu(current: string, latest: string, selected: number): void {
+  const items = [
+    chalk.cyan.bold(`Atualizar agora`) + chalk.dim(`  (npm install -g ${PACKAGE_NAME}@latest)`),
+    chalk.white('Continuar sem atualizar'),
+  ];
+
+  const lines = [
+    '',
+    chalk.yellow.bold(`  ┌─ Nova versão disponível: ${chalk.white(current)} → ${chalk.green.bold(latest)}`),
+    chalk.yellow('  │'),
+    chalk.yellow('  │  ') + chalk.dim('Use ↑↓ para navegar, Enter para confirmar:'),
+    chalk.yellow('  │'),
+    ...items.map((label, i) =>
+      chalk.yellow('  │  ') + (selected === i ? chalk.green('❯ ') + label : chalk.dim('  ') + label),
+    ),
+    chalk.yellow('  └' + '─'.repeat(52)),
+    '',
+  ];
+
+  process.stdout.write(lines.join('\n'));
+}
+
+async function interactiveUpdateMenu(current: string, latest: string): Promise<'update' | 'continue'> {
+  return new Promise((resolve) => {
+    let selected = 0;
+
+    // Initial render
+    renderMenu(current, latest, selected);
+
+    const stdin = process.stdin;
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+
+    // Hide cursor during menu
+    process.stdout.write('\x1B[?25l');
+
+    function teardown() {
+      stdin.setRawMode(false);
+      stdin.pause();
+      stdin.removeListener('data', onKey);
+      process.stdout.write('\x1B[?25h'); // restore cursor
+    }
+
+    function redraw() {
+      // Move cursor up MENU_LINES lines and redraw
+      process.stdout.write(`\x1B[${MENU_LINES}A`);
+      renderMenu(current, latest, selected);
+    }
+
+    function onKey(key: string) {
+      if (key === '\x03') { // Ctrl+C
+        teardown();
+        process.stdout.write('\n');
+        process.exit(0);
+      }
+
+      if (key === '\x1B[A' || key === '\x1B[D') { // Up arrow
+        if (selected > 0) { selected--; redraw(); }
+        return;
+      }
+
+      if (key === '\x1B[B' || key === '\x1B[C') { // Down arrow
+        if (selected < 1) { selected++; redraw(); }
+        return;
+      }
+
+      if (key === '\r' || key === '\n' || key === ' ') { // Enter / Space
+        teardown();
+        process.stdout.write('\n');
+        resolve(selected === 0 ? 'update' : 'continue');
+      }
+    }
+
+    stdin.on('data', onKey);
+  });
+}
+
+function installUpdate(latest: string): never {
+  console.log(chalk.cyan(`\n  Instalando ${PACKAGE_NAME}@${latest}...\n`));
+  const result = spawnSync('npm', ['install', '-g', `${PACKAGE_NAME}@latest`], {
+    stdio: 'inherit',
+    shell: false,
+  });
+  if (result.status === 0) {
+    console.log(chalk.green.bold(`\n  ✓ Atualizado para ${latest}. Execute o comando novamente.\n`));
+  } else {
+    console.error(chalk.red(`\n  ✗ Falha na instalação. Tente manualmente:`));
+    console.error(chalk.cyan(`    npm install -g ${PACKAGE_NAME}@latest\n`));
+  }
+  process.exit(0);
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+async function handleUpdate(current: string, latest: string): Promise<void> {
+  if (!process.stdout.isTTY || !process.stdin.isTTY) {
+    warnUpdate(current, latest);
+    return;
+  }
+
+  const choice = await interactiveUpdateMenu(current, latest);
+
+  if (choice === 'update') {
+    installUpdate(latest);
+  }
+  // 'continue' → fall through, command runs normally
 }
 
 export async function checkForUpdate(): Promise<void> {
@@ -90,21 +200,20 @@ export async function checkForUpdate(): Promise<void> {
   const cache = readCache();
   const now = Date.now();
 
-  // Block immediately if cached version is newer
   if (cache && isNewer(cache.latestVersion, current)) {
-    blockOnUpdate(current, cache.latestVersion);
+    await handleUpdate(current, cache.latestVersion);
+    return;
   }
 
   const stale = shouldRefreshUpdateCache(cache, current, now);
   if (stale) {
-    // Always await (up to 2s) so updates are caught on first run too
     const latest = await Promise.race([
       fetchLatest(),
       new Promise<null>((r) => setTimeout(() => r(null), 2000)),
     ]);
     if (latest) {
       writeCache({ checkedAt: now, latestVersion: latest, currentVersion: current });
-      if (isNewer(latest, current)) blockOnUpdate(current, latest);
+      if (isNewer(latest, current)) await handleUpdate(current, latest);
     }
   }
 }
