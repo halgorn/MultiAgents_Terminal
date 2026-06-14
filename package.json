@@ -1,6 +1,6 @@
 {
   "name": "@aionlabsai/aion",
-  "version": "0.3.39",
+  "version": "0.4.0",
   "description": "Multi-agent AI engineering runtime — audit, fix, graph, analyze",
   "type": "module",
   "bin": {
@@ -41,6 +41,7 @@
   "author": "Bruno Inácio <contact@walo.us>",
   "license": "MIT",
   "dependencies": {
+    "@aionlabsai/aion": "^0.3.39",
     "@anthropic-ai/sdk": "0.100.1",
     "@langchain/langgraph": "^1.3.6",
     "@langfuse/client": "^5.4.1",
