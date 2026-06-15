@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { execFileSync } from 'child_process';
 import chalk from 'chalk';
 import { ensureGitignore } from '../../infra/gitignore-guard.js';
 import { Orchestrator } from '../../core/orchestrator.js';
@@ -31,6 +32,8 @@ interface AuditOptions {
   fixMinSeverity: string;
   dryRun?: boolean;
   incremental?: boolean;
+  since?: string;
+  notifyWebhook?: string;
 }
 
 function renderAuditReport(report: AuditReport, durationMs: number): void {
@@ -143,9 +146,28 @@ export function registerAudit(program: Command): void {
     .option('--fix-min-severity <s>', 'minimum severity to fix: critical|high|medium (default: high)', 'high')
     .option('--dry-run', 'collect audit file stats without starting agents')
     .option('--incremental', 'only scan files changed since last audit')
+    .option('--since <git-ref>', 'only scan files changed since this git ref (e.g. HEAD~3, main)')
+    .option('--notify-webhook <url>', 'POST audit summary to this URL when complete')
     .action(async (target: string = '.', options: AuditOptions) => {
       if (options.listPersonas) return printPersonas();
       ensureGitignore(process.cwd());
+
+      // --since: resolve changed files via git diff
+      let sinceFiles: string[] | undefined;
+      if (options.since) {
+        try {
+          const raw = execFileSync('git', ['diff', '--name-only', options.since], { cwd: process.cwd(), encoding: 'utf8' });
+          sinceFiles = raw.trim().split('\n').filter(Boolean);
+          if (sinceFiles.length === 0) {
+            console.log(chalk.yellow(`  No files changed since ${options.since}. Nothing to audit.`));
+            return;
+          }
+          console.log(chalk.dim(`  --since ${options.since}: ${sinceFiles.length} changed file(s)\n`));
+        } catch {
+          console.error(chalk.red(`  Cannot resolve git ref: ${options.since}`));
+          process.exitCode = 1; return;
+        }
+      }
       const { loadAionConfig, mergeConfig } = await import('../../infra/aion-config.js');
       const mergedOptions = mergeConfig(options as AuditOptions & Record<string, unknown>, loadAionConfig(process.cwd())) as AuditOptions;
       const explicitN = mergedOptions.scanners ? Math.max(1, Math.min(15, parseInt(String(mergedOptions.scanners), 10) || 5)) : undefined;
@@ -257,6 +279,24 @@ export function registerAudit(program: Command): void {
         console.log(chalk.gray(`dashboard: ${saved.dashboard}`));
         console.log(chalk.dim(orch.costs.summary()));
         await orch.flushTrace();
+        if (options.notifyWebhook) {
+          try {
+            await fetch(options.notifyWebhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                project: process.cwd(),
+                findings: report.findings.length,
+                critical: report.criticalCount,
+                high: report.highCount,
+                summary: report.summary,
+                durationMs,
+                reportHtml: saved.html,
+              }),
+            });
+            console.log(chalk.dim(`  webhook notified: ${options.notifyWebhook}`));
+          } catch { console.log(chalk.yellow(`  webhook failed: ${options.notifyWebhook}`)); }
+        }
         await maybeAutoFix(options, report, orch);
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
       } catch (err) {

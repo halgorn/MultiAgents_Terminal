@@ -25,21 +25,26 @@ export function registerScan(program: Command): void {
   scan
     .command('api-map')
     .description('Extract all API endpoints with auth and rate-limit status')
-    .action(async () => {
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
       const cwd = process.cwd();
       ensureGitignore(cwd);
-      console.log(chalk.bold.cyan('\nAPI Map\n'));
       const endpoints = buildApiMap(cwd);
-
+      if (options.json || options.output) {
+        const out = JSON.stringify(endpoints, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nAPI Map\n'));
       if (endpoints.length === 0) {
         console.log(chalk.yellow('No API endpoints detected. Supports FastAPI, Flask, Django, Express.'));
         await refreshScanDashboard(cwd, 'scan api-map');
         return;
       }
-
       const noAuth = endpoints.filter((e) => !e.hasAuth);
       const noRateLimit = endpoints.filter((e) => !e.hasRateLimit);
-
       endpoints.forEach((ep) => {
         const authIcon = ep.hasAuth ? chalk.green('🔒') : chalk.red('🔓');
         const rlIcon = ep.hasRateLimit ? chalk.green('⏱') : chalk.gray('  ');
@@ -50,7 +55,6 @@ export function registerScan(program: Command): void {
           chalk.dim(`${ep.file}:${ep.line}`),
         );
       });
-
       console.log(chalk.bold(`\nSummary: ${endpoints.length} endpoints`));
       if (noAuth.length > 0) console.log(chalk.red(`  🔓 ${noAuth.length} without auth`));
       if (noRateLimit.length > 0) console.log(chalk.yellow(`  ⏱  ${noRateLimit.length} without rate limiting`));
@@ -61,26 +65,30 @@ export function registerScan(program: Command): void {
   scan
     .command('env-audit')
     .description('Find all environment variables used and check if they are documented')
-    .action(async () => {
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
       const cwd = process.cwd();
-      console.log(chalk.bold.cyan('\nEnvironment Variables Audit\n'));
       const result = auditEnvVars(cwd);
-
+      if (options.json || options.output) {
+        const out = JSON.stringify(result, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nEnvironment Variables Audit\n'));
       if (result.vars.length === 0) {
         console.log(chalk.yellow('No environment variables detected.'));
         await refreshScanDashboard(cwd, 'scan env-audit');
         return;
       }
-
       if (!result.envExampleExists) {
         console.log(chalk.red('⚠ No .env.example / .env.sample found — new developers cannot know required variables\n'));
       }
-
       result.vars.forEach((v) => {
         const icon = v.documented ? chalk.green('✓') : chalk.red('✗');
         console.log(`  ${icon}  ${chalk.bold(v.name.padEnd(35))} ${chalk.dim(`${v.file}:${v.line}`)}`);
       });
-
       console.log(chalk.bold(`\nSummary: ${result.vars.length} env vars`));
       if (result.undocumented.length > 0) {
         console.log(chalk.red(`  ${result.undocumented.length} undocumented: ${result.undocumented.slice(0, 5).join(', ')}${result.undocumented.length > 5 ? '...' : ''}`));
@@ -93,18 +101,24 @@ export function registerScan(program: Command): void {
     .command('cognitive-load')
     .description('Measure cognitive difficulty per file: nesting, magic numbers, long functions')
     .option('--top <n>', 'number of files to show', '20')
-    .action(async (options: { top: string }) => {
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { top: string; json?: boolean; output?: string }) => {
       const cwd = process.cwd();
       const top = parseInt(options.top, 10) || 20;
-      console.log(chalk.bold.cyan('\nCognitive Load Analysis\n'));
       const entries = measureCognitiveLoad(cwd, top);
-
+      if (options.json || options.output) {
+        const out = JSON.stringify(entries, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nCognitive Load Analysis\n'));
       if (entries.length === 0) {
         console.log(chalk.yellow('No source files found.'));
         await refreshScanDashboard(cwd, 'scan cognitive-load');
         return;
       }
-
       entries.forEach((e) => {
         const scoreColor = e.score >= 40 ? chalk.red : e.score >= 20 ? chalk.yellow : chalk.green;
         console.log(
@@ -113,7 +127,6 @@ export function registerScan(program: Command): void {
           chalk.white(e.file),
         );
       });
-
       const avgScore = Math.round(entries.reduce((s, e) => s + e.score, 0) / entries.length);
       console.log(chalk.bold(`\nAvg score: ${avgScore} · Top ${entries.length} files shown`));
       console.log(chalk.dim('Score = nesting×3 + long-functions×5 + magic-numbers/3 + long-lines penalty'));
@@ -125,19 +138,25 @@ export function registerScan(program: Command): void {
     .command('file-size')
     .description('Check source files against the maintainability line limit')
     .option('--limit <n>', 'maximum lines per source file', '500')
-    .action(async (options: { limit: string }) => {
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { limit: string; json?: boolean; output?: string }) => {
       const cwd = process.cwd();
       const limit = Math.max(50, parseInt(options.limit, 10) || 500);
-      console.log(chalk.bold.cyan('\nFile Size Guardrail\n'));
       const report = analyzeLineSize(cwd, limit);
-
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nFile Size Guardrail\n'));
       if (report.oversized.length === 0) {
         console.log(chalk.green(`✓ No source files over ${report.limit} lines`));
         console.log(chalk.dim(`  Checked ${report.checkedFiles} source files`));
         await refreshScanDashboard(cwd, 'scan file-size');
         return;
       }
-
       report.oversized.slice(0, 30).forEach((entry) => {
         console.log(chalk.yellow(`  ${entry.lines.toString().padStart(4)} lines  +${entry.overBy.toString().padEnd(4)}  ${entry.file}`));
       });
@@ -181,24 +200,32 @@ export function registerScan(program: Command): void {
   scan
     .command('secrets')
     .description('Scan current files for hardcoded secrets and credentials')
-    .action(async () => {
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .option('--fail-on-found', 'exit with code 1 if any secrets are found (for CI)')
+    .action(async (options: { json?: boolean; output?: string; failOnFound?: boolean }) => {
       const cwd = process.cwd();
-      console.log(chalk.bold.cyan('\nSecrets Scan (current files)\n'));
       const hits = scanCurrentSecrets(cwd);
-
+      if (options.json || options.output) {
+        const out = JSON.stringify(hits, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        if (options.failOnFound && hits.length > 0) process.exitCode = 1;
+        return;
+      }
+      console.log(chalk.bold.cyan('\nSecrets Scan (current files)\n'));
       if (hits.length === 0) {
         console.log(chalk.green('✓ No hardcoded secrets detected in current files'));
         await refreshScanDashboard(cwd, 'scan secrets');
         return;
       }
-
       console.log(chalk.red(`⚠ ${hits.length} potential secret(s) found:\n`));
       hits.forEach((h) => {
         console.log(chalk.bold(`  ${h.file}:${h.line}`) + chalk.red(` [${h.pattern}]`));
         console.log(chalk.dim(`    ${h.preview}`));
       });
-
       console.log(chalk.yellow('\nNote: also check git history for previously committed secrets'));
+      if (options.failOnFound) process.exitCode = 1;
       await refreshScanDashboard(cwd, 'scan secrets');
     });
 
@@ -207,24 +234,29 @@ export function registerScan(program: Command): void {
     .command('sbom')
     .description('Software Bill of Materials: all dependencies with versions and pin status')
     .option('--unpinned-only', 'show only unpinned dependencies')
-    .action(async (options: { unpinnedOnly?: boolean }) => {
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { unpinnedOnly?: boolean; json?: boolean; output?: string }) => {
       const cwd = process.cwd();
-      console.log(chalk.bold.cyan('\nSoftware Bill of Materials\n'));
       const report = buildSbom(cwd);
-
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nSoftware Bill of Materials\n'));
       if (report.packages.length === 0) {
         console.log(chalk.yellow('No package files found (requirements.txt, package.json, go.mod, Cargo.toml)'));
         await refreshScanDashboard(cwd, 'scan sbom');
         return;
       }
-
       const packages = options.unpinnedOnly ? report.unpinned : report.packages;
       packages.slice(0, 60).forEach((p) => {
         const icon = p.pinned ? chalk.green('✓') : chalk.red('!');
         console.log(`  ${icon}  ${chalk.gray(p.lang.padEnd(8))} ${chalk.white(p.name.padEnd(30))} ${chalk.dim(p.version)}`);
       });
       if (packages.length > 60) console.log(chalk.dim(`  ... and ${packages.length - 60} more`));
-
       console.log(chalk.bold(`\nTotal: ${report.totalCount} packages`));
       if (report.unpinned.length > 0) {
         console.log(chalk.yellow(`  ${report.unpinned.length} unpinned (supply chain risk)`));

@@ -25,6 +25,12 @@ export interface AionConfig {
   fixMinSeverity?: FixSeverity;
   /** Default scanner count override */
   scanners?: number;
+  /** Webhook URL to POST audit results to (used with aion audit --notify-webhook) */
+  notifyWebhook?: string;
+  /** Watch polling interval in seconds (used with aion watch) */
+  watchInterval?: number;
+  /** Default git ref for --since filtering (e.g. "main") */
+  sinceRef?: string;
 }
 
 export function loadAionConfig(cwd: string): AionConfig {

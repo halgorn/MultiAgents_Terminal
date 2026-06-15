@@ -37,6 +37,7 @@ import { registerSetup, runProjectSetupWizard } from './cli/commands/setup.js';
 import { registerCopilot } from './cli/commands/copilot.js';
 import { registerIndex } from './cli/commands/index.js';
 import { registerReleaseCheck } from './cli/commands/release-check.js';
+import { registerWatch } from './cli/commands/watch.js';
 import { buildAssistPlan, saveAssistPlan } from './infra/assist/assist-plan.js';
 import { applyArtifacts, formatArtifactSummary } from './infra/assist/apply-artifacts.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
@@ -118,6 +119,7 @@ registerSetup(program);
 registerCopilot(program);
 registerIndex(program);
 registerReleaseCheck(program);
+registerWatch(program);
 
 program
   .command('assist')
