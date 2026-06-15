@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { AION_CONFIG_FILE, AION_IGNORE_FILE } from '../../infra/paths.js';
 import { ensureGitignore } from '../../infra/gitignore-guard.js';
+import { isProjectPrepared } from '../../infra/setup/project-setup.js';
 
 export function registerInit(program: Command): void {
   program
@@ -60,5 +61,13 @@ export function registerInit(program: Command): void {
       console.log('');
       console.log(chalk.dim(`  Edit ${AION_CONFIG_FILE} to set default preset, budget, and provider.`));
       console.log(chalk.dim(`  Edit ${AION_IGNORE_FILE} to add project-specific exclusion patterns.`));
+      console.log('');
+
+      const prepared = isProjectPrepared(cwd);
+      if (!prepared) {
+        console.log(chalk.bold('Next step:'));
+        console.log(`  ${chalk.cyan('aion setup')}  ${chalk.dim('— index codebase, build memory, install git hook')}`);
+        console.log('');
+      }
     });
 }

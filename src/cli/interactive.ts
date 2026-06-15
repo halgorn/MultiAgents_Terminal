@@ -5,12 +5,32 @@ import { Orchestrator } from '../core/orchestrator.js';
 import { Renderer } from './ui/renderer.js';
 import { KnowledgeStore } from '../infra/knowledge.js';
 import { GraphAgent } from '../agents/graph-agent.js';
+import { displayProjectName } from '../infra/project-name.js';
+
+const HELP_LINES = [
+  chalk.bold('Commands:'),
+  `  ${chalk.cyan('fix <description>')}     — run fix pipeline`,
+  `  ${chalk.cyan('review <file/topic>')}   — review code or topic`,
+  `  ${chalk.cyan('audit')}                 — run security/quality audit`,
+  `  ${chalk.cyan('memory build')}          — build embedding index`,
+  `  ${chalk.cyan('memory search <query>')} — semantic memory search`,
+  `  ${chalk.cyan('graph')}                 — index repository symbol graph`,
+  '',
+  chalk.dim('  /help or ?  show this message'),
+  chalk.dim('  clear       clear screen'),
+  chalk.dim('  exit        leave REPL'),
+];
+
+function printHelp(): void {
+  console.log('');
+  for (const line of HELP_LINES) console.log(line);
+  console.log('');
+}
 
 export async function runNaturalLanguage(input: string, cwd: string): Promise<void> {
   const { intent, target } = classify(input);
 
   if (intent === 'unknown') {
-    // Default to analyze when intent is unclear
     console.log(chalk.yellow('  ⚠ Intent unclear, falling back to general analysis...'));
     await runWithRenderer(cwd, 'analyze', target);
     return;
@@ -100,27 +120,38 @@ export async function runInteractive(cwd: string): Promise<void> {
   // menu process survives instead of dying with an unhandled SIGINT.
   rl.on('SIGINT', () => { process.stdout.write('\n'); rl.close(); });
 
-  console.log(chalk.bold('\n🤖 AI Engineering Runtime'));
-  console.log(chalk.gray('Type your request in natural language. Ctrl+C or "exit" to return.\n'));
-  console.log(chalk.gray('Examples:'));
-  console.log(chalk.gray('  corrija o bug de autenticação'));
-  console.log(chalk.gray('  analise os erros no módulo de pagamento'));
-  console.log(chalk.gray('  revise o arquivo src/auth/middleware.ts'));
-  console.log(chalk.gray('  indexar memória\n'));
+  const project = displayProjectName(cwd);
+  console.log(chalk.bold(`\n🤖 AI Runtime`) + chalk.dim(` — ${project}`));
+  console.log(chalk.gray('Natural language interface. Type /help or ? for commands.\n'));
+
+  const promptLabel = chalk.bold.cyan(`ai[${project}]> `);
 
   const prompt = (): Promise<void> => new Promise((resolve) => {
-    rl.question(chalk.bold.cyan('ai> '), async (input) => {
+    rl.question(promptLabel, async (input) => {
       const trimmed = input.trim();
+
       if (!trimmed || trimmed === 'exit' || trimmed === 'quit') {
         rl.close();
         resolve();
         return;
       }
 
+      if (trimmed === '/help' || trimmed === '?') {
+        printHelp();
+        resolve(prompt());
+        return;
+      }
+
+      if (trimmed === 'clear') {
+        process.stdout.write('\x1Bc');
+        resolve(prompt());
+        return;
+      }
+
       try {
         await runNaturalLanguage(trimmed, cwd);
       } catch (err) {
-        console.error(chalk.red('\n  ✗ Error: ') + chalk.red(err instanceof Error ? err.message : String(err)));
+        process.stderr.write(chalk.red('\n  ✗ Error: ') + chalk.red(err instanceof Error ? err.message : String(err)) + '\n');
       }
 
       console.log();

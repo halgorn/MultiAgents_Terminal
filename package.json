@@ -1,7 +1,7 @@
 {
   "name": "@aionlabsai/aion",
-  "version": "0.4.7",
-  "description": "Multi-agent AI engineering runtime — audit, fix, graph, analyze",
+  "version": "0.4.8",
+  "description": "Multi-agent AI engineering runtime \u2014 audit, fix, graph, analyze",
   "type": "module",
   "bin": {
     "aion": "dist/index.js",
@@ -38,7 +38,7 @@
     "security",
     "cli"
   ],
-  "author": "Bruno Inácio <contact@walo.us>",
+  "author": "Bruno In\u00e1cio <contact@walo.us>",
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "0.100.1",

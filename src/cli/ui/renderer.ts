@@ -16,8 +16,18 @@ const STATE_COLOR: Record<TaskState, (s: string) => string> = {
   FAILED: chalk.bold.red,
 };
 
+function termWidth(): number {
+  return process.stdout.columns ?? 60;
+}
+
+function elapsed(startMs: number): string {
+  const s = ((Date.now() - startMs) / 1000).toFixed(1);
+  return chalk.dim(`${s}s`);
+}
+
 export class Renderer {
   private spinners = new Map<string, Ora>();
+  private startedAt = new Map<string, number>();
   private currentState: TaskState = 'NEW';
 
   showState(state: TaskState): void {
@@ -30,29 +40,47 @@ export class Renderer {
   private printProgress(active: TaskState): void {
     const activeIdx = STATE_ORDER.indexOf(active);
     const isFailed = active === 'FAILED';
+    const w = termWidth();
 
-    const bar = STATE_ORDER.filter((s) => s !== 'FAILED').map((s, i) => {
+    const segments = STATE_ORDER.filter((s) => s !== 'FAILED').map((s, i) => {
       if (isFailed && i < activeIdx) return chalk.green(`✓ ${s}`);
       if (s === active) return chalk.bold.white(`[${s}]`);
       const idx = STATE_ORDER.indexOf(s);
       return idx < activeIdx ? chalk.green(`✓ ${s}`) : chalk.gray(s);
-    }).join(' → ');
+    });
+    if (isFailed) segments.push(chalk.bold.red('[FAILED]'));
 
-    const suffix = isFailed ? ' → ' + chalk.bold.red('[FAILED]') : '';
-    process.stdout.write(bar + suffix + '\n\n');
+    const sep = chalk.dim(' → ');
+    const sepLen = 4;
+    const lines: string[][] = [[]];
+    let lineLen = 0;
+
+    for (const seg of segments) {
+      const rawLen = seg.replace(/\x1b\[[^m]*m/g, '').length;
+      if (lines[lines.length - 1]!.length > 0 && lineLen + sepLen + rawLen > w) {
+        lines.push([]);
+        lineLen = 0;
+      }
+      if (lines[lines.length - 1]!.length > 0) lineLen += sepLen;
+      lines[lines.length - 1]!.push(seg);
+      lineLen += rawLen;
+    }
+
+    process.stdout.write(lines.map((l) => l.join(sep)).join('\n') + '\n\n');
   }
 
   agentStart(agentName: string): void {
+    this.startedAt.set(agentName, Date.now());
     const spinner = ora({ text: chalk.dim(`${agentName} thinking...`), spinner: 'dots' }).start();
     this.spinners.set(agentName, spinner);
   }
 
   agentChunk(agentName: string, text: string): void {
     const spinner = this.spinners.get(agentName);
+    const t = elapsed(this.startedAt.get(agentName) ?? Date.now());
     if (spinner) {
-      // Show last 60 chars of output as spinner suffix
-      const preview = text.replace(/\n/g, ' ').slice(-60);
-      spinner.text = chalk.dim(`[${agentName}] `) + preview;
+      const preview = text.replace(/\n/g, ' ').slice(-55);
+      spinner.text = chalk.dim(`[${agentName}]`) + ` ${t} ` + preview;
     } else {
       process.stdout.write(chalk.dim(`[${agentName}] `) + text);
     }
@@ -61,17 +89,20 @@ export class Renderer {
   agentDone(agentName: string, durationMs: number): void {
     const spinner = this.spinners.get(agentName);
     if (spinner) {
-      spinner.succeed(chalk.green(`${agentName} done`) + chalk.gray(` (${durationMs}ms)`));
+      const secs = (durationMs / 1000).toFixed(1);
+      spinner.succeed(chalk.green(`${agentName} done`) + chalk.gray(` (${secs}s)`));
       this.spinners.delete(agentName);
+      this.startedAt.delete(agentName);
     }
   }
 
   showError(err: unknown): void {
     for (const [, spinner] of this.spinners) spinner.fail();
     this.spinners.clear();
+    this.startedAt.clear();
     const rawMsg = err instanceof Error ? err.message : String(err);
     const msg = rawMsg.split('\n').map((line, i) => (i === 0 ? line : `    ${line}`)).join('\n');
-    console.error(chalk.red('\n✗ Error: ') + chalk.red(msg));
+    process.stderr.write(chalk.red('\n✗ Error: ') + chalk.red(msg) + '\n');
   }
 
   showCost(summary: string): void {
@@ -81,15 +112,20 @@ export class Renderer {
   showResult(result: TaskResult): void {
     for (const [, spinner] of this.spinners) spinner.stop();
     this.spinners.clear();
+    this.startedAt.clear();
 
-    console.log('\n' + chalk.bold('─'.repeat(60)));
+    const sep = chalk.bold('─'.repeat(Math.min(termWidth(), 70)));
+    console.log('\n' + sep);
 
     if (result.state === 'DONE') {
-      console.log(chalk.bold.green('✓ DONE') + chalk.gray(` in ${result.durationMs}ms`));
+      const secs = (result.durationMs / 1000).toFixed(1);
+      console.log(chalk.bold.green('✓ DONE') + chalk.gray(` in ${secs}s`));
     } else if (result.state === 'REPRODUCED' && result.plan) {
-      console.log(chalk.bold.cyan('✓ ANALYSIS COMPLETE') + chalk.gray(` in ${result.durationMs}ms`));
+      const secs = (result.durationMs / 1000).toFixed(1);
+      console.log(chalk.bold.cyan('✓ ANALYSIS COMPLETE') + chalk.gray(` in ${secs}s`));
     } else {
-      console.log(chalk.bold.red(`✗ ${result.state}`) + chalk.gray(` after ${result.durationMs}ms`));
+      const secs = (result.durationMs / 1000).toFixed(1);
+      console.log(chalk.bold.red(`✗ ${result.state}`) + chalk.gray(` after ${secs}s`));
       if (result.errors.length > 0) {
         console.log(chalk.red('\nErrors:'));
         result.errors.forEach((e) => console.log(chalk.red(`  • ${e}`)));
@@ -110,9 +146,11 @@ export class Renderer {
     }
 
     if (result.evidence) {
+      const conf = result.evidence.confidence;
+      const confColor = conf >= 80 ? chalk.green : conf >= 50 ? chalk.yellow : chalk.red;
       console.log(chalk.bold('\nEvidence:'));
       console.log(`  Reproduced: ${result.evidence.reproduced ? chalk.green('yes') : chalk.red('no')}`);
-      console.log(`  Confidence: ${chalk.cyan(result.evidence.confidence + '%')}`);
+      console.log(`  Confidence: ${confColor(conf + '%')}`);
       console.log(`  Summary: ${result.evidence.summary}`);
     }
 
@@ -139,6 +177,6 @@ export class Renderer {
       console.log(`  Bug reproduced after fix: ${result.qaResult.reproductionStillFails ? chalk.red('yes (fix failed)') : chalk.green('no (fix worked)')}`);
     }
 
-    console.log(chalk.bold('─'.repeat(60)));
+    console.log(sep);
   }
 }
