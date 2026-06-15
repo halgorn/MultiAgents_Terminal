@@ -6,6 +6,7 @@ export interface MenuItem<T = string> {
   hint?: string;
   value: T;
   icon?: string;
+  key?: string;
   separator?: boolean;
   header?: boolean;
 }
@@ -18,6 +19,14 @@ function clearLines(n: number): void {
 
 function hideCursor(): void { process.stdout.write('\x1b[?25l'); }
 function showCursor(): void { process.stdout.write('\x1b[?25h'); }
+
+function isSelectable<T>(item: MenuItem<T>): boolean {
+  return !item.separator && !item.header;
+}
+
+function termCols(): number {
+  return Math.min(process.stdout.columns ?? 50, 80);
+}
 
 function renderList<T>(
   title: string,
@@ -32,7 +41,7 @@ function renderList<T>(
 
   items.forEach((item, i) => {
     if (item.separator) {
-      lines.push(chalk.dim('  ─────────────────────────────────'));
+      lines.push(chalk.dim('  ' + '─'.repeat(Math.min(termCols() - 4, 33))));
       return;
     }
     if (item.header) {
@@ -43,7 +52,8 @@ function renderList<T>(
     const icon = item.icon ?? ' ';
     const label = i === selected ? chalk.bold.white(item.label) : chalk.white(item.label);
     const hint = item.hint ? chalk.dim(`  ${item.hint}`) : '';
-    lines.push(`  ${cursor} ${icon}  ${label}${hint}`);
+    const shortcut = item.key ? chalk.dim(` [${item.key}]`) : '';
+    lines.push(`  ${cursor} ${icon}  ${label}${hint}${shortcut}`);
   });
 
   lines.push('');
@@ -65,6 +75,14 @@ function renderMulti<T>(
   lines.push('');
 
   items.forEach((item, i) => {
+    if (item.separator) {
+      lines.push(chalk.dim('  ' + '─'.repeat(Math.min(termCols() - 4, 33))));
+      return;
+    }
+    if (item.header) {
+      lines.push(chalk.dim(`  ── ${item.label.toUpperCase()} ${'─'.repeat(Math.max(0, 30 - item.label.length))}`));
+      return;
+    }
     const cursor = i === selected ? chalk.cyan('❯') : ' ';
     const check = toggled.has(i) ? chalk.green('☑') : chalk.gray('☐');
     const label = i === selected ? chalk.bold.white(item.label) : chalk.white(item.label);
@@ -92,8 +110,8 @@ export async function selectOne<T>(
     return null;
   }
 
-  const nonSep = items.filter((i) => !i.separator);
-  let selected = 0;
+  let selected = items.findIndex((i) => isSelectable(i));
+  if (selected === -1) return null;
   let lineCount = 0;
 
   hideCursor();
@@ -112,15 +130,19 @@ export async function selectOne<T>(
       }
       if (key.name === 'up') {
         do { selected = (selected - 1 + items.length) % items.length; }
-        while (items[selected]?.separator || items[selected]?.header);
+        while (!isSelectable(items[selected]!));
       }
       if (key.name === 'down') {
         do { selected = (selected + 1) % items.length; }
-        while (items[selected]?.separator || items[selected]?.header);
+        while (!isSelectable(items[selected]!));
       }
       if (key.name === 'return') {
         const val = items[selected];
-        if (val && !val.separator && !val.header) { cleanup(); resolve(val.value); return; }
+        if (val && isSelectable(val)) { cleanup(); resolve(val.value); return; }
+      }
+      if (key.name && key.name.length === 1) {
+        const shortcutIdx = items.findIndex((it) => isSelectable(it) && it.key === key.name);
+        if (shortcutIdx !== -1) { cleanup(); resolve(items[shortcutIdx]!.value); return; }
       }
       clearLines(lineCount);
       lineCount = renderList(title, items, selected, subtitle);
@@ -134,7 +156,6 @@ export async function selectOne<T>(
     };
 
     process.stdin.on('keypress', handler);
-    void nonSep; // suppress unused warning
   });
 }
 
@@ -149,7 +170,8 @@ export async function selectMany<T>(
     return null;
   }
 
-  let selected = 0;
+  let selected = items.findIndex((i) => isSelectable(i));
+  if (selected === -1) return null;
   const toggled = new Set<number>(preSelected ?? []);
   let lineCount = 0;
 
@@ -163,9 +185,15 @@ export async function selectMany<T>(
     const handler = (_: string | undefined, key: { name: string; ctrl?: boolean; sequence?: string }) => {
       if (!key) return;
       if ((key.ctrl && key.name === 'c') || key.name === 'q' || key.name === 'escape') { cleanup(); resolve(null); return; }
-      if (key.name === 'up') selected = Math.max(0, selected - 1);
-      if (key.name === 'down') selected = Math.min(items.length - 1, selected + 1);
-      if (key.name === 'space') {
+      if (key.name === 'up') {
+        do { selected = (selected - 1 + items.length) % items.length; }
+        while (!isSelectable(items[selected]!));
+      }
+      if (key.name === 'down') {
+        do { selected = (selected + 1) % items.length; }
+        while (!isSelectable(items[selected]!));
+      }
+      if (key.name === 'space' && isSelectable(items[selected]!)) {
         if (toggled.has(selected)) toggled.delete(selected);
         else toggled.add(selected);
       }
@@ -191,10 +219,11 @@ export async function selectMany<T>(
 }
 
 export function printHeader(projectName: string, extra?: string): void {
-  const line = '─'.repeat(50);
-  console.log(chalk.dim(line));
+  const width = Math.min(termCols(), 60);
+  const line = chalk.dim('─'.repeat(width));
+  console.log(line);
   console.log(chalk.bold.cyan(`  🤖 AI Runtime`) + chalk.gray(` — ${projectName}`));
   if (extra) console.log(chalk.dim(`  ${extra}`));
-  console.log(chalk.dim(line));
+  console.log(line);
   console.log('');
 }

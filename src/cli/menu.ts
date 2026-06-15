@@ -8,6 +8,7 @@ import type { MenuItem } from './tui.js';
 import { displayProjectName } from '../infra/project-name.js';
 import { AI_RUNTIME_DIR } from '../infra/paths.js';
 import { isIgnoredDirName } from './cli-utils.js';
+import { loadMenuPrefs, saveMenuPrefs } from './menu-prefs.js';
 
 // ── Kept for external consumers (audit command, tests) ────────────────────────
 export type { MenuItem };
@@ -146,9 +147,13 @@ async function promptLine(question: string): Promise<string> {
   });
 }
 
-async function chooseAuditMode(track: AuditTrack): Promise<AuditMode | null> {
-  const mode = await selectOne(`Audit mode (${track})`, AUDIT_MODE_ITEMS);
+async function chooseAuditMode(cwd: string, track: AuditTrack): Promise<AuditMode | null> {
+  const prefs = loadMenuPrefs(cwd);
+  const lastLabel = prefs.lastAuditMode === 'local-only' ? 'Local' : prefs.lastAuditMode === 'normal' ? 'Normal AI' : null;
+  const subtitle = lastLabel ? `last used: ${lastLabel}` : undefined;
+  const mode = await selectOne(`Audit mode (${track})`, AUDIT_MODE_ITEMS, subtitle);
   if (!mode) return null;
+  saveMenuPrefs(cwd, { lastAuditMode: mode });
   return mode;
 }
 
@@ -230,19 +235,24 @@ export function runMenuFallback(cwd: string): void {
 
 function buildMainItems(provider: string): Array<MenuItem<MenuAction>> {
   return [
-    { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM + complexity', value: 'local-check' },
-    { label: '🌐 SEO & Crawlers',         hint: 'zero token · Next.js routes, sitemap, robots, analytics', value: 'seo' },
-    { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',                      value: 'bugs' },
-    { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',                      value: 'security' },
-    { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',                      value: 'perf' },
-    { label: '🔧 Fix file',              hint: 'uses AI · asks for a path and runs the fix pipeline',     value: 'fix' },
-    { label: '🔍 Analyze problem',       hint: 'uses AI · asks for a focused description',                value: 'analyze' },
-    { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',                     value: 'assistant' },
-    { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',                    value: 'chat-qa' },
-    { label: '📋 View report',           hint: 'zero token · opens the unified main report',              value: 'report' },
+    { label: 'Diagnostics', header: true, value: 'sep' },
+    { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM', value: 'local-check', key: 'd' },
+    { label: '🌐 SEO & Crawlers',        hint: 'zero token · Next.js routes, sitemap, robots', value: 'seo',         key: 's' },
     { label: '', value: 'sep', separator: true },
-    { label: `⚙️  Provider: ${chalk.cyan(provider)}`, hint: 'change AI provider for this session', value: 'change-provider' },
-    { label: '  Quit', value: 'quit' },
+    { label: 'Audit', header: true, value: 'sep' },
+    { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',          value: 'bugs',         key: 'b' },
+    { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',          value: 'security',     key: 'e' },
+    { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',          value: 'perf',         key: 'p' },
+    { label: '', value: 'sep', separator: true },
+    { label: 'AI Tools', header: true, value: 'sep' },
+    { label: '🔧 Fix file',              hint: 'uses AI · runs fix pipeline on a file',       value: 'fix',          key: 'f' },
+    { label: '🔍 Analyze problem',       hint: 'uses AI · focused problem description',       value: 'analyze',      key: 'a' },
+    { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',         value: 'assistant',    key: 'i' },
+    { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',        value: 'chat-qa',      key: 'c' },
+    { label: '📋 View report',           hint: 'zero token · opens the unified main report',  value: 'report',       key: 'r' },
+    { label: '', value: 'sep', separator: true },
+    { label: `⚙️  Provider: ${chalk.cyan(provider)}`, hint: 'change AI provider',            value: 'change-provider' },
+    { label: '  Quit', value: 'quit', key: 'q' },
   ];
 }
 
@@ -255,7 +265,8 @@ export async function runMenu(cwd: string): Promise<void> {
 
   const { loadAionConfig } = await import('../infra/aion-config.js');
   const aionConfig = loadAionConfig(cwd);
-  let currentProvider: string = aionConfig.provider ?? 'claude';
+  const menuPrefs = loadMenuPrefs(cwd);
+  let currentProvider: string = menuPrefs.provider ?? aionConfig.provider ?? 'claude';
 
   const projectName = displayProjectName(cwd);
   let info = projectName;
@@ -317,21 +328,21 @@ export async function runMenu(cwd: string): Promise<void> {
     }
 
     if (action === 'bugs') {
-      const mode = await chooseAuditMode('bugs');
+      const mode = await chooseAuditMode(cwd, 'bugs');
       if (mode) runAuditTrack(cwd, 'bugs', mode, currentProvider);
       await pressEnter();
       continue;
     }
 
     if (action === 'security') {
-      const mode = await chooseAuditMode('security');
+      const mode = await chooseAuditMode(cwd, 'security');
       if (mode) runAuditTrack(cwd, 'security', mode, currentProvider);
       await pressEnter();
       continue;
     }
 
     if (action === 'perf') {
-      const mode = await chooseAuditMode('perf');
+      const mode = await chooseAuditMode(cwd, 'perf');
       if (mode) runAuditTrack(cwd, 'perf', mode, currentProvider);
       await pressEnter();
       continue;
@@ -361,7 +372,10 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'change-provider') {
       const picked = await selectOne('Select AI provider', PROVIDER_ITEMS);
-      if (picked) currentProvider = picked;
+      if (picked) {
+        currentProvider = picked;
+        saveMenuPrefs(cwd, { provider: picked });
+      }
       continue;
     }
 
