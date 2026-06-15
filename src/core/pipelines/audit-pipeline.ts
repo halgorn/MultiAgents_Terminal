@@ -2,22 +2,17 @@ import { randomUUID } from 'crypto';
 import { mkdtempSync, rmSync } from 'fs';
 import { join as pathJoin } from 'path';
 import { tmpdir } from 'os';
-import { spawnSync } from 'child_process';
 import { createWorktree, removeWorktree } from '../../infra/worktree.js';
 import { ScannerAgent } from '../../agents/scanner.js';
 import { SynthesizerAgent } from '../../agents/synthesizer.js';
 import type { FlowManifest } from '../../schemas/flow-manifest.js';
 import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.js';
 import { SEVERITY_RANK } from '../../schemas/audit.js';
-import { validateAuditFindings } from '../../infra/evidence-gate.js';
-import { loadRepoIndex } from '../../infra/repo-query.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { buildDepGraphAuto } from '../../infra/dep-graph.js';
 import { KnowledgeStore } from '../../infra/knowledge.js';
-
 import { detectLang } from '../../infra/lang-detect.js';
 import { detectProjectIdentity, formatIdentityForPrompt } from '../../infra/project-identity.js';
-import { reclassifyFindings, reclassStats, formatReclassNote } from '../../infra/finding-reclassifier.js';
 import type { ScannerContext } from '../../prompts/scanner.js';
 import type { RuntimePolicy } from '../runtime-policy.js';
 import type { CostTracker } from '../cost-tracker.js';
@@ -29,16 +24,22 @@ import {
   type AuditFileStats,
 } from './audit-file-scanner.js';
 import type { PipelineEmitter } from '../pipeline-context.js';
+import {
+  FindingAggregator,
+  compactScanReport,
+  compactText,
+  fallbackAuditReport,
+  recount,
+  MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS,
+  MAX_FINDINGS_PER_SCANNER,
+  MAX_FINDINGS_FOR_SYNTHESIS,
+} from '../finding-aggregator.js';
 
 type OnChunk = (agentName: string, text: string) => void;
 type Emitter = PipelineEmitter;
 
-const MAX_SEMGREP_FINDINGS_FOR_SYNTHESIS = 30;
-const MAX_FINDINGS_PER_SCANNER = 10;
-const MAX_FINDINGS_FOR_SYNTHESIS = 8;
-const MAX_FINDING_TEXT = 220;
-
 export { type AuditFileStats } from './audit-file-scanner.js';
+export { compactScanReport, fallbackAuditReport } from '../finding-aggregator.js';
 
 export interface AuditRunOptions {
   incremental?: boolean;
@@ -48,71 +49,18 @@ export interface AuditRunOptions {
   scannerTimeoutMs?: number;
 }
 
-function compactText(text: string, max = MAX_FINDING_TEXT): string {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (normalized.length <= max) return normalized;
-  return `${normalized.slice(0, max)}...`;
-}
-
-function compactFinding(finding: AuditFinding): AuditFinding {
-  return {
-    ...finding,
-    finding: compactText(finding.finding),
-    recommendation: compactText(finding.recommendation),
-  };
-}
-
-export function compactScanReport(report: ScanReport, maxFindings = MAX_FINDINGS_PER_SCANNER): ScanReport {
-  const findings = report.findings
-    .map(compactFinding)
-    .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1))
-    .slice(0, maxFindings);
-  return {
-    filesScanned: report.filesScanned.slice(0, 80),
-    findings,
-    summary: compactText(report.summary, 700),
-  };
-}
-
-export function fallbackAuditReport(scanReports: ScanReport[], totalFiles: number): AuditReport {
-  const seen = new Set<string>();
-  const findings = scanReports
-    .flatMap((report) => report.findings)
-    .map(compactFinding)
-    .filter((finding) => {
-      const key = `${finding.file}:${finding.line ?? ''}:${finding.finding}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1));
-
-  return {
-    findings,
-    criticalCount: findings.filter((f) => f.severity === 'critical').length,
-    highCount: findings.filter((f) => f.severity === 'high').length,
-    totalFiles,
-    summary: `Local fallback merged ${findings.length} findings from ${scanReports.length} scanner reports.`,
-    topPriorities: findings.slice(0, 5).map((f) => `${f.severity}: ${f.file}${f.line ? `:${f.line}` : ''} — ${f.finding}`),
-  };
-}
-
-function recount(report: AuditReport): AuditReport {
-  return {
-    ...report,
-    criticalCount: report.findings.filter((f) => f.severity === 'critical').length,
-    highCount: report.findings.filter((f) => f.severity === 'high').length,
-  };
-}
-
 export class AuditPipeline {
+  private readonly aggregator: FindingAggregator;
+
   constructor(
     private readonly cwd: string,
     private readonly policy: RuntimePolicy,
     private readonly costs: CostTracker,
     private readonly emit: Emitter,
     private readonly onChunk: OnChunk,
-  ) {}
+  ) {
+    this.aggregator = new FindingAggregator(cwd, emit);
+  }
 
   private async buildScannerContext(domains?: import('../../prompts/scanner.js').ScanDomain[]): Promise<ScannerContext> {
     const ctx: ScannerContext = {};
@@ -211,7 +159,7 @@ export class AuditPipeline {
           });
         }
         if (filesToScan.length === 0) {
-          const report = this.applyEvidenceGate({ findings: cachedFindings, criticalCount: 0, highCount: 0, totalFiles: allFiles.length, summary: 'Incremental: no changed files. All findings from cache.', topPriorities: [] });
+          const report = this.aggregator.applyEvidenceGate({ findings: cachedFindings, criticalCount: 0, highCount: 0, totalFiles: allFiles.length, summary: 'Incremental: no changed files. All findings from cache.', topPriorities: [] });
           saveAuditCache(this.cwd, allFiles, report.findings);
           return report;
         }
@@ -240,7 +188,7 @@ export class AuditPipeline {
       }
 
       if (options.localOnly) {
-        const report = this.applyEvidenceGate(fallbackAuditReport([semgrepReport], allFiles.length));
+        const report = this.aggregator.applyEvidenceGate(fallbackAuditReport([semgrepReport], allFiles.length));
         const finalReport = recount({
           ...report,
           summary: `${report.summary} Local-only mode: no AI scanners or synthesizer were started.`,
@@ -345,10 +293,8 @@ export class AuditPipeline {
           this.onChunk,
         );
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: synthRun.durationMs });
-        const gated = this.applyEvidenceGate({ ...synthRun.output, totalFiles: allFiles.length });
-        const reclassed = this.applyContextReclassification(gated.findings);
-        const deduped = this.deduplicateFindings([...cachedFindings, ...reclassed]);
-        const finalReport = recount({ ...gated, findings: deduped });
+        const gated = this.aggregator.applyEvidenceGate({ ...synthRun.output, totalFiles: allFiles.length });
+        const finalReport = this.aggregator.finalizeReport(gated, cachedFindings, allFiles.length);
         saveAuditCache(this.cwd, allFiles, finalReport.findings);
         sessionBudget.record(this.costs.totalUsd());
         return finalReport;
@@ -356,10 +302,8 @@ export class AuditPipeline {
         const message = err instanceof Error ? err.message : String(err);
         this.emit('agent:output', { agentName: 'synthesizer', text: `Synthesizer failed; using local fallback: ${message}\n` });
         this.emit('agent:done', { agentName: 'synthesizer', durationMs: Date.now() - synthStart });
-        const fallback = this.applyEvidenceGate(fallbackAuditReport(reports, allFiles.length));
-        const reclassed = this.applyContextReclassification(fallback.findings);
-        const deduped = this.deduplicateFindings([...cachedFindings, ...reclassed]);
-        const finalReport = recount({ ...fallback, findings: deduped });
+        const fallback = this.aggregator.applyEvidenceGate(fallbackAuditReport(reports, allFiles.length));
+        const finalReport = this.aggregator.finalizeReport(fallback, cachedFindings, allFiles.length);
         saveAuditCache(this.cwd, allFiles, finalReport.findings);
         sessionBudget.record(this.costs.totalUsd());
         return finalReport;
@@ -397,63 +341,6 @@ export class AuditPipeline {
       }
     }
     return results;
-  }
-
-  private deduplicateFindings(findings: AuditFinding[]): AuditFinding[] {
-    const seen = new Map<string, AuditFinding>();
-    for (const f of findings) {
-      // Key by precise location when available; include text for null-line findings
-      // so distinct file-level issues are not collapsed.
-      const lineKey = f.line ?? `file:${f.finding.slice(0, 80)}`;
-      const key = `${f.file}:${lineKey}:${f.category}`;
-      const existing = seen.get(key);
-      if (!existing) {
-        seen.set(key, f);
-      } else {
-        const keepNew = (SEVERITY_RANK[f.severity] ?? 1) > (SEVERITY_RANK[existing.severity] ?? 1);
-        const merged = keepNew ? f : existing;
-        const otherPersona = keepNew ? existing.persona : f.persona;
-        seen.set(key, {
-          ...merged,
-          persona: merged.persona && otherPersona
-            ? `${merged.persona}+${otherPersona}`
-            : merged.persona ?? otherPersona,
-        });
-      }
-    }
-    return [...seen.values()].sort((a, b) => (SEVERITY_RANK[b.severity] ?? 1) - (SEVERITY_RANK[a.severity] ?? 1));
-  }
-
-  private applyContextReclassification(findings: AuditFinding[]): AuditFinding[] {
-    try {
-      const identity = detectProjectIdentity(this.cwd);
-      const reclassed = reclassifyFindings(findings, identity);
-      const stats = reclassStats(findings, reclassed);
-      const note = formatReclassNote(stats);
-      if (note) {
-        this.emit('agent:output', { agentName: 'audit', text: `${note}\n` });
-      }
-      return reclassed;
-    } catch {
-      return findings;
-    }
-  }
-
-  private applyEvidenceGate(report: AuditReport): AuditReport {
-    const result = validateAuditFindings(report.findings, loadRepoIndex(this.cwd));
-    if (result.rejected.length === 0) return recount(report);
-
-    this.emit('agent:output', {
-      agentName: 'evidence-gate',
-      text: `Rejected ${result.rejected.length} findings without deterministic file/line evidence.\n`,
-    });
-
-    return recount({
-      ...report,
-      findings: result.accepted,
-      summary: `${report.summary} Evidence gate rejected ${result.rejected.length} findings without deterministic file/line evidence.`,
-      topPriorities: result.accepted.slice(0, 5).map((f) => `${f.severity}: ${f.file}${f.line ? `:${f.line}` : ''} — ${f.finding}`),
-    });
   }
 
   collectSourceFiles(target: string): string[] {

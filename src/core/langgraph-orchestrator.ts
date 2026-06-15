@@ -1,6 +1,6 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
-import type { TaskResult } from '../core/task.js';
-import type { Orchestrator } from '../core/orchestrator.js';
+import type { TaskResult } from './task.js';
+import type { Orchestrator } from './orchestrator.js';
 
 const LangGraphState = Annotation.Root({
   target: Annotation<string>(),

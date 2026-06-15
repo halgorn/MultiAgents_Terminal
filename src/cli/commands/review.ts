@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import { Orchestrator } from '../../core/orchestrator.js';
 import { Renderer } from '../ui/renderer.js';
 import { addRuntimeOptions, toRuntimePolicyInput, type RuntimeCliOptions } from '../runtime-options.js';
-import { runReviewViaLangGraph } from '../../infra/langgraph-orchestrator.js';
+import { runReviewViaLangGraph } from '../../core/langgraph-orchestrator.js';
 
 export function registerReview(program: Command): void {
   addRuntimeOptions(program

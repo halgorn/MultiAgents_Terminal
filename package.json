@@ -1,6 +1,6 @@
 {
   "name": "@aionlabsai/aion",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Multi-agent AI engineering runtime \u2014 audit, fix, graph, analyze",
   "type": "module",
   "bin": {
