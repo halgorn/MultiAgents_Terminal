@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { createTask, saveTaskResult } from '../../infra/db/task-repo.js';
 import { saveEvidence } from '../../infra/db/evidence-repo.js';
 import type { FlowManifest } from '../../schemas/flow-manifest.js';
-import { KnowledgeStore } from '../../infra/knowledge.js';
+import { getKnowledgeStore } from '../../infra/knowledge-factory.js';
 import { PlannerAgent } from '../../agents/planner.js';
 import { InvestigatorAgent } from '../../agents/investigator.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
@@ -18,7 +18,7 @@ export async function runAnalyzePipeline(ctx: PipelineContext, target: string): 
   const start = Date.now();
   const errors: string[] = [];
   const wt = makeWorktreeTracker(ctx.cwd);
-  const knowledge = new KnowledgeStore(ctx.cwd);
+  const knowledge = getKnowledgeStore(ctx.cwd);
   const graph = new GraphAgent(ctx.cwd);
 
   try {

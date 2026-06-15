@@ -1,7 +1,8 @@
 import { EventEmitter } from 'events';
 import type { TaskResult } from './task.js';
 import type { TaskState } from './state-machine.js';
-import { KnowledgeStore } from '../infra/knowledge.js';
+import { getKnowledgeStore } from '../infra/knowledge-factory.js';
+import type { KnowledgeStore } from '../infra/knowledge.js';
 import { createRuntimePolicy, type RuntimePolicy, type RuntimePolicyInput } from './runtime-policy.js';
 import type { AuditReport } from '../schemas/audit.js';
 import { CostTracker } from './cost-tracker.js';
@@ -39,7 +40,7 @@ export class Orchestrator extends EventEmitter {
 
   constructor(private readonly cwd: string, policyInput: RuntimePolicyInput = {}) {
     super();
-    this.knowledge = new KnowledgeStore(cwd);
+    this.knowledge = getKnowledgeStore(cwd);
     this.policy = createRuntimePolicy(policyInput);
   }
 

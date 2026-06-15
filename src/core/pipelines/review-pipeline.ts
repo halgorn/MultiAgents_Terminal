@@ -9,7 +9,7 @@ import type { TaskResult } from '../task.js';
 import type { TaskState } from '../state-machine.js';
 import type { EvidenceReport } from '../../schemas/evidence.js';
 import type { PatchReport } from '../../schemas/patch.js';
-import { KnowledgeStore } from '../../infra/knowledge.js';
+import { getKnowledgeStore } from '../../infra/knowledge-factory.js';
 
 export async function runReviewPipeline(ctx: PipelineContext, target: string): Promise<TaskResult> {
   const req = { id: randomUUID(), command: 'review' as const, target, cwd: ctx.cwd, createdAt: new Date() };
@@ -26,7 +26,7 @@ export async function runReviewPipeline(ctx: PipelineContext, target: string): P
 
     let ragSummary = '';
     try {
-      const knowledge = new KnowledgeStore(ctx.cwd);
+      const knowledge = getKnowledgeStore(ctx.cwd);
       if (knowledge.embeddings.hasIndex()) {
         ragSummary = await knowledge.buildContextSemantic(target, 1500);
       }

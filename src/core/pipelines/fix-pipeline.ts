@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { createTask, saveTaskResult } from '../../infra/db/task-repo.js';
 import { saveEvidence } from '../../infra/db/evidence-repo.js';
 import type { FlowManifest } from '../../schemas/flow-manifest.js';
-import { KnowledgeStore } from '../../infra/knowledge.js';
+import { getKnowledgeStore } from '../../infra/knowledge-factory.js';
 import { PlannerAgent } from '../../agents/planner.js';
 import { InvestigatorAgent } from '../../agents/investigator.js';
 import { DeveloperAgent } from '../../agents/developer.js';
@@ -66,7 +66,7 @@ export async function runFixPipeline(ctx: PipelineContext, target: string): Prom
   const errors: string[] = [];
   const wt = makeWorktreeTracker(ctx.cwd);
 
-  const knowledge = new KnowledgeStore(ctx.cwd);
+  const knowledge = getKnowledgeStore(ctx.cwd);
   const graph = new GraphAgent(ctx.cwd);
   const testsAgent = new TestsAgent(ctx.cwd);
   const langProfile = detectLang(ctx.cwd);

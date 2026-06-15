@@ -10,7 +10,7 @@ import type { AuditFinding, AuditReport, ScanReport } from '../../schemas/audit.
 import { SEVERITY_RANK } from '../../schemas/audit.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { buildDepGraphAuto } from '../../infra/dep-graph.js';
-import { KnowledgeStore } from '../../infra/knowledge.js';
+import { getKnowledgeStore } from '../../infra/knowledge-factory.js';
 import { detectLang } from '../../infra/lang-detect.js';
 import { detectProjectIdentity, formatIdentityForPrompt } from '../../infra/project-identity.js';
 import type { ScannerContext } from '../../prompts/scanner.js';
@@ -87,7 +87,7 @@ export class AuditPipeline {
       if (lines.length > 0) ctx.depGraph = lines.join('\n');
     } catch { /* best-effort */ }
     try {
-      const knowledge = new KnowledgeStore(this.cwd);
+      const knowledge = getKnowledgeStore(this.cwd);
       if (knowledge.embeddings.hasIndex()) {
         const DOMAIN_QUERIES: Record<string, string> = {
           security: 'authentication authorization input validation token session credentials',
