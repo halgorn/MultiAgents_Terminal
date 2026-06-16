@@ -7,6 +7,7 @@ import { openReportFile, refreshUnifiedReport } from '../../infra/report-refresh
 import { displayProjectName } from '../../infra/project-name.js';
 import { analyzeDatabase } from '../../infra/db-analyzer.js';
 import { analyzeNetwork } from '../../infra/network-analyzer.js';
+import { runSecurityScan } from '../../infra/security-scanner.js';
 
 function ensureUnifiedReport(cwd: string): string {
   const reportPath = projectReportPath(cwd);
@@ -73,6 +74,30 @@ function printLatest(cwd: string): void {
       if (net.issues.length > 3) console.log(chalk.dim(`  … and ${net.issues.length - 3} more — see full report`));
     }
     console.log(chalk.dim('  Full view:   aion report  (visual dashboard → Network section)'));
+  } catch { /* best-effort */ }
+
+  // App Security summary (zero-token, OWASP static scan)
+  try {
+    const sec = runSecurityScan(cwd);
+    const secScoreColor = sec.score >= 75 ? chalk.green : sec.score >= 50 ? chalk.yellow : chalk.red;
+    const criticalSec = sec.issues.filter((i) => i.severity === 'critical').length;
+    const highSec = sec.issues.filter((i) => i.severity === 'high').length;
+    console.log('');
+    console.log(chalk.bold('── App Security (OWASP) ────────────────────────────────────'));
+    console.log(`  score:       ${secScoreColor(`${sec.score}/100`)}`);
+    if (sec.issues.length === 0) {
+      console.log(chalk.dim('  No application security issues detected.'));
+    } else {
+      const critStr = criticalSec > 0 ? chalk.red(` · ${criticalSec} critical`) : '';
+      const highStr = highSec > 0 ? chalk.red(` · ${highSec} high`) : '';
+      console.log(`  issues:      ${sec.issues.length} total${critStr}${highStr}`);
+      sec.issues.slice(0, 3).forEach((i) => {
+        const sev = i.severity === 'critical' ? chalk.red(i.severity) : i.severity === 'high' ? chalk.red(i.severity) : chalk.yellow(i.severity);
+        console.log(`  ${sev}  ${chalk.dim(i.area)}  ${i.issue}`);
+      });
+      if (sec.issues.length > 3) console.log(chalk.dim(`  … and ${sec.issues.length - 3} more — see full report`));
+    }
+    console.log(chalk.dim('  Full view:   aion report  (visual dashboard → App Security section)'));
   } catch { /* best-effort */ }
 
   console.log('');

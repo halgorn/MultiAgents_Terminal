@@ -12,6 +12,7 @@ import { analyzeSeoAndCrawlers, type SeoCrawlerReport } from './seo-analyzer.js'
 import { projectReportPath } from './project-audit-dashboard.js';
 import { analyzeDatabase } from './db-analyzer.js';
 import { analyzeNetwork } from './network-analyzer.js';
+import { runSecurityScan } from './security-scanner.js';
 import { analyzePerformance } from './performance-analyzer.js';
 import { buildProjectInsights, renderInsightsHtml, renderInsightsMarkdown } from './project-insights.js';
 import { analyzeLineSize } from './line-size-analyzer.js';
@@ -212,6 +213,8 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   const database = analyzeDatabase(cwd);
   onProgress?.('analyzing network and API security');
   const network = analyzeNetwork(cwd);
+  onProgress?.('running OWASP application security scan');
+  const securityScan = runSecurityScan(cwd);
   onProgress?.('analyzing performance readiness');
   const performance = analyzePerformance(cwd, apiEndpoints);
   onProgress?.('checking file size guardrails');
@@ -260,7 +263,7 @@ export async function buildProjectReportData(cwd: string, days: number, onProgre
   const trend = buildProjectTrend({ cwd, generatedAt, health, auditCriticals: audit?.criticalCount ?? 0, auditHighs: audit?.highCount ?? 0, seo, database, performance, lineSize });
   onProgress?.('generating HTML report');
   return { projectName, projectType, health, audit, churn, patterns, cognitive, generatedAt, trend,
-    totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom, seo, database, network, performance, improvementPerspectives, insights };
+    totalFiles: index.stats.files, totalSymbols: index.stats.symbols, cycles, hotspots, architecture, apiEndpoints, envAudit, secrets, sbom, seo, database, network, securityScan, performance, improvementPerspectives, insights };
 }
 
 export function renderProjectMarkdown(data: Awaited<ReturnType<typeof buildProjectReportData>>): string {
@@ -353,6 +356,25 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const isWeb = WEB_TYPES.includes(data.projectType);
   const seoNavLink = isWeb ? '<a href="#seo">SEO & Crawlers</a>' : '';
   const seoSection = isWeb ? renderSeoHtml(data.seo) : '';
+  const sec = data.securityScan;
+  const secScoreClass = sec.score >= 75 ? 'ok' : sec.score >= 50 ? 'warn' : 'crit';
+  const secIssueRows = sec.issues.length
+    ? sec.issues.map((i) => `<tr><td class="sev-${i.severity}">${esc(i.severity)}</td><td>${esc(i.area)}</td><td>${esc(i.issue)}</td><td>${esc(i.recommendation)}</td></tr>`).join('')
+    : '<tr><td colspan="4">No application security issues detected.</td></tr>';
+  const secSection = `<section id="appsec"><h2>App Security <span class="muted">(OWASP · zero token)</span></h2>
+<div class="grid">
+  <div class="card"><strong class="${secScoreClass}">${sec.score}/100</strong><br>App Sec Score</div>
+  <div class="card"><strong class="${sec.evalSignals > 0 ? 'crit' : 'ok'}">${sec.evalSignals}</strong><br>Dynamic Exec</div>
+  <div class="card"><strong class="${sec.jwtWeakSignals > 0 ? 'crit' : 'ok'}">${sec.jwtWeakSignals}</strong><br>JWT Weakness</div>
+  <div class="card"><strong class="${sec.protoPollutionSignals > 0 ? 'crit' : 'ok'}">${sec.protoPollutionSignals}</strong><br>Proto Pollution</div>
+  <div class="card"><strong class="${sec.massAssignmentSignals > 0 ? 'crit' : 'ok'}">${sec.massAssignmentSignals}</strong><br>Mass Assignment</div>
+  <div class="card"><strong class="${sec.xssSignals > 0 ? 'crit' : 'ok'}">${sec.xssSignals}</strong><br>XSS Sinks</div>
+  <div class="card"><strong class="${sec.pathTraversalSignals > 0 ? 'crit' : 'ok'}">${sec.pathTraversalSignals}</strong><br>Path Traversal</div>
+  <div class="card"><strong class="${sec.errorLeakageSignals > 0 ? 'warn' : 'ok'}">${sec.errorLeakageSignals}</strong><br>Error Leakage</div>
+</div>
+<h3>Security Issues</h3>
+<table><tr><th>Severity</th><th>Area</th><th>Issue</th><th>Recommendation</th></tr>${secIssueRows}</table>
+</section>`;
   const net = data.network;
   const netScoreClass = net.score >= 75 ? 'ok' : net.score >= 50 ? 'warn' : 'crit';
   const netIssueRows = net.issues.length
@@ -392,7 +414,7 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
 <h3>Database Issues</h3>
 <table><tr><th>Severity</th><th>Area</th><th>Issue</th><th>Recommendation</th></tr>${dbIssueRows}</table>
 </section>`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>${projectReportCss(gradeColor)}</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a>${seoNavLink}<a href="#network">Network</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>${projectReportCss(gradeColor)}</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a>${seoNavLink}<a href="#appsec">App Security</a><a href="#network">Network</a><a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score" title="Health Score"><strong>${data.health.total}/100</strong><span>Grade ${data.health.grade}</span></div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
 ${renderTrendHtml(data.trend)}
@@ -404,6 +426,7 @@ ${architectureSvg}
 <div><h3>Architecture Risks</h3><table><tr><th>Name</th><th>Severity</th><th>Description</th><th>Evidence</th></tr>${antiPatternRows || '<tr><td colspan="4">No architecture anti-patterns detected.</td></tr>'}</table></div></div>
 <h3>Module Coupling</h3><table><tr><th>Module</th><th>Files</th><th>Symbols</th><th>LOC</th><th>Fan-in</th><th>Fan-out</th></tr>${architectureRows || '<tr><td colspan="6">No module data available.</td></tr>'}</table></section>
 ${seoSection}
+${secSection}
 ${netSection}
 ${dbSection}
 <section id="diagnostics"><h2>Local Diagnostics <span class="muted">(zero token)</span></h2><div class="grid"><div class="card"><strong class="${data.secrets.length ? 'warn' : 'ok'}">${data.secrets.length}</strong><br>Secrets</div><div class="card"><strong>${data.envAudit.vars.length}</strong><br>Env vars</div><div class="card"><strong class="${data.sbom.unpinned.length ? 'warn' : 'ok'}">${data.sbom.unpinned.length}</strong><br>Unpinned deps</div><div class="card"><strong>${data.apiEndpoints.length}</strong><br>API endpoints</div></div>

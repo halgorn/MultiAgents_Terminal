@@ -229,6 +229,38 @@ export function registerScan(program: Command): void {
       await refreshScanDashboard(cwd, 'scan secrets');
     });
 
+  // ── security ───────────────────────────────────────────────────────────────
+  scan
+    .command('security')
+    .description('App security scan: XSS, JWT, prototype pollution, mass assignment, path traversal, error leakage')
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
+      const cwd = process.cwd();
+      const { runSecurityScan } = await import('../../infra/security-scanner.js');
+      const report = runSecurityScan(cwd);
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nApp Security Scan (OWASP Top 10)\n'));
+      const scoreColor = report.score >= 75 ? chalk.green : report.score >= 50 ? chalk.yellow : chalk.red;
+      console.log(`  score: ${scoreColor(`${report.score}/100`)}  · ${report.filesChecked} files scanned\n`);
+      if (report.issues.length === 0) {
+        console.log(chalk.green('✓ No application security issues detected'));
+      } else {
+        report.issues.forEach((i) => {
+          const icon = i.severity === 'critical' ? chalk.red('☠') : i.severity === 'high' ? chalk.red('✗') : chalk.yellow('!');
+          console.log(`  ${icon}  ${chalk.bold(i.area.padEnd(20))} ${i.issue}`);
+          console.log(chalk.dim(`       → ${i.recommendation}\n`));
+        });
+      }
+      console.log(chalk.dim('  Full dashboard: aion report'));
+      await refreshScanDashboard(cwd, 'scan security');
+    });
+
   // ── network ────────────────────────────────────────────────────────────────
   scan
     .command('network')
