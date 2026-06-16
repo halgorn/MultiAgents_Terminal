@@ -229,6 +229,38 @@ export function registerScan(program: Command): void {
       await refreshScanDashboard(cwd, 'scan secrets');
     });
 
+  // ── network ────────────────────────────────────────────────────────────────
+  scan
+    .command('network')
+    .description('Scan for network/API security issues: HTTPS, CORS, cookies, IDs, exposed keys')
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
+      const cwd = process.cwd();
+      const { analyzeNetwork } = await import('../../infra/network-analyzer.js');
+      const report = analyzeNetwork(cwd);
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nNetwork & API Security Scan\n'));
+      const scoreColor = report.score >= 75 ? chalk.green : report.score >= 50 ? chalk.yellow : chalk.red;
+      console.log(`  score: ${scoreColor(`${report.score}/100`)}  · ${report.filesChecked} files scanned\n`);
+      if (report.issues.length === 0) {
+        console.log(chalk.green('✓ No network/API security issues detected'));
+      } else {
+        report.issues.forEach((i) => {
+          const icon = i.severity === 'high' ? chalk.red('✗') : i.severity === 'medium' ? chalk.yellow('!') : chalk.dim('·');
+          console.log(`  ${icon}  ${chalk.bold(i.area.padEnd(16))} ${i.issue}`);
+          console.log(chalk.dim(`       → ${i.recommendation}\n`));
+        });
+      }
+      console.log(chalk.dim('  Full dashboard: aion report'));
+      await refreshScanDashboard(cwd, 'scan network');
+    });
+
   // ── sbom ───────────────────────────────────────────────────────────────────
   scan
     .command('sbom')

@@ -378,3 +378,57 @@ Conecta ao banco (Postgres, MySQL, SQLite) e compara: schema ORM vs schema real,
 - Non-TTY: todo comando funciona sem travar
 - Providers suportados: claude, openrouter, kimi, minimax, codex
 - Score mínimo por commit: +20 pontos no scoring matrix (Architecture + Reliability + Maintainability + Observability + Security)
+
+---
+
+## Network & API Security Roadmap
+
+> Zero-token static analysis of transport security, CORS, ID design, cookies, and API key exposure.
+> Command prefix: `aion scan network`
+
+### Priority Table
+
+| # | Feature | Prioridade | Acurácia | Criticidade | Usabilidade | Manutenção | Segurança | Total |
+|---|---------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | HTTP vs HTTPS Enforcer | 9 | 9 | 10 | 8 | 7 | 10 | **53** |
+| 2 | API Key Exposure Scanner | 9 | 8 | 10 | 8 | 6 | 10 | **51** |
+| 3 | CORS Auditor | 9 | 8 | 9 | 8 | 7 | 10 | **51** |
+| 4 | Sequential ID / IDOR Risk | 9 | 7 | 9 | 8 | 6 | 10 | **49** |
+| 5 | Cookie Security Auditor | 8 | 8 | 8 | 8 | 7 | 9 | **48** |
+| 6 | Sensitive Data in URLs/GET | 8 | 7 | 9 | 8 | 6 | 9 | **47** |
+| 7 | ID Generation Auditor | 8 | 8 | 8 | 7 | 6 | 9 | **46** |
+| 8 | Security Headers Checker | 7 | 7 | 7 | 8 | 7 | 8 | **44** |
+| 9 | Request Logging / PII Leak | 7 | 6 | 8 | 7 | 6 | 9 | **43** |
+| 10 | WebSocket Security | 6 | 7 | 7 | 6 | 6 | 8 | **40** |
+
+### Item Details
+
+**#1 — HTTP vs HTTPS Enforcer** ✅ implemented in `network-analyzer.ts`
+Detects `http://` hardcoded in `fetch`, `axios`, `.env`, configs (excludes localhost). Checks for missing HSTS signals in Express/Fastify. Zero-token static analysis.
+
+**#2 — API Key Exposure Scanner** ✅ implemented
+Detects `sk-`, `pk_live_`, `AKIA`, `Bearer <token>`, `apiKey: '...'` hardcoded in source files (non-.env). Excludes legitimate `.env` files.
+
+**#3 — CORS Auditor** ✅ implemented
+Detects `origin: '*'` wildcard CORS, `Access-Control-Allow-Origin: *` in Express/Fastify/Next.js. Flags any CORS config missing an explicit allowlist.
+
+**#4 — Sequential ID / IDOR Risk** ✅ implemented
+Detects routes with `/:id` paired with `parseInt`/`Number()` — signals integer IDs in public routes, creating IDOR (Insecure Direct Object Reference) risk.
+
+**#5 — Cookie Security Auditor** ✅ implemented
+Detects `res.cookie()` / `setCookie()` calls without `httpOnly: true`, `secure: true`, or `sameSite` — common session hijacking vector.
+
+**#6 — Sensitive Data in URLs/GET** ✅ implemented
+Detects `?token=`, `?password=`, `?key=`, `?secret=`, `?api_key=` patterns in URL strings — leaks credentials to logs, browser history, and Referer headers.
+
+**#7 — ID Generation Auditor** ✅ implemented
+Detects `Math.random()` used for ID generation — not cryptographically secure. Recommends `crypto.randomUUID()`, `nanoid`, or `ULID`.
+
+**#8 — Security Headers Checker** ✅ implemented
+Detects presence of `helmet()`, `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Strict-Transport-Security` in middleware.
+
+**#9 — Request Logging / PII Leak** `aion scan net-log-pii` (future)
+Detects `console.log(req.body)`, `logger.info(req)` without sanitization — leaks passwords and tokens to logs.
+
+**#10 — WebSocket Security** `aion scan net-ws` (future)
+Detects `ws://` (without TLS), missing auth on `upgrade` event, broadcast without room filter.

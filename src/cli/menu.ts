@@ -46,7 +46,7 @@ export const BUDGETS = [
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
 type AuditMode = 'local-only' | 'normal';
-type MenuAction = 'local-check' | 'seo' | 'bugs' | 'security' | 'perf' | 'copilot' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'change-provider' | 'doctor' | 'providers' | 'sep' | 'quit';
+type MenuAction = 'local-check' | 'seo' | 'network-scan' | 'bugs' | 'security' | 'perf' | 'copilot' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'change-provider' | 'doctor' | 'providers' | 'sep' | 'quit';
 
 const PROVIDER_ITEMS = [
   { label: 'claude',      hint: 'Anthropic Claude (default)',        value: 'claude' },
@@ -249,6 +249,7 @@ function buildMainItems(provider: string): Array<MenuItem<MenuAction>> {
     { label: 'Diagnostics', header: true, value: 'sep' },
     { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM', description: 'Runs health score, secret scan, env-audit, and SBOM — all locally with zero token cost. Shows a risk summary and links to the HTML report.', value: 'local-check', key: 'd' },
     { label: '🌐 SEO & Crawlers',        hint: 'zero token · Next.js routes, sitemap, robots', description: 'Crawls your project for Next.js pages, sitemap.xml, robots.txt, and meta tags. No API calls — purely local analysis.', value: 'seo', key: 's' },
+    { label: '🔒 Network & API Security', hint: 'zero token · HTTPS, CORS, cookies, IDs, keys', description: 'Scans for insecure HTTP calls, CORS wildcard, hardcoded API keys, insecure cookies, sequential IDs (IDOR), and missing security headers. Zero token — static analysis only.', value: 'network-scan', key: 'n' },
     { label: '', value: 'sep', separator: true },
     { label: 'Audit', header: true, value: 'sep' },
     { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',          description: 'Choose Local (zero token) or AI mode. Scans for logic bugs, null dereferences, error-handling gaps, and test coverage holes.', value: 'bugs',     key: 'b' },
@@ -358,6 +359,12 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'seo') {
       run(['--cwd', cwd, 'scan', 'seo']);
+      await pressAnyKey();
+      continue;
+    }
+
+    if (action === 'network-scan') {
+      run(['--cwd', cwd, 'scan', 'network']);
       await pressAnyKey();
       continue;
     }

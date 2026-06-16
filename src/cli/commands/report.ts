@@ -6,6 +6,7 @@ import { latestAuditPointer, projectReportPath } from '../../infra/project-repor
 import { openReportFile, refreshUnifiedReport } from '../../infra/report-refresh.js';
 import { displayProjectName } from '../../infra/project-name.js';
 import { analyzeDatabase } from '../../infra/db-analyzer.js';
+import { analyzeNetwork } from '../../infra/network-analyzer.js';
 
 function ensureUnifiedReport(cwd: string): string {
   const reportPath = projectReportPath(cwd);
@@ -51,6 +52,27 @@ function printLatest(cwd: string): void {
       if (db.issues.length > 3) console.log(chalk.dim(`  … and ${db.issues.length - 3} more — see full report`));
     }
     console.log(chalk.dim('  Full view:   aion report  (visual dashboard → Database section)'));
+  } catch { /* best-effort */ }
+
+  // Network & API Security summary (zero-token, runs locally)
+  try {
+    const net = analyzeNetwork(cwd);
+    const netScoreColor = net.score >= 75 ? chalk.green : net.score >= 50 ? chalk.yellow : chalk.red;
+    const highNet = net.issues.filter((i) => i.severity === 'high').length;
+    console.log('');
+    console.log(chalk.bold('── Network & API Security ──────────────────────────────────'));
+    console.log(`  score:       ${netScoreColor(`${net.score}/100`)}`);
+    if (net.issues.length === 0) {
+      console.log(chalk.dim('  No network/API issues detected.'));
+    } else {
+      console.log(`  issues:      ${net.issues.length} total${highNet > 0 ? chalk.red(` · ${highNet} high`) : ''}`);
+      net.issues.slice(0, 3).forEach((i) => {
+        const sev = i.severity === 'high' ? chalk.red(i.severity) : chalk.yellow(i.severity);
+        console.log(`  ${sev}  ${chalk.dim(i.area)}  ${i.issue}`);
+      });
+      if (net.issues.length > 3) console.log(chalk.dim(`  … and ${net.issues.length - 3} more — see full report`));
+    }
+    console.log(chalk.dim('  Full view:   aion report  (visual dashboard → Network section)'));
   } catch { /* best-effort */ }
 
   console.log('');
