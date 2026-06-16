@@ -23,25 +23,39 @@ export function registerWatch(program: Command): void {
     .description('Watch for file changes and auto-run local scan on modified files')
     .option('--interval <seconds>', 'polling interval in seconds', '10')
     .option('--cmd <command>', 'aion subcommand to run on change (default: audit . --local-only)', 'audit . --local-only')
-    .action((_target: string = '.', options: { interval: string; cmd: string }) => {
+    .option('--json', 'emit JSON lines for each event (for piping/scripting)')
+    .action((_target: string = '.', options: { interval: string; cmd: string; json?: boolean }) => {
       const cwd = process.cwd();
       const intervalMs = Math.max(3, parseInt(options.interval, 10) || 10) * 1000;
       const cmdArgs = options.cmd.split(/\s+/).filter(Boolean);
+      const emit = (obj: Record<string, unknown>) => process.stdout.write(JSON.stringify({ ...obj, ts: new Date().toISOString() }) + '\n');
 
-      console.log(chalk.bold.cyan(`\n  👁  aion watch — ${cwd}`));
-      console.log(chalk.dim(`  Polling every ${intervalMs / 1000}s  ·  Ctrl+C to stop`));
-      console.log(chalk.dim(`  Command on change: aion ${cmdArgs.join(' ')}\n`));
+      if (options.json) {
+        emit({ type: 'start', cwd, interval: intervalMs / 1000, cmd: cmdArgs.join(' ') });
+      } else {
+        console.log(chalk.bold.cyan(`\n  👁  aion watch — ${cwd}`));
+        console.log(chalk.dim(`  Polling every ${intervalMs / 1000}s  ·  Ctrl+C to stop`));
+        console.log(chalk.dim(`  Command on change: aion ${cmdArgs.join(' ')}\n`));
+      }
 
       const runScan = (changed: string[]) => {
-        console.log(chalk.yellow(`\n  ⚡ ${changed.length} file(s) changed — running scan...`));
-        changed.slice(0, 10).forEach((f) => console.log(chalk.dim(`    · ${f}`)));
-        if (changed.length > 10) console.log(chalk.dim(`    ... and ${changed.length - 10} more`));
-        console.log('');
-        spawnSync(process.execPath, [process.argv[1]!, '--cwd', cwd, ...cmdArgs], {
-          stdio: 'inherit',
+        if (options.json) {
+          emit({ type: 'change', files: changed });
+        } else {
+          console.log(chalk.yellow(`\n  ⚡ ${changed.length} file(s) changed — running scan...`));
+          changed.slice(0, 10).forEach((f) => console.log(chalk.dim(`    · ${f}`)));
+          if (changed.length > 10) console.log(chalk.dim(`    ... and ${changed.length - 10} more`));
+          console.log('');
+        }
+        const result = spawnSync(process.execPath, [process.argv[1]!, '--cwd', cwd, ...cmdArgs], {
+          stdio: options.json ? 'pipe' : 'inherit',
           env: process.env,
         });
-        console.log(chalk.dim(`\n  ── done — watching again (${new Date().toLocaleTimeString()}) ──\n`));
+        if (options.json) {
+          emit({ type: 'scan_done', status: result.status ?? 0, stdout: result.stdout?.toString().trim() ?? '', stderr: result.stderr?.toString().trim() ?? '' });
+        } else {
+          console.log(chalk.dim(`\n  ── done — watching again (${new Date().toLocaleTimeString()}) ──\n`));
+        }
       };
 
       let lastHash = getDiffHash(cwd);
@@ -65,7 +79,11 @@ export function registerWatch(program: Command): void {
       process.stdin.resume();
       process.on('SIGINT', () => {
         clearInterval(timer);
-        console.log(chalk.dim('\n  Watch stopped.\n'));
+        if (options.json) {
+          emit({ type: 'stop' });
+        } else {
+          console.log(chalk.dim('\n  Watch stopped.\n'));
+        }
         process.exit(0);
       });
     });

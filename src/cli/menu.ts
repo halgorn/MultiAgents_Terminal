@@ -108,23 +108,34 @@ function run(args: string[]): void {
   }
 }
 
-async function pressEnter(): Promise<void> {
+async function pressAnyKey(autoMs = 6000): Promise<void> {
   resetTty();
   drainStdin();
   return new Promise<void>((resolve) => {
+    const startedAt = Date.now();
+    const remaining = () => Math.max(0, Math.ceil((autoMs - (Date.now() - startedAt)) / 1000));
+
     process.stdout.write(chalk.dim('\n  ──────────────────────────────────────────────────\n'));
-    process.stdout.write('  ' + chalk.bold('↵  Press Enter to return to the menu'));
+    process.stdout.write(`\r  ${chalk.dim(`↵ any key to return  (${remaining()}s)`)}`);
+
+    const ticker = setInterval(() => {
+      const r = remaining();
+      process.stdout.write(`\r  ${chalk.dim(`↵ any key to return  (${r}s)  `)}`);
+      if (r === 0) cleanup(true);
+    }, 1000);
+
     let resolved = false;
-    const cleanup = () => {
+    const cleanup = (auto = false) => {
       if (resolved) return;
       resolved = true;
+      clearInterval(ticker);
       process.stdin.removeListener('data', onData);
       process.removeListener('SIGINT', onSigint);
-      process.stdout.write('\n');
+      process.stdout.write(auto ? chalk.dim('\n  (auto)\n') : '\n');
       drainStdin();
       resolve();
     };
-    const onData = cleanup;
+    const onData = () => cleanup(false);
     const onSigint = () => { process.stdout.write('\n'); process.exit(0); };
     process.stdin.resume();
     process.stdin.once('data', onData);
@@ -236,25 +247,25 @@ export function runMenuFallback(cwd: string): void {
 function buildMainItems(provider: string): Array<MenuItem<MenuAction>> {
   return [
     { label: 'Diagnostics', header: true, value: 'sep' },
-    { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM', value: 'local-check', key: 'd' },
-    { label: '🌐 SEO & Crawlers',        hint: 'zero token · Next.js routes, sitemap, robots', value: 'seo',         key: 's' },
+    { label: '📊 Automatic diagnostics', hint: 'zero token · health + secrets + env + SBOM', description: 'Runs health score, secret scan, env-audit, and SBOM — all locally with zero token cost. Shows a risk summary and links to the HTML report.', value: 'local-check', key: 'd' },
+    { label: '🌐 SEO & Crawlers',        hint: 'zero token · Next.js routes, sitemap, robots', description: 'Crawls your project for Next.js pages, sitemap.xml, robots.txt, and meta tags. No API calls — purely local analysis.', value: 'seo', key: 's' },
     { label: '', value: 'sep', separator: true },
     { label: 'Audit', header: true, value: 'sep' },
-    { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',          value: 'bugs',         key: 'b' },
-    { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',          value: 'security',     key: 'e' },
-    { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',          value: 'perf',         key: 'p' },
-    { label: '🛡️  Copilot Safe',          hint: 'zero token · pre-commit safety gate',          value: 'copilot',      key: 'g' },
+    { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',          description: 'Choose Local (zero token) or AI mode. Scans for logic bugs, null dereferences, error-handling gaps, and test coverage holes.', value: 'bugs',     key: 'b' },
+    { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',          description: 'Choose Local (zero token) or AI mode. Reviews for injection, auth bypass, secrets exposure, dependency CVEs, and OWASP Top 10.', value: 'security', key: 'e' },
+    { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',          description: 'Choose Local (zero token) or AI mode. Finds bottlenecks, missing timeouts, N+1 queries, and observability gaps.', value: 'perf',     key: 'p' },
+    { label: '🛡️  Copilot Safe',          hint: 'zero token · pre-commit safety gate',          description: 'Pre-commit safety check. Validates staged changes for obvious regressions before you commit. Zero token — instant feedback.', value: 'copilot',  key: 'g' },
     { label: '', value: 'sep', separator: true },
     { label: 'AI Tools', header: true, value: 'sep' },
-    { label: '🔧 Fix file',              hint: 'uses AI · runs fix pipeline on a file',       value: 'fix',          key: 'f' },
-    { label: '🔍 Analyze problem',       hint: 'uses AI · focused problem description',       value: 'analyze',      key: 'a' },
-    { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',         value: 'assistant',    key: 'i' },
-    { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',        value: 'chat-qa',      key: 'c' },
-    { label: '📋 View report',           hint: 'zero token · opens the unified main report',  value: 'report',       key: 'r' },
+    { label: '🔧 Fix file',              hint: 'uses AI · runs fix pipeline on a file',       description: 'Pick a file and let the AI apply targeted fixes. Uses the full fix pipeline: analyze → patch → verify.', value: 'fix',       key: 'f' },
+    { label: '🔍 Analyze problem',       hint: 'uses AI · focused problem description',       description: 'Describe a specific bug or architectural question. The AI focuses its full context window on your problem statement.', value: 'analyze',  key: 'a' },
+    { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',         description: 'General-purpose assistant. Routes to local tools when possible, falls back to AI when needed.', value: 'assistant', key: 'i' },
+    { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',        description: 'Chat with the AI about your repository. Uses the repo index for context — ask about architecture, patterns, or specific files.', value: 'chat-qa',  key: 'c' },
+    { label: '📋 View report',           hint: 'zero token · opens the unified main report',  description: 'Open the latest unified audit report. Shows the HTML visual, markdown digest, and recommended next actions.', value: 'report',    key: 'r' },
     { label: '', value: 'sep', separator: true },
     { label: 'System', header: true, value: 'sep' },
-    { label: '🩺 Doctor',     hint: 'zero token · check all system components', value: 'doctor',    key: 'o' },
-    { label: '🔌 Providers',  hint: 'zero token · show AI provider status',     value: 'providers' },
+    { label: '🩺 Doctor',     hint: 'zero token · check all system components', description: 'Runs a full system health check: API keys, index freshness, provider connectivity, and tool availability.', value: 'doctor',    key: 'o' },
+    { label: '🔌 Providers',  hint: 'zero token · show AI provider status',     description: 'Lists all configured AI providers, shows which is active, and reports API key status for each.', value: 'providers' },
     { label: '', value: 'sep', separator: true },
     { label: `⚙️  Provider: ${chalk.cyan(provider)}`, hint: 'change AI provider', value: 'change-provider' },
     { label: '  Quit', value: 'quit', key: 'q' },
@@ -300,6 +311,21 @@ export async function runMenu(cwd: string): Promise<void> {
 
   await loadCapState(cwd);
 
+  // Health score from trend history
+  let healthScore: string | null = null;
+  try {
+    const { loadTrend } = await import('../infra/audit-trend.js');
+    const trend = loadTrend(cwd);
+    const last = trend.entries.at(-1);
+    if (last) {
+      const prev = trend.entries.at(-2);
+      const delta = prev ? last.score - prev.score : 0;
+      const arrow = delta > 2 ? chalk.green('↑') : delta < -2 ? chalk.red('↓') : chalk.dim('→');
+      const scoreColor = last.score >= 80 ? chalk.green : last.score >= 60 ? chalk.yellow : chalk.red;
+      healthScore = `health ${scoreColor(`${last.score}/100`)} ${arrow}`;
+    }
+  } catch { /* best-effort */ }
+
   const staleWarning = checkIndexStaleness(cwd);
 
   function buildStatusLine(): string {
@@ -307,7 +333,8 @@ export async function runMenu(cwd: string): Promise<void> {
     const setup = _setupReady ? chalk.green('setup ok') : chalk.dim('initial setup pending');
     const lf = `LangFuse ${currentLangfuseLabel()}`;
     const prov = `provider: ${chalk.cyan(currentProvider)}`;
-    return `  ${setup}   ${rag}   ${lf}   ${prov}`;
+    const health = healthScore ? `  ${healthScore}` : '';
+    return `  ${setup}   ${rag}   ${lf}   ${prov}${health}`;
   }
 
   while (true) {
@@ -325,34 +352,34 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'local-check') {
       run(['--cwd', cwd, 'report', '--diagnostics']);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
     if (action === 'seo') {
       run(['--cwd', cwd, 'scan', 'seo']);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
     if (action === 'bugs') {
       const mode = await chooseAuditMode(cwd, 'bugs');
       if (mode) runAuditTrack(cwd, 'bugs', mode, currentProvider);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
     if (action === 'security') {
       const mode = await chooseAuditMode(cwd, 'security');
       if (mode) runAuditTrack(cwd, 'security', mode, currentProvider);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
     if (action === 'perf') {
       const mode = await chooseAuditMode(cwd, 'perf');
       if (mode) runAuditTrack(cwd, 'perf', mode, currentProvider);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
@@ -362,7 +389,7 @@ export async function runMenu(cwd: string): Promise<void> {
         const args = ['--cwd', cwd, 'fix', file];
         if (currentProvider !== 'claude') args.push('--provider', currentProvider);
         run(args);
-        await pressEnter();
+        await pressAnyKey();
       }
       continue;
     }
@@ -373,7 +400,7 @@ export async function runMenu(cwd: string): Promise<void> {
         const args = ['--cwd', cwd, 'analyze', target];
         if (currentProvider !== 'claude') args.push('--provider', currentProvider);
         run(args);
-        await pressEnter();
+        await pressAnyKey();
       }
       continue;
     }
@@ -400,25 +427,25 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'report') {
       run(['--cwd', cwd, 'report']);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
     if (action === 'copilot') {
       run(['--cwd', cwd, 'copilot', 'safe', '--dry-run']);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
     if (action === 'doctor') {
       run(['--cwd', cwd, 'doctor']);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
 
     if (action === 'providers') {
       run(['--cwd', cwd, 'providers']);
-      await pressEnter();
+      await pressAnyKey();
       continue;
     }
   }

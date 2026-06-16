@@ -4,6 +4,7 @@ import chalk from 'chalk';
 export interface MenuItem<T = string> {
   label: string;
   hint?: string;
+  description?: string;  // shown in right pane when terminal is wide enough
   value: T;
   icon?: string;
   key?: string;
@@ -26,6 +27,15 @@ function isSelectable<T>(item: MenuItem<T>): boolean {
 
 function termCols(): number {
   return Math.min(process.stdout.columns ?? 50, 80);
+}
+
+function visLen(s: string): number {
+  return s.replace(/\x1b\[[0-9;]*m/g, '').length;
+}
+
+function padRight(s: string, width: number): string {
+  const pad = width - visLen(s);
+  return s + (pad > 0 ? ' '.repeat(pad) : '');
 }
 
 function applyFilter<T>(items: MenuItem<T>[], q: string): MenuItem<T>[] {
@@ -120,6 +130,87 @@ function renderMulti<T>(
   return lines.length;
 }
 
+function renderListTwoPane<T>(
+  title: string,
+  items: MenuItem<T>[],
+  selected: number,
+  subtitle?: string,
+  filter?: string,
+): number {
+  const cols = process.stdout.columns ?? 80;
+  if (cols < 90) return renderList(title, items, selected, subtitle, filter);
+
+  const LEFT_W = Math.min(46, Math.floor(cols * 0.48));
+  const RIGHT_W = cols - LEFT_W - 4;
+
+  // Build left column
+  const left: string[] = [];
+  left.push(`  ${chalk.bold.cyan(title)}`);
+  if (filter !== undefined) {
+    const cur = filter ? chalk.dim(' ▌') : chalk.dim(' type to filter…');
+    left.push(`  ${chalk.cyan(`/ ${filter}`)}${cur}  ${chalk.dim('Esc exit')}`);
+  } else if (subtitle) {
+    left.push(chalk.dim(`  ${subtitle}`));
+  } else {
+    left.push('');
+  }
+  left.push('');
+
+  items.forEach((item, i) => {
+    if (item.separator) {
+      left.push(chalk.dim('  ' + '─'.repeat(LEFT_W - 4)));
+      return;
+    }
+    if (item.header) {
+      const h = `  ── ${item.label.toUpperCase()} `;
+      left.push(chalk.dim(h + '─'.repeat(Math.max(0, LEFT_W - h.length - 2))));
+      return;
+    }
+    const cur = i === selected ? chalk.cyan('❯') : ' ';
+    const icon = item.icon ?? ' ';
+    const lbl = i === selected ? chalk.bold.white(item.label) : chalk.white(item.label);
+    const sc = item.key ? chalk.dim(` [${item.key}]`) : '';
+    left.push(`  ${cur} ${icon}  ${lbl}${sc}`);
+  });
+
+  left.push('');
+  left.push(filter !== undefined
+    ? chalk.dim('  ↕/jk move   ↵ select   Esc exit')
+    : chalk.dim('  ↕/jk   ↵   / filter   q quit'));
+
+  // Build right column from description or hint of selected item
+  const right: string[] = [];
+  const sel = items[selected];
+  if (sel && !sel.separator && !sel.header) {
+    const desc = sel.description ?? sel.hint;
+    if (desc) {
+      right.push('');
+      right.push(chalk.bold.white(`  ${sel.label}`));
+      right.push(chalk.dim('  ' + '─'.repeat(Math.min(RIGHT_W - 4, 36))));
+      right.push('');
+      const words = desc.split(' ');
+      let ln = '';
+      for (const w of words) {
+        if ((ln + w).length > RIGHT_W - 4) {
+          if (ln.trim()) right.push(chalk.dim(`  ${ln.trim()}`));
+          ln = w + ' ';
+        } else {
+          ln += w + ' ';
+        }
+      }
+      if (ln.trim()) right.push(chalk.dim(`  ${ln.trim()}`));
+    }
+  }
+
+  // Render side-by-side
+  const sep = chalk.dim('│');
+  const rows = Math.max(left.length, right.length);
+  for (let r = 0; r < rows; r++) {
+    process.stdout.write(`${padRight(left[r] ?? '', LEFT_W)} ${sep} ${right[r] ?? ''}\n`);
+  }
+  return rows;
+}
+
 export async function selectOne<T>(
   title: string,
   items: MenuItem<T>[],
@@ -138,7 +229,7 @@ export async function selectOne<T>(
   let lineCount = 0;
 
   hideCursor();
-  lineCount = renderList(title, filtered, selected, subtitle, undefined);
+  lineCount = renderListTwoPane(title, filtered, selected, subtitle, undefined);
 
   return new Promise((resolve) => {
     process.stdin.setRawMode!(true);
@@ -209,7 +300,7 @@ export async function selectOne<T>(
       }
 
       clearLines(lineCount);
-      lineCount = renderList(title, filtered, selected, subtitle, filterMode ? filter : undefined);
+      lineCount = renderListTwoPane(title, filtered, selected, subtitle, filterMode ? filter : undefined);
     };
 
     const cleanup = () => {
