@@ -350,6 +350,26 @@ export function renderProjectHtml(data: Awaited<ReturnType<typeof buildProjectRe
   const isWeb = WEB_TYPES.includes(data.projectType);
   const seoNavLink = isWeb ? '<a href="#seo">SEO & Crawlers</a>' : '';
   const seoSection = isWeb ? renderSeoHtml(data.seo) : '';
+  const db = data.database;
+  const dbScoreClass = db.score >= 75 ? 'ok' : db.score >= 50 ? 'warn' : 'crit';
+  const dbOrmLabel = db.ormSignals.length ? db.ormSignals.join(', ') : 'None detected';
+  const dbIssueRows = db.issues.length
+    ? db.issues.map((i) => `<tr><td class="sev-${i.severity}">${esc(i.severity)}</td><td>${esc(i.area)}</td><td>${esc(i.issue)}</td><td>${esc(i.recommendation)}</td></tr>`).join('')
+    : '<tr><td colspan="4">No database issues detected.</td></tr>';
+  const dbSection = `<section id="database"><h2>Database <span class="muted">(zero token)</span></h2>
+<div class="grid">
+  <div class="card"><strong class="${dbScoreClass}">${db.score}/100</strong><br>DB Score</div>
+  <div class="card"><strong>${esc(dbOrmLabel)}</strong><br>ORM Detected</div>
+  <div class="card"><strong class="${db.migrationFiles === 0 ? 'warn' : 'ok'}">${db.migrationFiles}</strong><br>Migration Files</div>
+  <div class="card"><strong class="${db.unboundedListSignals > 0 ? 'warn' : 'ok'}">${db.unboundedListSignals}</strong><br>Unbounded Queries</div>
+  <div class="card"><strong class="${db.transactionSignals === 0 && db.rawSqlFiles > 0 ? 'warn' : 'ok'}">${db.transactionSignals}</strong><br>Transaction Signals</div>
+  <div class="card"><strong class="${db.paginationSignals === 0 && db.rawSqlFiles > 0 ? 'warn' : 'ok'}">${db.paginationSignals}</strong><br>Pagination Signals</div>
+  <div class="card"><strong>${db.indexSignals}</strong><br>Index Signals</div>
+  <div class="card"><strong>${db.poolSignals}</strong><br>Pool Signals</div>
+</div>
+<h3>Database Issues</h3>
+<table><tr><th>Severity</th><th>Area</th><th>Issue</th><th>Recommendation</th></tr>${dbIssueRows}</table>
+</section>`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(data.projectName)} - Project Report</title><style>${projectReportCss(gradeColor)}</style></head><body><nav><a href="#health">Health</a><a href="#trend">Changes</a><a href="#score-explain">Score</a><a href="#token-map">Tokens</a><a href="#architecture">Architecture</a>${seoNavLink}<a href="#database">Database</a><a href="#performance">Performance</a><a href="#diagnostics">Diagnostics</a><a href="#audit">Audit</a><a href="#improvements">Personas</a><a href="#churn">Churn</a><a href="#complexity">Complexity</a>${graphExists ? '<a href="../graph.html">Interactive Graph</a>' : ''}</nav><main class="container">
 <section class="header"><div><h1>${esc(data.projectName)}</h1><p>Generated ${esc(data.generatedAt)} · ${data.audit ? `${data.audit.totalFiles} files audited` : 'no audit data'}</p></div><div class="score" title="Health Score"><strong>${data.health.total}/100</strong><span>Grade ${data.health.grade}</span></div></section>
 <section id="health"><h2>Health</h2>${dimBars}${riskRows ? `<h3>Top Risks</h3><ul>${riskRows}</ul>` : ''}</section>
@@ -362,6 +382,7 @@ ${architectureSvg}
 <div><h3>Architecture Risks</h3><table><tr><th>Name</th><th>Severity</th><th>Description</th><th>Evidence</th></tr>${antiPatternRows || '<tr><td colspan="4">No architecture anti-patterns detected.</td></tr>'}</table></div></div>
 <h3>Module Coupling</h3><table><tr><th>Module</th><th>Files</th><th>Symbols</th><th>LOC</th><th>Fan-in</th><th>Fan-out</th></tr>${architectureRows || '<tr><td colspan="6">No module data available.</td></tr>'}</table></section>
 ${seoSection}
+${dbSection}
 <section id="diagnostics"><h2>Local Diagnostics <span class="muted">(zero token)</span></h2><div class="grid"><div class="card"><strong class="${data.secrets.length ? 'warn' : 'ok'}">${data.secrets.length}</strong><br>Secrets</div><div class="card"><strong>${data.envAudit.vars.length}</strong><br>Env vars</div><div class="card"><strong class="${data.sbom.unpinned.length ? 'warn' : 'ok'}">${data.sbom.unpinned.length}</strong><br>Unpinned deps</div><div class="card"><strong>${data.apiEndpoints.length}</strong><br>API endpoints</div></div>
 <h3>Secrets</h3><table><tr><th>Location</th><th>Pattern</th><th>Preview</th></tr>${secretRows}</table>
 <h3>Environment Variables</h3><table><tr><th>Documented</th><th>Name</th><th>Location</th></tr>${envRows || '<tr><td colspan="3">No environment variables detected.</td></tr>'}</table>

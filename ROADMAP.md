@@ -300,6 +300,76 @@
 
 ---
 
+## Database Intelligence Roadmap
+
+> Análise com 10 personas (Backend Engineer, DBA, DevOps/SRE, Security Engineer, Junior Developer, Tech Lead, Startup CTO, QA Engineer, Full-stack Developer, Compliance/DPO).
+>
+> O `db-analyzer.ts` cobre análise estática básica (ORM detection, N+1 signals, pool, paginação, migrações como sinais). O que falta está abaixo.
+
+Scores de 0 a 10 por dimensão. Ordenado por prioridade total ponderada.
+
+| # | Feature | Prioridade | Acurácia | Criticidade | Usabilidade | Manutenção | Segurança | Soma |
+|---|---------|:-----------:|:--------:|:-----------:|:-----------:|:----------:|:---------:|:----:|
+| 1 | Connection Config Auditor (`aion scan db-config`) | 9 | 9 | 9 | 9 | 8 | 10 | **54** |
+| 2 | Schema Quality Analyzer (`aion scan db-schema`) | 9 | 8 | 9 | 9 | 8 | 6 | **49** |
+| 3 | PII & Data Column Scanner (`aion scan db-pii`) | 8 | 7 | 9 | 8 | 7 | 10 | **49** |
+| 4 | Duplicate Query Detector (`aion scan db-duplicates`) | 8 | 7 | 8 | 9 | 8 | 3 | **43** |
+| 5 | Migration Health Analyzer (`aion scan db-migrations`) | 7 | 8 | 8 | 8 | 7 | 5 | **43** |
+| 6 | Unbounded Query Guard (enhance db-analyzer) | 7 | 8 | 8 | 9 | 8 | 3 | **43** |
+| 7 | Transaction Safety Analyzer (enhance db-analyzer) | 7 | 6 | 9 | 7 | 6 | 6 | **41** |
+| 8 | N+1 Loop Detector — deep (enhance db-analyzer) | 8 | 6 | 9 | 7 | 6 | 2 | **38** |
+| 9 | AI Query Optimizer (`--domains data`) | 6 | 7 | 8 | 8 | 7 | 3 | **39** |
+| 10 | Live Schema Introspection (`aion db connect`) | 5 | 10 | 10 | 5 | 4 | 7 | **41** |
+
+### #1 — Connection Config Auditor `aion scan db-config` — Soma 54
+
+Varre `.env`, `docker-compose.yml`, `prisma/schema.prisma`, `knexfile.js`, `typeorm.config.ts`.
+Detecta: `sslmode=disable` / `ssl: false`, ausência de `connectionLimit`/`pool_size`, ausência de `connect_timeout`, senha em texto plano na connection string.
+Zero token. Análise estática de arquivos de config estruturados — alta acurácia.
+
+### #2 — Schema Quality Analyzer `aion scan db-schema` — Soma 49
+
+Parseia schemas Prisma, entidades TypeORM, modelos Sequelize/Django.
+Detecta: FK sem `@@index`, campos nullable sem default, ausência de `@unique` em email/cpf, tabelas sem PK, relações sem `onDelete`.
+Zero token. Arquivos estruturados = acurácia alta.
+
+### #3 — PII & Data Column Scanner `aion scan db-pii` — Soma 49
+
+Detecta nomes de coluna sensíveis (`email`, `cpf`, `senha`, `password`, `phone`, `ssn`, `dob`) em schemas ORM e migrations sem sinais de criptografia (`select: false`, `@db.VarChar` com encrypt, audit log).
+Relevante para LGPD/GDPR. Zero token.
+
+### #4 — Duplicate Query Detector `aion scan db-duplicates` — Soma 43
+
+Extrai chamadas ORM por arquivo (modelo + operação + campos + filtros) e agrupa por similaridade.
+Detecta o mesmo `findMany(User)` reescrito em 3 arquivos diferentes. Output: grupos de duplicatas com localização + sugestão de repositório.
+
+### #5 — Migration Health Analyzer `aion scan db-migrations` — Soma 43
+
+Varre arquivos de migration: FK sem índice correspondente, `DROP COLUMN` sem verificação de dependências, migrations irreversíveis sem `down()`, `ALTER TABLE` em tabelas grandes sem aviso.
+Complementa o contador atual de `migrationFiles` com análise de conteúdo.
+
+### #6 — Unbounded Query Guard (enhance) — Soma 43
+
+O `db-analyzer` já conta `unboundedListSignals`. A melhoria: localizar cada ocorrência (arquivo + linha aproximada), sugerir o `take` exato por contexto (API endpoint → 20, admin → 100), diferenciar queries públicas de administrativas.
+
+### #7 — Transaction Safety Analyzer (enhance) — Soma 41
+
+Detecta: múltiplos writes em sequência sem `$transaction()`, `Promise.all` com escritas paralelas (race condition), read-modify-write sem lock. O atual só conta `transactionSignals` sem localizar o problema.
+
+### #8 — N+1 Loop Detector — deep (enhance) — Soma 38
+
+O atual detecta `relationRiskSignals` por contagem. O deep detector busca o padrão concreto: iteração sobre lista + chamada ORM dentro do loop no mesmo arquivo ou caller imediato.
+
+### #9 — AI Query Optimizer `aion audit . --domains data` — Soma 39
+
+Usa AI para sugerir rewrites de queries identificadas pelos scanners locais: uso de índices existentes, substituição de N+1 por `include`/`JOIN`, projeção específica em vez de `SELECT *`. Usa tokens — ativado via `--domains data`.
+
+### #10 — Live Schema Introspection `aion db connect` — Soma 41
+
+Conecta ao banco (Postgres, MySQL, SQLite) e compara: schema ORM vs schema real, índices no código vs índices no banco, tabelas órfãs. Máxima precisão mas exige connection string — UX mais complexa, manutenção de múltiplos drivers.
+
+---
+
 ## Critérios de Qualidade (permanentes)
 
 - `npm test` ≥ 742 testes passando

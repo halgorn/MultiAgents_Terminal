@@ -33,7 +33,11 @@ th{color:var(--muted);font-size:9px;font-family:'JetBrains Mono',monospace;text-
 .muted{color:var(--muted)}
 .warn{color:#ffb020}
 .ok{color:#34d399}
-.sev-high{color:#ff4d4d}
+.crit{color:#ff2d2d}
+.sev-critical{color:#ff2d2d;font-weight:600}
+.sev-high{color:#ff4d4d;font-weight:600}
+.sev-medium{color:#ffb020}
+.sev-low{color:var(--muted)}
 .graph-wrap{background:var(--s1);border:1px solid var(--line);border-radius:10px;overflow:auto;margin:14px 0}
 .graph-wrap svg{display:block;min-width:900px;width:100%;height:auto}
 .split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}

@@ -5,6 +5,7 @@ import { dirname } from 'path';
 import { latestAuditPointer, projectReportPath } from '../../infra/project-report.js';
 import { openReportFile, refreshUnifiedReport } from '../../infra/report-refresh.js';
 import { displayProjectName } from '../../infra/project-name.js';
+import { analyzeDatabase } from '../../infra/db-analyzer.js';
 
 function ensureUnifiedReport(cwd: string): string {
   const reportPath = projectReportPath(cwd);
@@ -29,6 +30,29 @@ function printLatest(cwd: string): void {
   if (latest.html) console.log(`  html:        ${latest.html}`);
   if (latest.digest) console.log(`  digest:      ${latest.digest}`);
   if (latest.aiContext) console.log(`  ai context:  ${latest.aiContext}`);
+
+  // Database summary (zero-token, runs locally)
+  try {
+    const db = analyzeDatabase(cwd);
+    const scoreColor = db.score >= 75 ? chalk.green : db.score >= 50 ? chalk.yellow : chalk.red;
+    const highIssues = db.issues.filter((i) => i.severity === 'high').length;
+    console.log('');
+    console.log(chalk.bold('── Database ────────────────────────────────────────────────'));
+    console.log(`  score:       ${scoreColor(`${db.score}/100`)}`);
+    if (db.ormSignals.length) console.log(`  orm:         ${chalk.dim(db.ormSignals.join(', '))}`);
+    if (db.issues.length === 0) {
+      console.log(chalk.dim('  No database issues detected.'));
+    } else {
+      console.log(`  issues:      ${db.issues.length} total${highIssues > 0 ? chalk.red(` · ${highIssues} high`) : ''}`);
+      db.issues.slice(0, 3).forEach((i) => {
+        const sev = i.severity === 'high' ? chalk.red(i.severity) : chalk.yellow(i.severity);
+        console.log(`  ${sev}  ${chalk.dim(i.area)}  ${i.issue}`);
+      });
+      if (db.issues.length > 3) console.log(chalk.dim(`  … and ${db.issues.length - 3} more — see full report`));
+    }
+    console.log(chalk.dim('  Full view:   aion report  (visual dashboard → Database section)'));
+  } catch { /* best-effort */ }
+
   console.log('');
   console.log(chalk.bold('── File guide ──────────────────────────────────────────────'));
   console.log(chalk.dim('  digest.md      — human-readable summary. Open this to read findings and priorities.'));
