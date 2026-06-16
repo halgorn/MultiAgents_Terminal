@@ -1,7 +1,8 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
+import ora from 'ora';
 import * as readline from 'readline';
-import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { createRuntimePolicy, BUDGET_NAMES, PROVIDER_NAMES, type ProviderName, type BudgetName, type RuntimePolicy } from '../../core/runtime-policy.js';
@@ -64,7 +65,8 @@ export function registerChat(program: Command): void {
     .option('--context-limit <n>', 'max chars of repo context injected (default: 6000)', '6000')
     .option('--no-history', 'start a fresh session without loading previous history')
     .option('--history', 'show last 10 Q&A pairs from history then exit')
-    .action(async (options: { budget: string; provider?: string; model?: string; contextLimit: string; history?: boolean; noHistory?: boolean }) => {
+    .option('--clear-history', 'clear all chat history and exit')
+    .action(async (options: { budget: string; provider?: string; model?: string; contextLimit: string; history?: boolean; noHistory?: boolean; clearHistory?: boolean }) => {
       const cwd = process.cwd();
       const contextLimit = Math.max(1000, Math.min(20000, parseInt(options.contextLimit, 10) || 6000));
       const budget = ((BUDGET_NAMES as readonly string[]).includes(options.budget) ? options.budget : 'normal') as BudgetName;
@@ -72,6 +74,18 @@ export function registerChat(program: Command): void {
         ? options.provider as ProviderName
         : undefined)
         ?? (process.env['OPENROUTER_API_KEY'] ? 'openrouter' : process.env['MOONSHOT_API_KEY'] ? 'kimi' : process.env['MINIMAX_API_KEY'] ? 'minimax' : 'claude');
+
+      // --clear-history: wipe history file and exit
+      if (options.clearHistory) {
+        const p = historyPath(cwd);
+        if (existsSync(p)) {
+          writeFileSync(p, '', 'utf8');
+          console.log(chalk.green('  Chat history cleared.'));
+        } else {
+          console.log(chalk.dim('  No chat history to clear.'));
+        }
+        return;
+      }
 
       // --history: show recent Q&A and exit
       if (options.history) {
@@ -101,13 +115,15 @@ export function registerChat(program: Command): void {
         } : {}),
       };
       const policy = createRuntimePolicy(policyInput);
-      console.log(chalk.dim('\nBuilding repository index…'));
+      const indexSpinner = ora('Building repository index…').start();
       const graph = new GraphAgent(cwd);
       let repoContext = '';
       try {
         repoContext = await graph.queryWithContext('architecture structure files modules', 20, contextLimit);
+        indexSpinner.succeed(chalk.dim(`Repository index ready (${repoContext.length} chars context)`));
       } catch {
         repoContext = '(No repo index available)';
+        indexSpinner.warn(chalk.yellow('No repo index available — code awareness is limited. Run `aion memory index` first.'));
       }
 
       // Load previous session
@@ -118,9 +134,6 @@ export function registerChat(program: Command): void {
       console.log(chalk.dim(`  Provider: ${provider}  Budget: ${budget}  Context: ${repoContext.length} chars`));
       if (pastEntries.length > 0) {
         console.log(chalk.dim(`  Session resumed (${pastEntries.length} previous messages) — /history to review  /clear to reset`));
-      }
-      if (repoContext.startsWith('(No repo')) {
-        console.log(chalk.yellow('  ⚠ No repo index available. Code awareness is limited. Run "aion index" first.'));
       }
       console.log(chalk.dim('  Type "exit" or Ctrl+C to quit.'));
       console.log(chalk.dim('  /context [query]  /history  /clear  /context-show\n'));

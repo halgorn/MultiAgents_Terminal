@@ -38,6 +38,8 @@ import { registerCopilot } from './cli/commands/copilot.js';
 import { registerIndex } from './cli/commands/index.js';
 import { registerReleaseCheck } from './cli/commands/release-check.js';
 import { registerWatch } from './cli/commands/watch.js';
+import { registerDoctor } from './cli/commands/doctor.js';
+import { registerProviders } from './cli/commands/providers.js';
 import { buildAssistPlan, saveAssistPlan } from './infra/assist/assist-plan.js';
 import { applyArtifacts, formatArtifactSummary } from './infra/assist/apply-artifacts.js';
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
@@ -120,6 +122,8 @@ registerCopilot(program);
 registerIndex(program);
 registerReleaseCheck(program);
 registerWatch(program);
+registerDoctor(program);
+registerProviders(program);
 
 program
   .command('assist')

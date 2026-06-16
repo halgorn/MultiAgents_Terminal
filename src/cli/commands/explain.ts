@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import chalk from 'chalk';
+import ora from 'ora';
 import { ExplainAgent } from '../../agents/explain-agent.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
 import { createRuntimePolicy } from '../../core/runtime-policy.js';
@@ -91,8 +92,10 @@ export function registerExplain(program: Command): void {
     .action(async (file: string, options: RuntimeCliOptions) => {
       const cwd = process.cwd();
       const policy = createRuntimePolicy(toRuntimePolicyInput(options));
-      console.log(chalk.bold.cyan(`\nExplaining ${file}…\n`));
+      const spinner = ora(`Building context for ${file}…`).start();
       const context = await buildFileContext(cwd, file);
+      spinner.stop();
+      console.log(chalk.bold.cyan(`\nExplaining ${file}…\n`));
       const agent = new ExplainAgent('explain', policy.plannerProvider);
       const run = await agent.run({ worktreePath: cwd, mode: 'explain', target: file, context }, policy);
       console.log(run.output);
@@ -105,8 +108,10 @@ export function registerExplain(program: Command): void {
     .action(async (file: string, options: RuntimeCliOptions) => {
       const cwd = process.cwd();
       const policy = createRuntimePolicy(toRuntimePolicyInput(options));
-      console.log(chalk.bold.cyan(`\nImpact analysis: ${file}…\n`));
+      const spinner = ora(`Mapping impact for ${file}…`).start();
       const context = await buildImpactContext(cwd, file);
+      spinner.stop();
+      console.log(chalk.bold.cyan(`\nImpact analysis: ${file}…\n`));
       const agent = new ExplainAgent('impact', policy.plannerProvider);
       const run = await agent.run({ worktreePath: cwd, mode: 'impact', target: file, context }, policy);
       console.log(run.output);

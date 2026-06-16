@@ -46,7 +46,7 @@ export const BUDGETS = [
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
 type AuditMode = 'local-only' | 'normal';
-type MenuAction = 'local-check' | 'seo' | 'bugs' | 'security' | 'perf' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'change-provider' | 'sep' | 'quit';
+type MenuAction = 'local-check' | 'seo' | 'bugs' | 'security' | 'perf' | 'copilot' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'change-provider' | 'doctor' | 'providers' | 'sep' | 'quit';
 
 const PROVIDER_ITEMS = [
   { label: 'claude',      hint: 'Anthropic Claude (default)',        value: 'claude' },
@@ -243,6 +243,7 @@ function buildMainItems(provider: string): Array<MenuItem<MenuAction>> {
     { label: '🐛 Bugs & Quality',        hint: 'zero-token local scan or normal AI',          value: 'bugs',         key: 'b' },
     { label: '🔐 Security',              hint: 'zero-token local scan or normal AI',          value: 'security',     key: 'e' },
     { label: '⚡ Performance & Infra',   hint: 'zero-token local scan or normal AI',          value: 'perf',         key: 'p' },
+    { label: '🛡️  Copilot Safe',          hint: 'zero token · pre-commit safety gate',          value: 'copilot',      key: 'g' },
     { label: '', value: 'sep', separator: true },
     { label: 'AI Tools', header: true, value: 'sep' },
     { label: '🔧 Fix file',              hint: 'uses AI · runs fix pipeline on a file',       value: 'fix',          key: 'f' },
@@ -251,7 +252,11 @@ function buildMainItems(provider: string): Array<MenuItem<MenuAction>> {
     { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',        value: 'chat-qa',      key: 'c' },
     { label: '📋 View report',           hint: 'zero token · opens the unified main report',  value: 'report',       key: 'r' },
     { label: '', value: 'sep', separator: true },
-    { label: `⚙️  Provider: ${chalk.cyan(provider)}`, hint: 'change AI provider',            value: 'change-provider' },
+    { label: 'System', header: true, value: 'sep' },
+    { label: '🩺 Doctor',     hint: 'zero token · check all system components', value: 'doctor',    key: 'o' },
+    { label: '🔌 Providers',  hint: 'zero token · show AI provider status',     value: 'providers' },
+    { label: '', value: 'sep', separator: true },
+    { label: `⚙️  Provider: ${chalk.cyan(provider)}`, hint: 'change AI provider', value: 'change-provider' },
     { label: '  Quit', value: 'quit', key: 'q' },
   ];
 }
@@ -309,6 +314,9 @@ export async function runMenu(cwd: string): Promise<void> {
     console.log('');
     printHeader(projectName, info);
     console.log(buildStatusLine());
+    if (!_setupReady) {
+      console.log(chalk.yellow('  ⚡ First time? Run `aion setup` to index your codebase, build memory, and install the git hook.'));
+    }
     if (staleWarning) console.log(`  ${staleWarning}`);
 
     const action = await selectOne('What do you want to do?', buildMainItems(currentProvider));
@@ -392,6 +400,24 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'report') {
       run(['--cwd', cwd, 'report']);
+      await pressEnter();
+      continue;
+    }
+
+    if (action === 'copilot') {
+      run(['--cwd', cwd, 'copilot', 'safe', '--dry-run']);
+      await pressEnter();
+      continue;
+    }
+
+    if (action === 'doctor') {
+      run(['--cwd', cwd, 'doctor']);
+      await pressEnter();
+      continue;
+    }
+
+    if (action === 'providers') {
+      run(['--cwd', cwd, 'providers']);
       await pressEnter();
       continue;
     }

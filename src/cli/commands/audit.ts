@@ -8,7 +8,7 @@ import { createRuntimePolicy, type ProviderName } from '../../core/runtime-polic
 import { CostTracker } from '../../core/cost-tracker.js';
 import { Renderer } from '../ui/renderer.js';
 import { saveAuditReport } from '../../infra/audit-report-writer.js';
-import { SEVERITY_RANK, type CostSummary } from '../../infra/audit-model.js';
+import { SEVERITY_RANK, type CostSummary, type AuditHistoryEntry } from '../../infra/audit-model.js';
 import type { AuditFinding, AuditReport, FixSeverity } from '../../schemas/audit.js';
 import { FIX_SEVERITIES } from '../../schemas/audit.js';
 import { parseBudget, parsePositiveInt } from '../cli-utils.js';
@@ -150,6 +150,42 @@ export function registerAudit(program: Command): void {
     .option('--notify-webhook <url>', 'POST audit summary to this URL when complete')
     .action(async (target: string = '.', options: AuditOptions) => {
       if (options.listPersonas) return printPersonas();
+
+      // ── audit diff: compare last 2 (or all) runs ──────────────────────────
+      if (target === 'diff') {
+        const { existsSync: fsExists, readFileSync: fsRead } = await import('fs');
+        const { join: fsJoin } = await import('path');
+        const { AI_RUNTIME_DIR } = await import('../../infra/paths.js');
+        const histFile = fsJoin(process.cwd(), AI_RUNTIME_DIR, 'reports', 'audit-history.json');
+        if (!fsExists(histFile)) {
+          console.error(chalk.yellow('No audit history found. Run `aion audit . --local-only` first.'));
+          process.exitCode = 1; return;
+        }
+        const history = JSON.parse(fsRead(histFile, 'utf8')) as AuditHistoryEntry[];
+        if (history.length < 2) {
+          console.log(chalk.yellow(`Only ${history.length} audit run(s) recorded. Need at least 2 to compare.`));
+          return;
+        }
+        const sorted = history.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        const prev = sorted[sorted.length - 2]!;
+        const curr = sorted[sorted.length - 1]!;
+        const critDelta = curr.criticalCount - prev.criticalCount;
+        const highDelta = curr.highCount - prev.highCount;
+        const fmt = (n: number) => n > 0 ? chalk.red(`+${n}`) : n < 0 ? chalk.green(String(n)) : chalk.dim('±0');
+        console.log(chalk.bold.cyan('\nAudit Diff — last 2 runs\n'));
+        console.log(`  Previous  ${chalk.dim(new Date(prev.createdAt).toLocaleString())}   critical: ${prev.criticalCount}  high: ${prev.highCount}`);
+        console.log(`  Current   ${chalk.dim(new Date(curr.createdAt).toLocaleString())}   critical: ${curr.criticalCount}  high: ${curr.highCount}`);
+        console.log('');
+        console.log(`  Critical  ${fmt(critDelta)}`);
+        console.log(`  High      ${fmt(highDelta)}`);
+        console.log(`  Files     ${fmt(curr.totalFiles - prev.totalFiles)}`);
+        if (critDelta < 0 || highDelta < 0) console.log(chalk.green('\n  ✓ Improvement detected'));
+        else if (critDelta > 0 || highDelta > 0) console.log(chalk.red('\n  ✗ Regression detected'));
+        else console.log(chalk.dim('\n  = No change in critical/high findings'));
+        console.log('');
+        return;
+      }
+
       ensureGitignore(process.cwd());
 
       // --since: resolve changed files via git diff

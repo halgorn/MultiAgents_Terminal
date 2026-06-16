@@ -8,9 +8,42 @@ import { buildChurnReport } from '../../infra/git-analysis.js';
 import { measureCognitiveLoad } from '../../infra/code-metrics.js';
 import { detectPatterns } from '../../infra/pattern-detect.js';
 import { GraphAgent } from '../../agents/graph-agent.js';
-import { appendTrend, loadTrend, renderTrendChart } from '../../infra/audit-trend.js';
+import { appendTrend, loadTrend, renderTrendChart, type TrendEntry } from '../../infra/audit-trend.js';
+
+function miniSparkline(entries: TrendEntry[]): string {
+  const BARS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+  const scores = entries.slice(-8).map((e) => e.score);
+  if (scores.length < 2) return '';
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const range = max - min || 1;
+  const spark = scores.map((s) => {
+    const idx = Math.min(7, Math.round(((s - min) / range) * 7));
+    const bar = BARS[idx]!;
+    return s >= 85 ? chalk.green(bar) : s >= 70 ? chalk.yellow(bar) : chalk.red(bar);
+  }).join('');
+  const last = scores[scores.length - 1]!;
+  const prev = scores[scores.length - 2]!;
+  const delta = last - prev;
+  const arrow = delta > 0 ? chalk.green(`+${delta}`) : delta < 0 ? chalk.red(String(delta)) : chalk.dim('±0');
+  return `${spark}  ${arrow} vs prev`;
+}
 import { loadLatestAudit } from '../../infra/project-report.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
+
+function topRiskDomains(topRisks: string[]): string {
+  const domains = new Set<string>();
+  for (const r of topRisks) {
+    const l = r.toLowerCase();
+    if (l.includes('security')) { domains.add('security'); domains.add('dependencies'); }
+    if (l.includes('maintainability') || l.includes('cognitive')) { domains.add('bugs'); domains.add('architecture'); }
+    if (l.includes('test')) domains.add('testing');
+    if (l.includes('churn') || l.includes('bus factor')) domains.add('architecture');
+    if (l.includes('architecture') || l.includes('coupling')) domains.add('architecture');
+  }
+  if (domains.size === 0) domains.add('bugs');
+  return [...domains].join(',');
+}
 
 export function registerHealth(program: Command): void {
   program
@@ -98,7 +131,10 @@ export function registerHealth(program: Command): void {
 
       // Render
       const gradeColor = { A: chalk.green.bold, B: chalk.green, C: chalk.yellow, D: chalk.red, F: chalk.red.bold }[score.grade] ?? chalk.white;
-      console.log(`  ${score.badge}\n`);
+      void gradeColor;
+      const trend = loadTrend(cwd);
+      const spark = miniSparkline(trend.entries);
+      console.log(`  ${score.badge}${spark ? chalk.dim('  ') + spark : ''}\n`);
 
       console.log(chalk.bold('── Dimensions ─────────────────────────────────────────────'));
       score.dimensions.forEach((d) => {
@@ -113,10 +149,12 @@ export function registerHealth(program: Command): void {
       if (score.topRisks.length > 0) {
         console.log(chalk.bold('\n── Top Risks ──────────────────────────────────────────────'));
         score.topRisks.forEach((r) => console.log(chalk.red(`  ✗ ${r}`)));
+        const domains = topRiskDomains(score.topRisks);
+        console.log(chalk.dim(`\n  → aion audit . --domains ${domains} --budget normal`));
       }
 
       if (!audit) {
-        console.log(chalk.dim('\n  Tip: run `audit` first for security dimension accuracy'));
+        console.log(chalk.dim('\n  Tip: run `aion audit . --local-only` first for security dimension accuracy'));
       }
 
       let failedThreshold = false;
@@ -129,9 +167,12 @@ export function registerHealth(program: Command): void {
         }
       }
 
-      await refreshUnifiedReport(cwd, {
+      const written = await refreshUnifiedReport(cwd, {
         reason: 'Updating dashboard after health check',
       });
+      if (written.htmlFile) {
+        console.log(chalk.dim(`\n  Report updated → ${written.htmlFile}`));
+      }
       if (failedThreshold) process.exit(1);
     });
 }

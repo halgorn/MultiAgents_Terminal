@@ -39,7 +39,7 @@ test('projectReportCss includes responsive media query', () => {
 
 test('projectReportCss includes dark background', () => {
   const css = projectReportCss('#fff');
-  assert.ok(css.includes('background:#0d1117'));
+  assert.ok(css.includes('--bg:#09090b'));
 });
 
 test('projectReportCss .score block wraps gradeColor correctly', () => {

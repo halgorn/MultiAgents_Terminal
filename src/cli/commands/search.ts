@@ -26,7 +26,9 @@ export function registerSearch(program: Command): void {
           return;
         }
         results.forEach((item, i) => {
-          console.log(`${chalk.cyan(`${i + 1}.`)} ${chalk.bold(item.file)}:${item.startLine}-${item.endLine} ${chalk.gray(`[${item.type} ${item.score.toFixed(3)}]`)}`);
+          const pct = Math.round(item.score * 100);
+          const scoreColor = pct >= 80 ? chalk.green : pct >= 50 ? chalk.yellow : chalk.red;
+          console.log(`${chalk.cyan(`${i + 1}.`)} ${chalk.bold(item.file)}:${item.startLine}-${item.endLine} ${scoreColor(`${pct}%`)} ${chalk.dim(`[${item.type}]`)}`);
           console.log(chalk.dim(`   ${item.name}`));
           if (item.text) console.log(chalk.gray(item.text.split('\n').slice(0, 4).map((line) => `   ${line}`).join('\n')));
           console.log();

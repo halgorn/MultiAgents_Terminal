@@ -7,7 +7,7 @@ test('main menu has the expected actionable items', () => {
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
 
-  assert.deepEqual(selectable, ['local-check', 'seo', 'bugs', 'security', 'perf', 'fix', 'analyze', 'assistant', 'chat-qa', 'report', 'change-provider']);
+  assert.deepEqual(selectable, ['local-check', 'seo', 'bugs', 'security', 'perf', 'copilot', 'fix', 'analyze', 'assistant', 'chat-qa', 'report', 'doctor', 'providers', 'change-provider']);
 });
 
 test('menu does not include old submenus', () => {

@@ -30,9 +30,16 @@ function printLatest(cwd: string): void {
   if (latest.digest) console.log(`  digest:      ${latest.digest}`);
   if (latest.aiContext) console.log(`  ai context:  ${latest.aiContext}`);
   console.log('');
-  console.log(chalk.bold('Recommended:'));
-  console.log(`  Human review: ${chalk.cyan(latest.digest ?? latest.runDir ?? '')}`);
-  console.log(`  Send to AI:   ${chalk.cyan(latest.aiContext ?? '')}`);
+  console.log(chalk.bold('── File guide ──────────────────────────────────────────────'));
+  console.log(chalk.dim('  digest.md      — human-readable summary. Open this to read findings and priorities.'));
+  console.log(chalk.dim('  ai-context.md  — compact machine context. Paste the path into an AI assistant to load the full audit.'));
+  console.log(chalk.dim('  action-plan.md — prioritized list of fixes with exact file locations.'));
+  console.log(chalk.dim('  index.html     — visual dashboard with trend charts and per-file breakdown.'));
+  console.log('');
+  console.log(chalk.bold('── Recommended ─────────────────────────────────────────────'));
+  console.log(`  Human review:  ${chalk.cyan(latest.digest ?? latest.runDir ?? '')}`);
+  console.log(`  Send to AI:    ${chalk.cyan(latest.aiContext ?? '')}`);
+  console.log(`  Visual report: ${chalk.cyan(latest.html ?? latest.runDir ?? '')}`);
 }
 
 export function registerReport(program: Command): void {

@@ -131,7 +131,7 @@ test('CLI local subcommands smoke without API keys or internet assumptions', () 
     assert.equal(graph.status, 0, graph.stderr);
     assert.match(readFileSync(graphOutput, 'utf8'), /Dependency Graph/);
 
-    const setupStatus = runSourceCli(repo, ['setup', '--status']);
+    const setupStatus = runSourceCli(repo, ['setup', '--status', '--json']);
     assert.equal(setupStatus.status, 0, setupStatus.stderr);
     assert.match(setupStatus.stdout, /"prepared": false/);
 
@@ -245,7 +245,7 @@ test('CLI setup command prepares project and can be reset', () => {
     assert.equal(setup.status, 0, setup.stderr);
     assert.match(setup.stdout, /Setup complete/);
 
-    const status = runSourceCli(repo, ['setup', '--status']);
+    const status = runSourceCli(repo, ['setup', '--status', '--json']);
     assert.equal(status.status, 0, status.stderr);
     assert.match(status.stdout, /"prepared": true/);
     assert.match(status.stdout, /"selectedScanners": 1/);
@@ -254,7 +254,7 @@ test('CLI setup command prepares project and can be reset', () => {
     assert.equal(reset.status, 0, reset.stderr);
     assert.match(reset.stdout, /Setup state reset/);
 
-    const statusAfterReset = runSourceCli(repo, ['setup', '--status']);
+    const statusAfterReset = runSourceCli(repo, ['setup', '--status', '--json']);
     assert.equal(statusAfterReset.status, 0, statusAfterReset.stderr);
     assert.match(statusAfterReset.stdout, /"prepared": false/);
   } finally {
@@ -273,9 +273,9 @@ test('CLI setup with semantic rag falls back to local embeddings when remote key
     });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /fallback local/i);
+    assert.match(result.stdout, /fallback/i);
 
-    const status = runSourceCli(repo, ['setup', '--status']);
+    const status = runSourceCli(repo, ['setup', '--status', '--json']);
     assert.equal(status.status, 0, status.stderr);
     assert.match(status.stdout, /"prepared": true/);
   } finally {

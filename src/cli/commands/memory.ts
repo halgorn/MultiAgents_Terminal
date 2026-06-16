@@ -96,7 +96,23 @@ export function registerMemory(program: Command): void {
         console.log(chalk.gray(`  Backend:  ${backend}`));
         console.log(chalk.gray('  Run `aion memory search "<query>"` to test retrieval.'));
       } catch (err) {
-        spinner.fail(chalk.red('Build failed: ' + String(err)));
+        const errStr = String(err);
+        spinner.fail(chalk.red('Build failed: ' + errStr));
+        if (/401|403|api.?key|authentication|unauthorized/i.test(errStr)) {
+          process.stderr.write(chalk.yellow('\n  Cause: API key missing or invalid.\n'));
+          process.stderr.write(chalk.dim('  → Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or another provider key.\n'));
+          process.stderr.write(chalk.dim('  → Use local embeddings (no API key needed): aion memory build --no-src\n'));
+        } else if (/429|rate.?limit/i.test(errStr)) {
+          process.stderr.write(chalk.yellow('\n  Cause: Rate limit reached.\n'));
+          process.stderr.write(chalk.dim('  → Wait a moment and retry, or switch to local embeddings: aion memory build --no-src\n'));
+        } else if (/timeout|ECONNREFUSED|ENOTFOUND|network/i.test(errStr)) {
+          process.stderr.write(chalk.yellow('\n  Cause: Network error.\n'));
+          process.stderr.write(chalk.dim('  → Check your internet connection.\n'));
+          process.stderr.write(chalk.dim('  → Or use local embeddings: aion memory build --no-src\n'));
+        } else {
+          process.stderr.write(chalk.dim('\n  → Try local embeddings (no API key required): aion memory build --no-src\n'));
+          process.stderr.write(chalk.dim('  → Run `aion doctor` to check system status.\n'));
+        }
         process.exit(1);
       }
     });
@@ -231,7 +247,8 @@ export function registerMemory(program: Command): void {
     .action((query: string, options: { topK: string }) => {
       const index = loadRepoIndex(process.cwd());
       if (!index) {
-        console.error(chalk.yellow('No repo index found. Run `ai memory index` first.'));
+        process.stderr.write(chalk.yellow('No repo index found.\n'));
+        process.stderr.write(chalk.dim('  → aion memory index\n'));
         process.exit(1);
       }
 

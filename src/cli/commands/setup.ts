@@ -38,20 +38,16 @@ interface SetupWizardResult {
   semanticRagBuilt: boolean;
 }
 
-function runSelfCommand(cwd: string, args: string[]): boolean {
-  const result = spawnSync(process.execPath, [process.argv[1]!, '--cwd', cwd, ...args], {
-    stdio: 'inherit',
-    env: process.env,
-  });
-  return (result.status ?? 1) === 0;
-}
-
 function runSelfCommandWithEnv(cwd: string, args: string[], env: NodeJS.ProcessEnv): boolean {
   const result = spawnSync(process.execPath, [process.argv[1]!, '--cwd', cwd, ...args], {
     stdio: 'inherit',
     env,
   });
   return (result.status ?? 1) === 0;
+}
+
+function runSelfCommand(cwd: string, args: string[]): boolean {
+  return runSelfCommandWithEnv(cwd, args, process.env);
 }
 
 function runMemoryBuildWithFallback(cwd: string): boolean {
@@ -62,7 +58,7 @@ function runMemoryBuildWithFallback(cwd: string): boolean {
   if (!hadRemoteEmbeddingEnv) return false;
 
   process.stdout.write(
-    chalk.yellow('\nEmbeddings remotos falharam. Tentando fallback local (hash-384d, sem API)...\n'),
+    chalk.yellow('\nRemote embeddings failed. Retrying with local fallback (hash-384d, no API key required)...\n'),
   );
   const fallbackEnv: NodeJS.ProcessEnv = {
     ...process.env,
@@ -73,25 +69,58 @@ function runMemoryBuildWithFallback(cwd: string): boolean {
 }
 
 async function chooseBudget(): Promise<'low' | 'normal' | 'deep'> {
-  const picked = await selectOne('Budget padrão de análise', [
-    { label: 'low', hint: 'mais barato: foco em velocidade', value: 'low' },
-    { label: 'normal', hint: 'equilíbrio: cobertura moderada', value: 'normal' },
-    { label: 'deep', hint: 'mais caro: análise extensa', value: 'deep' },
+  const picked = await selectOne('Default analysis budget', [
+    { label: 'low',    hint: 'fast and cheap  · minimal token usage', value: 'low' },
+    { label: 'normal', hint: 'balanced        · moderate coverage',   value: 'normal' },
+    { label: 'deep',   hint: 'thorough        · extended analysis',   value: 'deep' },
   ]);
   return parseBudget(picked ?? 'low');
 }
 
 async function chooseDomain(): Promise<string> {
-  const picked = await selectOne('Domínio inicial de auditoria', [
-    { label: 'bugs', hint: 'bom default geral para começar', value: 'bugs' },
-    { label: 'security', hint: 'prioriza riscos e hardening', value: 'security' },
+  const picked = await selectOne('Default audit domain', [
+    { label: 'bugs',     hint: 'good general-purpose starting point', value: 'bugs' },
+    { label: 'security', hint: 'prioritize risks and hardening',      value: 'security' },
   ]);
   return picked ?? 'bugs';
 }
 
+function printStatus(cwd: string, json: boolean): void {
+  const state = readSetupState(cwd);
+  const prepared = isProjectPrepared(cwd);
+  const rag = detectRagTrainingStatus(cwd);
+
+  if (json) {
+    process.stdout.write(JSON.stringify({ prepared, state: state ?? null }, null, 2) + '\n');
+    return;
+  }
+
+  const ok = chalk.green('✓');
+  const no = chalk.red('✗');
+
+  console.log(chalk.bold.cyan('\nSetup Status\n'));
+  console.log(`  ${prepared ? ok : no}  Project prepared`);
+  if (state) {
+    const p = state.progress;
+    console.log(`  ${p.configReady      ? ok : no}  Config ready`);
+    console.log(`  ${p.localIndexReady  ? ok : no}  Repo index`);
+    console.log(`  ${p.dependencyMapReady ? ok : no}  Dependency map`);
+    console.log(`  ${p.semanticRagReady ? ok : no}  Semantic memory`);
+    console.log(`  ${rag.repoIndexReady ? ok : no}  RAG index`);
+    console.log(`  ${isHookInstalled(cwd) ? ok : no}  Git hook (post-commit)`);
+    console.log('');
+    console.log(`  domain:   ${chalk.cyan(state.selectedDomain ?? '—')}`);
+    console.log(`  budget:   ${chalk.cyan(state.selectedBudget ?? '—')}`);
+    console.log(`  scanners: ${chalk.cyan(String(state.selectedScanners ?? '—'))}`);
+  } else {
+    console.log(chalk.dim('\n  No setup state found. Run `aion setup` to initialize.'));
+  }
+  console.log('');
+}
+
 export async function runProjectSetupWizard(cwd: string, options: SetupRunOptions = {}): Promise<SetupWizardResult> {
   if (process.stdin.isTTY) {
-    process.stdout.write(chalk.bold.cyan('\n  🤖 Aion project setup wizard\n\n'));
+    console.log(chalk.bold.cyan('\n  🤖 Aion Setup Wizard\n'));
   }
   const budget = options.budget ?? (process.stdin.isTTY ? await chooseBudget() : 'low');
   const domain = options.domain ?? (process.stdin.isTTY ? await chooseDomain() : 'bugs');
@@ -145,6 +174,7 @@ export function registerSetup(program: Command): void {
     .command('setup')
     .description('Run initial project wizard (config, indexes, optional semantic RAG)')
     .option('--status', 'show setup status and exit')
+    .option('--json', 'output status as JSON (use with --status)')
     .option('--reset', 'reset setup state and exit')
     .option('--domain <domain>', 'default audit domain (e.g. bugs, security)')
     .option('--budget <budget>', 'default budget: low | normal | deep')
@@ -153,6 +183,7 @@ export function registerSetup(program: Command): void {
     .option('--skip-semantic-rag', 'skip semantic embeddings step')
     .action(async (options: {
       status?: boolean;
+      json?: boolean;
       reset?: boolean;
       domain?: string;
       budget?: 'low' | 'normal' | 'deep';
@@ -161,18 +192,15 @@ export function registerSetup(program: Command): void {
       skipSemanticRag?: boolean;
     }) => {
       const cwd = process.cwd();
+
       if (options.reset) {
         clearSetupState(cwd);
-        process.stdout.write('Setup state reset.\n');
+        console.log('Setup state reset.');
         return;
       }
 
       if (options.status) {
-        const state = readSetupState(cwd);
-        process.stdout.write(JSON.stringify({
-          prepared: isProjectPrepared(cwd),
-          state: state ?? null,
-        }, null, 2) + '\n');
+        printStatus(cwd, options.json ?? false);
         return;
       }
 
@@ -185,17 +213,26 @@ export function registerSetup(program: Command): void {
         skipSemanticRag: options.skipSemanticRag,
       });
 
-      process.stdout.write(chalk.green('\nSetup complete.\n'));
-      process.stdout.write(`  config: ${result.setupFile}\n`);
-      process.stdout.write(`  state: ${result.stateFile}\n`);
-      process.stdout.write(`  defaults: domain=${result.domain}, budget=${result.budget}, scanners=${result.scanners}\n`);
-      process.stdout.write(`  semantic rag: ${result.semanticRagBuilt ? 'built' : 'skipped'}\n`);
-      process.stdout.write(`  git hook: ${isHookInstalled(cwd) ? 'instalado (.git/hooks/post-commit)' : 'não instalado (sem .git)'}\n`);
+      const ok = chalk.green('✓');
+      const skip = chalk.dim('–');
+      const hookOk = isHookInstalled(cwd);
+
+      console.log(chalk.bold.green('\nSetup complete.\n'));
+      console.log(`  ${ok}  Config:         ${chalk.dim(result.setupFile)}`);
+      console.log(`  ${ok}  Repo index:     ready`);
+      console.log(`  ${ok}  Dependency map: ready`);
+      console.log(`  ${result.semanticRagBuilt ? ok : skip}  Semantic memory: ${result.semanticRagBuilt ? 'built' : 'skipped'}`);
+      console.log(`  ${hookOk ? ok : skip}  Git hook:        ${hookOk ? 'installed (.git/hooks/post-commit)' : 'not installed (no .git)'}`);
+      console.log('');
+      console.log(`  Defaults → domain: ${chalk.cyan(result.domain)}  budget: ${chalk.cyan(result.budget)}  scanners: ${chalk.cyan(String(result.scanners))}`);
+
       if (!result.semanticRagBuilt) {
-        process.stdout.write('  run `aion memory build` later to enable semantic retrieval.\n');
+        console.log(chalk.dim('\n  Tip: run `aion memory build` later to enable semantic retrieval.'));
       }
 
-      const rag = detectRagTrainingStatus(cwd);
-      process.stdout.write(`  rag status: repo-index=${rag.repoIndexReady ? 'ok' : 'missing'}, vectors=${rag.semanticVectorsReady ? 'ok' : 'missing'}\n`);
+      console.log('');
+      console.log(chalk.bold('Next step:'));
+      console.log(`  ${chalk.cyan('aion next')}  ${chalk.dim('— see recommended analysis flow for this project')}`);
+      console.log('');
     });
 }
