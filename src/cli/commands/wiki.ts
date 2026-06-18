@@ -6,13 +6,19 @@ import { readProjectStore, type ProjectStore, type DepNode, type DepHotspot } fr
 import { runSync } from './sync.js';
 
 const PROJECT_MD_FILE = 'PROJECT.md';
+const DOCS_DIR = 'docs';
 const DEFAULT_TOKEN_BUDGET = 4000;
+
+export type WikiDomain = 'architecture' | 'security' | 'performance' | 'test-coverage' | 'dependencies' | 'recent-changes';
 
 export interface WikiOptions {
   output?: string;
   tokenBudget?: number;
   cwd?: string;
   refresh?: boolean;
+  module?: string;
+  domain?: WikiDomain;
+  all?: boolean;
 }
 
 export interface WikiResult {
@@ -180,19 +186,208 @@ export async function runWiki(options: WikiOptions = {}): Promise<WikiResult> {
   return { path, bytes: md.length, sections, estimatedTokens };
 }
 
+export function renderModuleMarkdown(store: ProjectStore, moduleName: string, tokenBudget = 800): string {
+  const node = store.deps.nodes.find((n) => n.file === moduleName);
+  const symbols = store.symbols.filter((s) => s.file === moduleName);
+  const lines: string[] = [];
+  lines.push('---');
+  lines.push(`generated_at: ${new Date().toISOString()}`);
+  lines.push(`schema_version: 1`);
+  lines.push(`freshness: sync`);
+  lines.push(`audience: both`);
+  lines.push(`priority: 0.0`);
+  lines.push(`token_cost: ${tokenBudget}`);
+  lines.push(`module: ${moduleName}`);
+  lines.push('---');
+  lines.push('');
+  lines.push(`# Module: ${moduleName}`);
+  lines.push('');
+  if (!node) {
+    lines.push('Module not in dependency graph.');
+    return lines.join('\n');
+  }
+  lines.push(`Lines of code: ${node.loc}`);
+  lines.push(`Imports: ${node.imports.length} · Imported by: ${node.importedBy.length}`);
+  lines.push('');
+  if (node.exports.length > 0) {
+    lines.push('## Exports');
+    for (const e of node.exports) lines.push(`- ${e}`);
+    lines.push('');
+  }
+  if (node.imports.length > 0) {
+    lines.push('## Imports');
+    for (const i of node.imports) lines.push(`- \`${i}\``);
+    lines.push('');
+  }
+  if (node.importedBy.length > 0) {
+    lines.push('## Imported by');
+    for (const i of node.importedBy) lines.push(`- \`${i}\``);
+    lines.push('');
+  }
+  if (symbols.length > 0) {
+    lines.push('## Symbols');
+    for (const s of symbols.slice(0, 20)) {
+      lines.push(`- \`${s.name}\` (${s.kind}) at line ${s.line}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+export function renderDomainMarkdown(store: ProjectStore, domain: WikiDomain): string {
+  const lines: string[] = [];
+  const aud = domain === 'security' ? 'user' : 'both';
+  const prio = domain === 'security' ? 0.3 : domain === 'performance' ? 0.2 : 0.5;
+  lines.push('---');
+  lines.push(`generated_at: ${new Date().toISOString()}`);
+  lines.push(`schema_version: 1`);
+  lines.push(`freshness: sync`);
+  lines.push(`audience: ${aud}`);
+  lines.push(`priority: ${prio}`);
+  lines.push(`token_cost: 800`);
+  lines.push(`domain: ${domain}`);
+  lines.push('---');
+  lines.push('');
+  lines.push(`# ${domain}`);
+  lines.push('');
+  switch (domain) {
+    case 'architecture':
+      lines.push(`## Modules (${store.deps.nodes.length})`);
+      for (const n of store.deps.nodes.slice(0, 25)) {
+        lines.push(`- \`${n.file}\` — ${n.loc} LOC · ${n.exports.length} exports · ${n.imports.length} imports`);
+      }
+      if (store.deps.cycles.length > 0) {
+        lines.push('');
+        lines.push(`## Circular dependencies (${store.deps.cycles.length})`);
+        for (const c of store.deps.cycles.slice(0, 10)) lines.push(`- ${c.join(' → ')}`);
+      }
+      if (store.deps.hotspots.length > 0) {
+        lines.push('');
+        lines.push('## Hotspots');
+        for (const h of store.deps.hotspots.slice(0, 10)) {
+          lines.push(`- \`${h.file}\` — fan-in ${h.fanIn}, fan-out ${h.fanOut}`);
+        }
+      }
+      break;
+    case 'security':
+      lines.push('Use `aion scan security` and `aion scan secrets` for full findings.');
+      lines.push('This resource is user-only — not auto-included for assistants.');
+      break;
+    case 'performance':
+      lines.push('Use `aion scan cognitive-load` and `aion scan api-map` for detailed performance analysis.');
+      break;
+    case 'test-coverage': {
+      const sources = store.files.filter((f) => !f.isTest);
+      const tested = new Set(store.tests.map((t) => t.source));
+      const untested = sources.filter((s) => !tested.has(s.path));
+      lines.push(`Total source files: ${sources.length}`);
+      lines.push(`Linked to tests: ${tested.size}`);
+      lines.push(`Untested: ${untested.length}`);
+      lines.push('');
+      lines.push('## Untested files (top 30)');
+      for (const f of untested.slice(0, 30)) lines.push(`- \`${f.path}\` (${f.loc} LOC)`);
+      break;
+    }
+    case 'dependencies':
+      lines.push('Use `aion scan sbom --unpinned-only` for full SBOM with outdated deps.');
+      break;
+    case 'recent-changes':
+      lines.push('Live counter — files changed since last PIL sync.');
+      lines.push('Use `aion watch --auto-sync` to keep this current.');
+      break;
+  }
+  return lines.join('\n');
+}
+
+export function writeDocFile(cwd: string, relPath: string, content: string): string {
+  const path = join(cwd, AI_RUNTIME_DIR, relPath);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, 'utf8');
+  return path;
+}
+
+export interface WikiBatchResult {
+  dashboard: WikiResult;
+  subDocs: Array<{ name: string; path: string; bytes: number }>;
+}
+
+export async function runWikiBatch(options: WikiOptions = {}): Promise<WikiBatchResult> {
+  const cwd = options.cwd ?? process.cwd();
+  const dashboard = await runWiki(options);
+  const store = readProjectStore(cwd);
+  if (!store) throw new Error('No project.json after sync');
+
+  const subDocs: Array<{ name: string; path: string; bytes: number }> = [];
+
+  const domains: WikiDomain[] = ['architecture', 'security', 'performance', 'test-coverage', 'dependencies', 'recent-changes'];
+  for (const d of domains) {
+    const md = renderDomainMarkdown(store, d);
+    const path = writeDocFile(cwd, join(DOCS_DIR, `${d}.md`), md);
+    subDocs.push({ name: d, path, bytes: md.length });
+  }
+
+  return { dashboard, subDocs };
+}
+
 export function registerWiki(program: Command): void {
   program
     .command('wiki')
-    .description('Generate PROJECT.md from the unified Project Intelligence Layer')
+    .description('Generate PROJECT.md (and optional sub-docs) from the unified Project Intelligence Layer')
     .option('-o, --output <path>', 'output path (default: .ai-runtime/PROJECT.md)')
     .option('--token-budget <n>', 'approximate token budget for the generated markdown', String(DEFAULT_TOKEN_BUDGET))
     .option('--refresh', 're-run sync before generating')
-    .action(async (opts: { output?: string; tokenBudget?: string; refresh?: boolean }) => {
-      const result = await runWiki({
+    .option('--module <name>', 'generate a per-module doc instead of the dashboard')
+    .option('--domain <name>', 'generate a domain-specific doc (architecture|security|performance|test-coverage|dependencies|recent-changes)')
+    .option('--all', 'generate dashboard + all sub-docs (dashboard, 6 domain docs)')
+    .action(async (opts: { output?: string; tokenBudget?: string; refresh?: boolean; module?: string; domain?: string; all?: boolean }) => {
+      const cwd = process.cwd();
+      const opts2: WikiOptions = {
         output: opts.output,
         tokenBudget: opts.tokenBudget ? parseInt(opts.tokenBudget, 10) : DEFAULT_TOKEN_BUDGET,
         refresh: opts.refresh,
-      });
+        module: opts.module,
+        domain: opts.domain as WikiDomain | undefined,
+        all: opts.all,
+      };
+
+      if (opts.all) {
+        const batch = await runWikiBatch(opts2);
+        const out = process.stdout;
+        out.write(`✓ Dashboard: ${batch.dashboard.path} (${batch.dashboard.bytes} bytes)\n`);
+        for (const d of batch.subDocs) {
+          out.write(`✓ ${d.name.padEnd(20)} ${d.path} (${d.bytes} bytes)\n`);
+        }
+        return;
+      }
+
+      if (opts.module) {
+        const store = readProjectStore(cwd);
+        if (!store) {
+          opts2.refresh = true;
+          await runWiki(opts2);
+        }
+        const fresh = readProjectStore(cwd);
+        if (!fresh) throw new Error('No project.json after sync');
+        const md = renderModuleMarkdown(fresh, opts.module);
+        const path = writeDocFile(cwd, join(DOCS_DIR, 'modules', `${opts.module.replace(/[\\/]/g, '_')}.md`), md);
+        process.stdout.write(`✓ Module doc: ${path} (${md.length} bytes)\n`);
+        return;
+      }
+
+      if (opts.domain) {
+        const store = readProjectStore(cwd);
+        if (!store) {
+          opts2.refresh = true;
+          await runWiki(opts2);
+        }
+        const fresh = readProjectStore(cwd);
+        if (!fresh) throw new Error('No project.json after sync');
+        const md = renderDomainMarkdown(fresh, opts.domain as WikiDomain);
+        const path = writeDocFile(cwd, join(DOCS_DIR, `${opts.domain}.md`), md);
+        process.stdout.write(`✓ Domain doc: ${path} (${md.length} bytes)\n`);
+        return;
+      }
+
+      const result = await runWiki(opts2);
       const out = process.stdout;
       out.write(`✓ PROJECT.md written: ${result.path}\n`);
       out.write(`  bytes: ${result.bytes} · estimated tokens: ${result.estimatedTokens} · sections: ${result.sections.length}\n`);

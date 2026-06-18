@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { runSync } from './sync.js';
-import { renderProjectMarkdown, writeProjectMarkdown, runWiki } from './wiki.js';
+import { renderProjectMarkdown, writeProjectMarkdown, runWiki, renderModuleMarkdown, renderDomainMarkdown, writeDocFile, runWikiBatch } from './wiki.js';
 import { writeProjectStore } from '../../infra/project-store.js';
 import type { ProjectStore } from '../../infra/project-store.js';
 
@@ -330,4 +330,100 @@ test('writeProjectStore + renderProjectMarkdown roundtrip', async () => {
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
+});
+
+test('renderModuleMarkdown produces per-module doc', () => {
+  const cwd = '/tmp/x';
+  const store = makeStore(cwd);
+  const md = renderModuleMarkdown(store, 'src/a.ts');
+  assert.match(md, /# Module: src\/a\.ts/);
+  assert.match(md, /hello/);
+  assert.match(md, /audience: both/);
+});
+
+test('renderModuleMarkdown handles missing module', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderModuleMarkdown(store, 'src/nonexistent.ts');
+  assert.match(md, /not in dependency graph/);
+});
+
+test('renderDomainMarkdown for architecture lists modules', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderDomainMarkdown(store, 'architecture');
+  assert.match(md, /# architecture/);
+  assert.match(md, /Modules/);
+});
+
+test('renderDomainMarkdown for security is user-only', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderDomainMarkdown(store, 'security');
+  assert.match(md, /audience: user/);
+});
+
+test('renderDomainMarkdown for test-coverage shows untested', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderDomainMarkdown(store, 'test-coverage');
+  assert.match(md, /Untested files/);
+});
+
+test('renderDomainMarkdown for performance', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderDomainMarkdown(store, 'performance');
+  assert.match(md, /# performance/);
+});
+
+test('renderDomainMarkdown for dependencies', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderDomainMarkdown(store, 'dependencies');
+  assert.match(md, /# dependencies/);
+});
+
+test('renderDomainMarkdown for recent-changes', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderDomainMarkdown(store, 'recent-changes');
+  assert.match(md, /# recent-changes/);
+});
+
+test('writeDocFile creates nested directories', () => {
+  const cwd = makeTmp();
+  try {
+    const path = writeDocFile(cwd, 'docs/modules/auth.md', '# auth');
+    assert.ok(existsSync(path));
+    assert.equal(readFileSync(path, 'utf8'), '# auth');
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('runWikiBatch generates dashboard + 6 sub-docs', async () => {
+  const cwd = makeTmp();
+  const prevOpenai = process.env.OPENAI_API_KEY;
+  const prevVoyage = process.env.VOYAGE_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.VOYAGE_API_KEY;
+  try {
+    makeFixture(cwd);
+    const result = await runWikiBatch({ cwd, tokenBudget: 4000 });
+    assert.ok(result.dashboard.path);
+    assert.equal(result.subDocs.length, 6);
+    for (const d of result.subDocs) assert.ok(existsSync(d.path));
+  } finally {
+    if (prevOpenai === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prevOpenai;
+    if (prevVoyage === undefined) delete process.env.VOYAGE_API_KEY;
+    else process.env.VOYAGE_API_KEY = prevVoyage;
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('renderModuleMarkdown escapes forward slashes in path', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderModuleMarkdown(store, 'src/auth/middleware.ts');
+  assert.match(md, /src\/auth\/middleware\.ts/);
+});
+
+test('renderDomainMarkdown frontmatter includes token_cost', () => {
+  const store = makeStore('/tmp/x');
+  const md = renderDomainMarkdown(store, 'architecture');
+  assert.match(md, /token_cost:/);
 });
