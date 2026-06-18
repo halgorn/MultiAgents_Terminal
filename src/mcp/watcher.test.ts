@@ -166,3 +166,124 @@ test('FileWatcher stop is idempotent', () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('FileWatcher watches individual files in addition to directories', async () => {
+  const cwd = makeTmp();
+  try {
+    mkdirSync(join(cwd, 'src'), { recursive: true });
+    writeFileSync(join(cwd, 'package.json'), '{"name":"test"}');
+    writeFileSync(join(cwd, 'src', 'a.ts'), 'initial');
+    const w = new FileWatcher({ cwd, roots: ['src'], debounceMs: 50 });
+    w.start();
+    await new Promise((r) => setTimeout(r, 100));
+    writeFileSync(join(cwd, 'package.json'), '{"name":"changed","version":"1"}');
+    await new Promise((r) => setTimeout(r, 200));
+    const count = w.filesChanged();
+    w.stop();
+    assert.ok(count >= 1, `expected ≥1 change, got ${count}`);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('FileWatcher with watchRootFiles=false ignores root files', async () => {
+  const cwd = makeTmp();
+  try {
+    mkdirSync(join(cwd, 'src'), { recursive: true });
+    writeFileSync(join(cwd, 'package.json'), '{"name":"test"}');
+    const w = new FileWatcher({ cwd, roots: ['src'], watchRootFiles: false, debounceMs: 50 });
+    w.start();
+    await new Promise((r) => setTimeout(r, 100));
+    writeFileSync(join(cwd, 'package.json'), '{"name":"changed"}');
+    await new Promise((r) => setTimeout(r, 200));
+    const count = w.filesChanged();
+    w.stop();
+    assert.equal(count, 0, 'should not detect changes in root files when watchRootFiles=false');
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('FileWatcher with watchAll=true uses broader root defaults', () => {
+  const cwd = makeTmp();
+  try {
+    const w = new FileWatcher({ cwd, watchAll: true });
+    const stats = w.stats();
+    assert.ok(stats.watchedRoots.includes('app'));
+    assert.ok(stats.watchedRoots.includes('packages'));
+    assert.ok(stats.watchedRoots.includes('services'));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('FileWatcher stats include watchedFiles list', async () => {
+  const cwd = makeTmp();
+  try {
+    mkdirSync(join(cwd, 'src'), { recursive: true });
+    writeFileSync(join(cwd, 'package.json'), '{}');
+    writeFileSync(join(cwd, 'tsconfig.json'), '{}');
+    const w = new FileWatcher({ cwd, roots: ['src'] });
+    w.start();
+    const stats = w.stats();
+    assert.ok(stats.watchedFiles.includes('package.json'));
+    assert.ok(stats.watchedFiles.includes('tsconfig.json'));
+    w.stop();
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('FileWatcher addRoot adds new root', () => {
+  const cwd = makeTmp();
+  try {
+    mkdirSync(join(cwd, 'src'), { recursive: true });
+    mkdirSync(join(cwd, 'tests'), { recursive: true });
+    const w = new FileWatcher({ cwd, roots: ['src'] });
+    w.addRoot('tests');
+    assert.ok(w.stats().watchedRoots.includes('tests'));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('FileWatcher addFile adds new file', () => {
+  const cwd = makeTmp();
+  try {
+    writeFileSync(join(cwd, 'custom.json'), '{}');
+    const w = new FileWatcher({ cwd, roots: [], watchRootFiles: false, files: [] });
+    w.addFile('custom.json');
+    assert.ok(w.stats().watchedFiles.includes('custom.json'));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('FileWatcher ignores tsconfig when not present', () => {
+  const cwd = makeTmp();
+  try {
+    const w = new FileWatcher({ cwd, roots: [], watchRootFiles: true });
+    const stats = w.stats();
+    assert.equal(stats.watchedFiles.includes('tsconfig.json'), false);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test('FileWatcher detects tsconfig.json change', async () => {
+  const cwd = makeTmp();
+  try {
+    mkdirSync(join(cwd, 'src'), { recursive: true });
+    writeFileSync(join(cwd, 'tsconfig.json'), '{"compilerOptions":{}}');
+    const w = new FileWatcher({ cwd, roots: ['src'], debounceMs: 50 });
+    w.start();
+    await new Promise((r) => setTimeout(r, 100));
+    writeFileSync(join(cwd, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}');
+    await new Promise((r) => setTimeout(r, 200));
+    const count = w.filesChanged();
+    w.stop();
+    assert.ok(count >= 1, `expected ≥1 change, got ${count}`);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

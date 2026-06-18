@@ -16,8 +16,17 @@ import { buildResourceList, type ResourceContext } from './resources.js';
 import { buildPromptList } from './prompts.js';
 import { withObservability } from './observability.js';
 import { FileWatcher } from './watcher.js';
-import { buildResponseMeta } from './freshness.js';
-import { defaultMcpOptions, estimateTokens, type McpServerOptions, type ResourceArgs, type ResourceDescriptor, type ResourceResult } from './types.js';
+import { buildResponseMeta, computeConfidence } from './freshness.js';
+import { readProjectStore } from '../infra/project-store.js';
+import { defaultMcpOptions, estimateTokens, DEFAULT_FRESHNESS, type McpServerOptions, type ResourceArgs, type ResourceDescriptor, type ResourceResult } from './types.js';
+
+interface ServerInternals {
+  watcher?: FileWatcher;
+  wikiRegenTimer?: NodeJS.Timeout;
+  resyncInFlight?: Promise<void>;
+}
+
+const internals: ServerInternals = {};
 
 function getCurrentVersion(): string {
   try {
@@ -122,9 +131,20 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
     scopedLog.info('auto-sync complete', { result: autoSyncResult });
   }
 
-  const watcher = options.watch ? new FileWatcher({ cwd: options.cwd, roots: options.allowedRoots }) : undefined;
+  const watcher = options.watch
+    ? new FileWatcher({
+        cwd: options.cwd,
+        roots: options.allowedRoots,
+        watchRootFiles: true,
+        onChange: (file) => {
+          scopedLog.info('file changed', { file });
+          scheduleWikiRegen(options);
+        },
+      })
+    : undefined;
   if (watcher) {
     watcher.start();
+    internals.watcher = watcher;
     scopedLog.info('watcher started', { roots: options.allowedRoots });
   }
 
@@ -150,6 +170,9 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     const toolName = req.params.name;
+
+    const resyncInfo = await maybeResyncOnStale(options);
+
     const observed = await withObservability<{ content: string; meta: Record<string, unknown> }>({ tool: toolName, args }, async (traceId) => {
       let content: string;
       switch (toolName) {
@@ -161,7 +184,8 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
         default: content = `Unknown tool: ${toolName}`;
       }
       const fullMeta = buildResponseMeta({ cwd: options.cwd, tool: toolName, traceId, estTokens: estimateTokens(content) });
-      return { content, meta: fullMeta as unknown as Record<string, unknown> };
+      const meta = { ...fullMeta, syncRecommended: resyncInfo.confidence === 'stale' };
+      return { content, meta: meta as unknown as Record<string, unknown> };
     });
     return {
       content: [{ type: 'text', text: observed.result.content }],
@@ -220,14 +244,87 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
 
   process.on('SIGINT', () => {
     scopedLog.info('shutting down');
+    if (internals.wikiRegenTimer) clearTimeout(internals.wikiRegenTimer);
     watcher?.stop();
     process.exit(0);
   });
   process.on('SIGTERM', () => {
     scopedLog.info('shutting down');
+    if (internals.wikiRegenTimer) clearTimeout(internals.wikiRegenTimer);
     watcher?.stop();
     process.exit(0);
   });
+}
+
+export function scheduleWikiRegen(options: McpServerOptions): void {
+  if (internals.wikiRegenTimer) clearTimeout(internals.wikiRegenTimer);
+  const scopedLog = log.child('mcp.server');
+  internals.wikiRegenTimer = setTimeout(async () => {
+    try {
+      const { runWiki } = await import('../cli/commands/wiki.js');
+      const result = await runWiki({ cwd: options.cwd, tokenBudget: options.tokenBudget });
+      scopedLog.info('wiki regenerated', { path: result.path, bytes: result.bytes });
+    } catch (err) {
+      scopedLog.error('wiki regen failed', { error: String(err) });
+    }
+  }, 1000);
+}
+
+export async function maybeResyncOnStale(options: McpServerOptions): Promise<{ resynced: boolean; confidence: 'high' | 'medium' | 'stale' }> {
+  if (!options.autoResync) {
+    const store = readProjectStore(options.cwd);
+    const indexedAt = store?.generatedAt ?? new Date(0).toISOString();
+    const filesTotal = store?.stats.files ?? 0;
+    const filesChangedSince = internals.watcher?.filesChanged() ?? 0;
+    const confidence = computeConfidence(
+      { indexedAt, filesChangedSince, filesTotal },
+      options.freshness ?? DEFAULT_FRESHNESS,
+    );
+    return { resynced: false, confidence };
+  }
+  if (internals.resyncInFlight) {
+    await internals.resyncInFlight;
+    const store = readProjectStore(options.cwd);
+    const indexedAt = store?.generatedAt ?? new Date(0).toISOString();
+    const filesTotal = store?.stats.files ?? 0;
+    const filesChangedSince = internals.watcher?.filesChanged() ?? 0;
+    const confidence = computeConfidence(
+      { indexedAt, filesChangedSince, filesTotal },
+      options.freshness ?? DEFAULT_FRESHNESS,
+    );
+    return { resynced: true, confidence };
+  }
+  const store = readProjectStore(options.cwd);
+  const indexedAt = store?.generatedAt ?? new Date(0).toISOString();
+  const filesTotal = store?.stats.files ?? 0;
+  const filesChangedSince = internals.watcher?.filesChanged() ?? 0;
+  const confidence = computeConfidence(
+    { indexedAt, filesChangedSince, filesTotal },
+    options.freshness ?? DEFAULT_FRESHNESS,
+  );
+  if (confidence !== 'stale') {
+    return { resynced: false, confidence };
+  }
+  internals.resyncInFlight = (async () => {
+    try {
+      await autoSyncIfNeeded({ cwd: options.cwd, config: options.freshness, force: true, quiet: true });
+      log.child('mcp.server').info('auto-resync on stale completed');
+    } catch (err) {
+      log.child('mcp.server').error('auto-resync failed', { error: String(err) });
+    } finally {
+      internals.resyncInFlight = undefined;
+    }
+  })();
+  await internals.resyncInFlight;
+  const after = readProjectStore(options.cwd);
+  const afterIndexedAt = after?.generatedAt ?? new Date(0).toISOString();
+  const afterFilesTotal = after?.stats.files ?? 0;
+  const afterFilesChangedSince = internals.watcher?.filesChanged() ?? 0;
+  const afterConfidence = computeConfidence(
+    { indexedAt: afterIndexedAt, filesChangedSince: afterFilesChangedSince, filesTotal: afterFilesTotal },
+    options.freshness ?? DEFAULT_FRESHNESS,
+  );
+  return { resynced: true, confidence: afterConfidence };
 }
 
 function parseResourceParams(uri: string, resource: ResourceDescriptor): Record<string, string> {

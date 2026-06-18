@@ -50,10 +50,13 @@ export function registerMcp(program: Command): void {
     .option('--register', 'register in ~/.claude/mcp.json for Claude Desktop auto-connect')
     .option('--no-auto-sync', 'disable auto-sync on connect')
     .option('--no-watch', 'disable background file watcher')
+    .option('--watch-all', 'watch all source directories (app, packages, services, etc.) — not just src/ and lib/')
+    .option('--no-auto-regen', 'disable auto-regeneration of PROJECT.md on file change')
+    .option('--no-auto-resync', 'disable auto-resync when a tool call finds the index stale')
     .option('--token-budget <n>', 'token budget per response', '1500')
     .option('--log-file <path>', 'persistent log file path', '.ai-runtime/mcp.log')
     .option('--log-level <level>', 'log level (debug|info|warn|error)', 'info')
-    .action(async (options: { register?: boolean; autoSync?: boolean; watch?: boolean; tokenBudget?: string; logFile?: string; logLevel?: string }) => {
+    .action(async (options: { register?: boolean; autoSync?: boolean; watch?: boolean; watchAll?: boolean; autoRegen?: boolean; autoResync?: boolean; tokenBudget?: string; logFile?: string; logLevel?: string }) => {
       if (options.register) {
         const binPath = process.argv[1] ?? 'aion';
         const cfgPath = join(homedir(), '.claude', 'mcp.json');
@@ -69,6 +72,7 @@ export function registerMcp(program: Command): void {
         console.error(chalk.gray('Restart Claude Desktop to pick up the new server.'));
       }
 
+      const allowedRoots = options.watchAll ? ['src', 'lib', 'app', 'packages', 'services'] : ['src', 'lib'];
       const { startMcpServer } = await import('../../mcp/server.js');
       await startMcpServer({
         cwd: defaultMcpCwd(),
@@ -77,6 +81,7 @@ export function registerMcp(program: Command): void {
         tokenBudget: parseInt(options.tokenBudget ?? '1500', 10) || 1500,
         logFile: options.logFile ?? '.ai-runtime/mcp.log',
         logLevel: (options.logLevel as 'debug' | 'info' | 'warn' | 'error') ?? 'info',
+        allowedRoots,
       });
     });
 

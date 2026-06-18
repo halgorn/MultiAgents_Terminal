@@ -6,6 +6,9 @@ import { isIgnoredDirName } from '../infra/file-filter.js';
 export interface WatcherOptions {
   cwd: string;
   roots?: string[];
+  files?: string[];
+  watchRootFiles?: boolean;
+  watchAll?: boolean;
   onChange?: (file: string) => void;
   onError?: (err: Error) => void;
   debounceMs?: number;
@@ -14,13 +17,26 @@ export interface WatcherOptions {
 export interface WatcherStats {
   filesChangedSinceStart: number;
   watchedRoots: string[];
+  watchedFiles: string[];
   startedAt: string;
   active: boolean;
 }
 
+const DEFAULT_ROOT_FILES = [
+  'package.json',
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'tsconfig.json',
+  'tsconfig.build.json',
+  '.aionrc.json',
+  '.aionignore',
+];
+
 export class FileWatcher {
   private readonly cwd: string;
   private readonly roots: string[];
+  private readonly files: string[];
   private readonly onChange?: (file: string) => void;
   private readonly onError?: (err: Error) => void;
   private readonly debounceMs: number;
@@ -29,10 +45,19 @@ export class FileWatcher {
   private filesChangedSinceStart = 0;
   private startedAt = '';
   private active = false;
+  private watchAll: boolean;
 
   constructor(options: WatcherOptions) {
     this.cwd = options.cwd;
-    this.roots = options.roots ?? ['src', 'lib'];
+    this.watchAll = options.watchAll ?? false;
+    this.roots = options.roots ?? (this.watchAll ? ['src', 'lib', 'app', 'packages', 'services'] : ['src', 'lib']);
+    const files: string[] = [...(options.files ?? [])];
+    if (options.watchRootFiles !== false && !this.watchAll) {
+      for (const f of DEFAULT_ROOT_FILES) {
+        if (existsSync(join(this.cwd, f)) && !files.includes(f)) files.push(f);
+      }
+    }
+    this.files = files;
     this.onChange = options.onChange;
     this.onError = options.onError;
     this.debounceMs = options.debounceMs ?? 200;
@@ -59,7 +84,8 @@ export class FileWatcher {
         const w = watch(fullPath, { recursive: true }, (eventType, filename) => {
           if (!filename) return;
           const rel = relative(this.cwd, join(fullPath, filename.toString()));
-          if (isIgnoredDirName(filename.toString().split('/')[0] ?? '')) return;
+          const firstSegment = filename.toString().split('/')[0] ?? '';
+          if (!this.watchAll && isIgnoredDirName(firstSegment)) return;
           this.debounceAndFire(rel);
         });
         w.on('error', (err) => {
@@ -67,10 +93,33 @@ export class FileWatcher {
           this.onError?.(err);
         });
         this.watchers.push(w);
-        scopedLog.info('watching', { root });
+        scopedLog.info('watching directory', { root });
       } catch (err) {
         scopedLog.error('failed to start watcher', { root, error: String(err) });
         this.onError?.(err instanceof Error ? err : new Error(String(err)));
+      }
+    }
+
+    for (const file of this.files) {
+      const fullPath = join(this.cwd, file);
+      if (!existsSync(fullPath)) {
+        scopedLog.debug('file does not exist, skipping', { file });
+        continue;
+      }
+      try {
+        const stats = statSync(fullPath);
+        if (!stats.isFile()) continue;
+        const w = watch(fullPath, (eventType) => {
+          this.debounceAndFire(file);
+        });
+        w.on('error', (err) => {
+          scopedLog.error('watcher error', { file, error: String(err) });
+          this.onError?.(err);
+        });
+        this.watchers.push(w);
+        scopedLog.info('watching file', { file });
+      } catch (err) {
+        scopedLog.debug('failed to watch file', { file, error: String(err) });
       }
     }
   }
@@ -91,6 +140,7 @@ export class FileWatcher {
     return {
       filesChangedSinceStart: this.filesChangedSinceStart,
       watchedRoots: [...this.roots],
+      watchedFiles: [...this.files],
       startedAt: this.startedAt,
       active: this.active,
     };
@@ -98,6 +148,14 @@ export class FileWatcher {
 
   filesChanged(): number {
     return this.filesChangedSinceStart;
+  }
+
+  addRoot(root: string): void {
+    if (!this.roots.includes(root)) this.roots.push(root);
+  }
+
+  addFile(file: string): void {
+    if (!this.files.includes(file)) this.files.push(file);
   }
 
   private debounceAndFire(file: string): void {
@@ -115,3 +173,5 @@ export class FileWatcher {
 export function createWatcher(options: WatcherOptions): FileWatcher {
   return new FileWatcher(options);
 }
+
+export { DEFAULT_ROOT_FILES };
