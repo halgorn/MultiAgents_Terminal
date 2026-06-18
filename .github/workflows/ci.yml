@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Test
         env:
           AION_SKIP_UPDATE_CHECK: "1"
@@ -53,6 +56,19 @@ jobs:
           node dist/index.js scan env-audit
           node dist/index.js scan sbom --unpinned-only
           node dist/index.js audit . --dry-run --max-files 20
+
+      - name: Smoke (PIL commands registered)
+        env:
+          AION_SKIP_UPDATE_CHECK: "1"
+          ANTHROPIC_API_KEY: ""
+          OPENROUTER_API_KEY: ""
+          OPENAI_API_KEY: ""
+          VOYAGE_API_KEY: ""
+          QDRANT_URL: ""
+        run: |
+          node dist/index.js sync --help
+          node dist/index.js wiki --help
+          node dist/index.js watch --help | grep -q "auto-sync"
 
       - name: Pack package
         run: npm pack --dry-run
