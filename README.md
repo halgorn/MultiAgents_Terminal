@@ -2,7 +2,13 @@
 
 Multi-agent AI engineering runtime for auditing, analyzing, reviewing, and fixing code from the terminal.
 
-**v0.6.1** — interactive two-column menu, 36 commands, agents-first UX, persistent memory, multi-provider support.
+**v0.7.0** — MCP v2 with auto-sync, freshness signaling, multi-doc RAG, 11 resources, 6 prompts, multi-client install (Cursor, Claude Code, Codex, OpenCode).
+
+Aion also acts as a **RAG Confidence Layer** for any LLM agent: it serves a unified Project Intelligence Layer (PIL) over MCP, with confidence metadata on every response so the agent knows when to trust the index vs re-read the source.
+
+> 📘 **Read the product vision:** [docs/PRODUCT-VISION.md](docs/PRODUCT-VISION.md)
+> ⚙️ **MCP options reference:** [docs/mcp-options.md](docs/mcp-options.md)
+> 🔄 **Freshness semantics:** [docs/mcp.md](docs/mcp.md)
 
 ---
 
@@ -16,8 +22,34 @@ Aion is a CLI tool that brings a team of specialized AI agents to your terminal.
 - **Analyze** — reason about specific bugs or problems with full repo context
 - **Chat** — answer questions about your codebase using a semantic index
 - **Watch** — trigger scans automatically on file change
+- **Sync** — build a unified Project Intelligence Layer (PIL) once, reuse everywhere
+- **Wiki** — generate `PROJECT.md` + per-domain + per-module docs (RAG-friendly)
+- **MCP serve** — act as a RAG Confidence Layer for Cursor, Claude Code, Codex, OpenCode
 
 Every command has a **zero-token local mode** and an **AI-powered mode**. You choose the tradeoff.
+
+---
+
+## Quick Start: MCP with any AI Agent
+
+```bash
+# 1. Install the MCP server in your favorite client
+aion mcp install --client cursor      # or claude, codex, opencode, all
+
+# 2. Build the Project Intelligence Layer
+aion sync                             # writes .ai-runtime/project.json
+
+# 3. Generate the context docs
+aion wiki --all                       # PROJECT.md + 6 domain docs
+
+# 4. Restart your AI client — context is now auto-attached
+```
+
+The MCP server:
+- Auto-syncs the PIL on connect (no manual `aion sync` needed)
+- Watches files in `src/` for changes
+- Attaches `aion://project/context` (1.5k tokens) automatically
+- Returns `confidence: high|medium|stale` on every response
 
 ---
 
