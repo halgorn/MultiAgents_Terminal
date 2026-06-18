@@ -7,7 +7,7 @@ test('main menu has the expected actionable items', () => {
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
 
-  assert.deepEqual(selectable, ['local-check', 'seo', 'network-scan', 'app-security', 'bugs', 'security', 'perf', 'copilot', 'fix', 'analyze', 'assistant', 'chat-qa', 'report', 'doctor', 'providers', 'change-provider']);
+  assert.deepEqual(selectable, ['local-check', 'seo', 'network-scan', 'app-security', 'bugs', 'security', 'perf', 'copilot', 'fix', 'analyze', 'assistant', 'chat-qa', 'report', 'links', 'doctor', 'providers', 'change-provider']);
 });
 
 test('menu does not include old submenus', () => {
@@ -32,6 +32,7 @@ test('menu has the correct English labels', () => {
   assert.equal(labels.includes('🤖 Direct assistant'), true);
   assert.equal(labels.includes('💬 Code chat'), true);
   assert.equal(labels.includes('📋 View report'), true);
+  assert.equal(labels.includes('🔗 Project links'), true);
   assert.equal(labels.includes('🧪 DeepEval quickcheck'), false);
   assert.equal(labels.includes('🕸️ AI orchestrator'), false);
   assert.equal(labels.includes('⚙️  Setup'), false);
@@ -56,6 +57,9 @@ test('non-TTY fallback prints actionable commands', () => {
   assert.match(output, /aion scan seo/);
   assert.match(output, /aion fix/);
   assert.match(output, /aion audit/);
+  assert.match(output, /https:\/\/github\.com\/halgorn\/MultiAgents_Terminal/);
+  assert.match(output, /https:\/\/www\.linkedin\.com\/in\/bruno-inacio-036530170\//);
+  assert.match(output, /brunoinacio3000@hotmail\.com/);
   assert.match(output, /zero token/i);
   assert.doesNotMatch(output, /aion setup/);
   assert.doesNotMatch(output, /aion deepeval/);

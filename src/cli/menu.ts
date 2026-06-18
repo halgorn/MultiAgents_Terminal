@@ -46,7 +46,7 @@ export const BUDGETS = [
 
 type AuditTrack = 'bugs' | 'security' | 'perf';
 type AuditMode = 'local-only' | 'normal';
-type MenuAction = 'local-check' | 'seo' | 'network-scan' | 'app-security' | 'bugs' | 'security' | 'perf' | 'copilot' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'change-provider' | 'doctor' | 'providers' | 'sep' | 'quit';
+type MenuAction = 'local-check' | 'seo' | 'network-scan' | 'app-security' | 'bugs' | 'security' | 'perf' | 'copilot' | 'fix' | 'analyze' | 'assistant' | 'chat-qa' | 'report' | 'links' | 'change-provider' | 'doctor' | 'providers' | 'sep' | 'quit';
 
 const PROVIDER_ITEMS = [
   { label: 'claude',      hint: 'Anthropic Claude (default)',        value: 'claude' },
@@ -72,6 +72,12 @@ const AUDIT_MODE_ITEMS: Array<MenuItem<AuditMode>> = [
   { label: '🧪 Local', hint: 'zero token · complete local scan', value: 'local-only' },
   { label: '🤖 Normal AI', hint: 'uses tokens · balanced multi-agent analysis', value: 'normal' },
 ];
+
+const PROJECT_LINKS = {
+  github: 'https://github.com/halgorn/MultiAgents_Terminal',
+  linkedin: 'https://www.linkedin.com/in/bruno-inacio-036530170/',
+  email: 'brunoinacio3000@hotmail.com',
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -185,6 +191,16 @@ function currentLangfuseLabel(): string {
     : chalk.gray('OFF');
 }
 
+function showProjectLinks(): void {
+  resetTty();
+  console.log('');
+  console.log(chalk.bold.cyan('  Project links'));
+  console.log(chalk.dim('  ──────────────────────────────────────────────────'));
+  console.log(`${chalk.bold('  GitHub:   ')}${chalk.cyan(PROJECT_LINKS.github)}`);
+  console.log(`${chalk.bold('  LinkedIn: ')}${chalk.cyan(PROJECT_LINKS.linkedin)}`);
+  console.log(`${chalk.bold('  Email:    ')}${chalk.cyan(PROJECT_LINKS.email)}`);
+}
+
 // ── Capability state ──────────────────────────────────────────────────────────
 
 let _ragReady = false;
@@ -238,6 +254,7 @@ export function runMenuFallback(cwd: string): void {
   console.log('');
   console.log(chalk.bold('  Zero token:  ') + chalk.cyan('aion health  · aion scan seo  · aion scan secrets  · aion scan env-audit  · aion report'));
   console.log(chalk.bold('  Uses AI:     ') + chalk.cyan('aion audit . --budget normal  · aion fix <file>  · aion analyze "<problem>"  · aion chat'));
+  console.log(chalk.bold('  Links:       ') + chalk.cyan(`${PROJECT_LINKS.github}  ·  ${PROJECT_LINKS.linkedin}  ·  ${PROJECT_LINKS.email}`));
   console.log(chalk.bold('  Guided:      ') + chalk.cyan('aion menu'));
   console.log('');
 }
@@ -264,6 +281,9 @@ function buildMainItems(provider: string): Array<MenuItem<MenuAction>> {
     { label: '🤖 Direct assistant',      hint: 'uses AI when the intent requires it',         description: 'General-purpose assistant. Routes to local tools when possible, falls back to AI when needed.', value: 'assistant', key: 'i' },
     { label: '💬 Code chat',             hint: 'uses AI · repository-aware questions',        description: 'Chat with the AI about your repository. Uses the repo index for context — ask about architecture, patterns, or specific files.', value: 'chat-qa',  key: 'c' },
     { label: '📋 View report',           hint: 'zero token · opens the unified main report',  description: 'Open the latest unified audit report. Shows the HTML visual, markdown digest, and recommended next actions.', value: 'report',    key: 'r' },
+    { label: '', value: 'sep', separator: true },
+    { label: 'Links', header: true, value: 'sep' },
+    { label: '🔗 Project links',          hint: 'GitHub · LinkedIn · email',                  description: 'Shows the GitHub repository, Bruno Inácio LinkedIn profile, and contact email.', value: 'links', key: 'l' },
     { label: '', value: 'sep', separator: true },
     { label: 'System', header: true, value: 'sep' },
     { label: '🩺 Doctor',     hint: 'zero token · check all system components', description: 'Runs a full system health check: API keys, index freshness, provider connectivity, and tool availability.', value: 'doctor',    key: 'o' },
@@ -441,6 +461,12 @@ export async function runMenu(cwd: string): Promise<void> {
 
     if (action === 'report') {
       run(['--cwd', cwd, 'report']);
+      await pressAnyKey();
+      continue;
+    }
+
+    if (action === 'links') {
+      showProjectLinks();
       await pressAnyKey();
       continue;
     }
