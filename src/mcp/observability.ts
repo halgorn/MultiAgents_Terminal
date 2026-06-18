@@ -61,7 +61,7 @@ export interface WithObservabilityResult<T> {
   meta: Partial<McpResponseMeta>;
 }
 
-export async function withObservability<T extends { meta?: Partial<McpResponseMeta> }>(
+export async function withObservability<T>(
   options: WithObservabilityOptions,
   fn: (traceId: string) => Promise<T>,
 ): Promise<{ result: T; entry: ObservabilityEntry; meta: Partial<McpResponseMeta> }> {
