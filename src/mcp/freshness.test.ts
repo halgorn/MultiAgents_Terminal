@@ -6,6 +6,7 @@ import {
   buildResponseMeta,
   buildResponseMetaWithFiles,
   formatConfidence,
+  estimateTokensSaved,
 } from './freshness.js';
 import { DEFAULT_FRESHNESS } from './types.js';
 
@@ -133,4 +134,19 @@ test('negative age (clock skew) treated as fresh', () => {
     NOW,
   );
   assert.equal(c, 'high');
+});
+
+test('buildResponseMeta includes tokensSaved', () => {
+  const meta = buildResponseMeta({ cwd: '/nonexistent', traceId: 'abc', estTokens: 500 });
+  assert.ok(typeof meta.tokensSaved === 'number');
+  assert.ok(meta.tokensSaved > 0, 'should save tokens vs raw Read');
+});
+
+test('estimateTokensSaved returns positive for small responses', () => {
+  assert.ok(estimateTokensSaved(500) > 0);
+  assert.ok(estimateTokensSaved(2000) > 0);
+});
+
+test('estimateTokensSaved returns 0 for huge responses', () => {
+  assert.equal(estimateTokensSaved(20000), 0);
 });

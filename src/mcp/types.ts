@@ -12,6 +12,7 @@ export interface McpResponseMeta {
   confidence: Confidence;
   syncRecommended: boolean;
   estTokens: number;
+  tokensSaved: number;
   traceId: string;
   tool?: string;
   resource?: string;
@@ -19,6 +20,9 @@ export interface McpResponseMeta {
   status?: 'ok' | 'error';
   error?: string;
 }
+
+export const RAW_READ_TOKEN_ESTIMATE = 2000;
+export const RAW_READ_AVG_COUNT = 5;
 
 export interface FreshnessConfig {
   highMaxChanged: number;

@@ -1,11 +1,16 @@
 import { readProjectStore } from '../infra/project-store.js';
-import { DEFAULT_FRESHNESS, type Confidence, type FreshnessConfig, type McpResponseMeta } from './types.js';
+import { DEFAULT_FRESHNESS, RAW_READ_AVG_COUNT, RAW_READ_TOKEN_ESTIMATE, type Confidence, type FreshnessConfig, type McpResponseMeta } from './types.js';
 
 export interface FreshnessInput {
   indexedAt: string;
   filesChangedSince: number;
   filesTotal: number;
   now?: Date;
+}
+
+export function estimateTokensSaved(estTokens: number): number {
+  const rawReadTotal = RAW_READ_AVG_COUNT * RAW_READ_TOKEN_ESTIMATE;
+  return Math.max(0, rawReadTotal - estTokens);
 }
 
 export function computeConfidence(
@@ -59,6 +64,7 @@ export function buildResponseMeta(options: BuildMetaOptions): McpResponseMeta {
     confidence,
     syncRecommended: confidence === 'stale',
     estTokens: options.estTokens,
+    tokensSaved: estimateTokensSaved(options.estTokens),
     traceId: options.traceId,
     tool: options.tool,
     resource: options.resource,
@@ -79,6 +85,8 @@ export function buildResponseMetaWithFiles(
     ),
   };
 }
+
+void RAW_READ_TOKEN_ESTIMATE;
 
 export function formatConfidence(c: Confidence): string {
   switch (c) {

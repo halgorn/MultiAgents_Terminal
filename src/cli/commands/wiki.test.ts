@@ -427,3 +427,64 @@ test('renderDomainMarkdown frontmatter includes token_cost', () => {
   const md = renderDomainMarkdown(store, 'architecture');
   assert.match(md, /token_cost:/);
 });
+
+test('renderProjectMarkdown includes AI agent bootstrap section by default', () => {
+  const store = makeStore('/tmp/x');
+  const { md, sections } = renderProjectMarkdown(store);
+  assert.ok(sections.includes('How AI agents should use this file'), 'expected bootstrap section');
+  assert.match(md, /How AI agents should use this file/);
+  assert.match(md, /search_memory/);
+  assert.match(md, /_meta\.confidence/);
+  assert.match(md, /aion:\/\/project\/context/);
+});
+
+test('renderProjectMarkdown can disable bootstrap with includeBootstrap=false', () => {
+  const store = makeStore('/tmp/x');
+  const { sections } = renderProjectMarkdown(store, { includeBootstrap: false });
+  assert.ok(!sections.includes('How AI agents should use this file'), 'bootstrap should be absent');
+});
+
+test('renderProjectMarkdown still accepts tokenBudget as number (backward compat)', () => {
+  const store = makeStore('/tmp/x');
+  const { md } = renderProjectMarkdown(store, 2000);
+  assert.ok(md.length > 0);
+});
+
+test('bootstrap section explains confidence levels (high/medium/stale)', () => {
+  const store = makeStore('/tmp/x');
+  const { md } = renderProjectMarkdown(store);
+  assert.match(md, /`high`/);
+  assert.match(md, /`medium`/);
+  assert.match(md, /`stale`/);
+});
+
+test('bootstrap section lists all MCP resources', () => {
+  const store = makeStore('/tmp/x');
+  const { md } = renderProjectMarkdown(store);
+  for (const uri of [
+    'aion://project/context',
+    'aion://docs/architecture',
+    'aion://docs/recent-changes',
+    'aion://docs/test-coverage',
+    'aion://docs/dependencies',
+    'aion://health',
+  ]) {
+    assert.match(md, new RegExp(uri.replace(/\//g, '\\/')), `expected ${uri} in bootstrap`);
+  }
+});
+
+test('bootstrap section explains when to use which tool', () => {
+  const store = makeStore('/tmp/x');
+  const { md } = renderProjectMarkdown(store);
+  assert.match(md, /User asks "how does X work/);
+  assert.match(md, /User asks "what should I work on/);
+  assert.match(md, /User asks "is it safe to change X/);
+});
+
+test('bootstrap section is always last (after How to use this file)', () => {
+  const store = makeStore('/tmp/x');
+  const { sections } = renderProjectMarkdown(store);
+  const useIdx = sections.indexOf('How to use this file');
+  const bootIdx = sections.indexOf('How AI agents should use this file');
+  assert.ok(bootIdx > useIdx, 'bootstrap should come after How to use this file');
+});

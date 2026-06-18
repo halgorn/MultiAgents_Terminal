@@ -113,3 +113,26 @@ test('observability summary resource returns object', async () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('policy resource is included and audience=assistant', () => {
+  const list = buildResourceList({ cwd: '.', traceId: 't' });
+  const policy = list.find((r) => r.uri === 'aion://docs/policy');
+  assert.ok(policy, 'expected policy resource');
+  assert.equal(policy.annotations.audience, 'assistant');
+  assert.ok(policy.annotations.priority >= 0.7);
+});
+
+test('policy resource has high priority for auto-attach', () => {
+  const list = buildResourceList({ cwd: '.', traceId: 't' });
+  const policy = list.find((r) => r.uri === 'aion://docs/policy')!;
+  assert.ok(policy.annotations.priority >= 0.7, 'policy should auto-attach');
+});
+
+test('policy handler returns markdown with MANDATORY keyword', async () => {
+  const list = buildResourceList({ cwd: '.', traceId: 't' });
+  const policy = list.find((r) => r.uri === 'aion://docs/policy')!;
+  const result = await policy.handler({ cwd: '.', params: {} });
+  const text = result.contents[0]?.text ?? '';
+  assert.match(text, /MANDATORY/);
+  assert.match(text, /tokensSaved/);
+});

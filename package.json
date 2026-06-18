@@ -19,7 +19,8 @@
     "release-check": "npm run build && node dist/index.js release-check --skip-build",
     "prepublishOnly": "npm run build",
     "install-global": "npm run build && npm link",
-    "uninstall-global": "npm unlink -g @aionlabsai/aion"
+    "uninstall-global": "npm unlink -g @aionlabsai/aion",
+    "postinstall": "node -e \"const pkg=require('./package.json');if(pkg.name==='@aionlabsai/aion')process.exit(0);require('child_process').execSync('node ./dist/index.js init --skip-embeddings --no-mcp || true',{stdio:'inherit'})\""
   },
   "files": [
     "dist/**/*",

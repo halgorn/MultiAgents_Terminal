@@ -98,7 +98,18 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-export function renderProjectMarkdown(store: ProjectStore, tokenBudget = DEFAULT_TOKEN_BUDGET): { md: string; estimatedTokens: number; sections: string[] } {
+export interface RenderOptions {
+  tokenBudget?: number;
+  includeBootstrap?: boolean;
+}
+
+export function renderProjectMarkdown(store: ProjectStore, tokenBudgetOrOptions: number | RenderOptions = DEFAULT_TOKEN_BUDGET): { md: string; estimatedTokens: number; sections: string[] } {
+  const opts: RenderOptions = typeof tokenBudgetOrOptions === 'number'
+    ? { tokenBudget: tokenBudgetOrOptions }
+    : tokenBudgetOrOptions;
+  const tokenBudget = opts.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
+  const includeBootstrap = opts.includeBootstrap ?? true;
+
   const lines: string[] = [];
   const sections: string[] = [];
   const budget = tokenBudget;
@@ -151,6 +162,70 @@ export function renderProjectMarkdown(store: ProjectStore, tokenBudget = DEFAULT
     '3. Run `aion chat` to ask questions grounded in this index.',
     '4. Hook `aion watch` to keep this file current on every commit.',
   ]);
+
+  if (includeBootstrap) {
+    add('How AI agents should use this file', [
+      'You (the AI agent) have access to the following aion MCP tools and resources. This section is auto-generated to bootstrap your understanding of aion — do not skip it.',
+      '',
+      '### ⚠️ MANDATORY: Always use aion first',
+      '',
+      '**Before you do ANY raw `Read` or `Grep` on source files, you MUST first try an aion resource or tool.**',
+      '',
+      'Why: aion pre-computes a token-budgeted, freshness-tracked index of the entire project. Using it costs ~2k tokens per question. Doing 5 raw Reads costs ~10k tokens and gives you no freshness guarantee.',
+      '',
+      '**The rule is simple:**',
+      '1. **Start** by reading `aion://project/context` (this file, ~1.5k tokens) — it has the project overview.',
+      '2. **For specific code**, call `search_memory(query, topK=5)` (~500 tokens) instead of reading files.',
+      '3. **For module-level detail**, read `aion://docs/modules/{path}` or `aion://docs/{domain}.md`.',
+      '4. **Only fall back to raw `Read` when:**',
+      '   - aion returns `_meta.confidence: "stale"` AND the user has not run `aion sync` recently',
+      '   - you need exact line-by-line text that aion chunks do not preserve',
+      '   - the user explicitly asks you to read a specific file',
+      '',
+      'Every aion response includes `_meta.estTokens` and `_meta.tokensSaved` (estimate vs raw Read). If you find yourself reaching for `Read` without trying aion first, **you are wasting the user\'s tokens and your context window**.',
+      '',
+      '### Tools you can call',
+      '- `search_memory(query, topK=5)` — semantic search over source code chunks',
+      '- `get_dep_graph()` — module dependency graph, hotspots, circular dependencies',
+      '- `get_health_score()` — composite health score (0–100, A–F grade)',
+      '- `get_hot_zones(limit=10)` — top-N files by churn + complexity',
+      '- `get_impact(file)` — transitive impact of changing a file',
+      '',
+      '### Resources you can read (auto-attached by your client)',
+      '- `aion://project/context` — this file (PROJECT.md, ~1.5k tokens)',
+      '- `aion://docs/architecture` — modules, deps, cycles (800 tokens)',
+      '- `aion://docs/recent-changes` — live file-change counter (300 tokens)',
+      '- `aion://docs/test-coverage` — source files without tests (500 tokens)',
+      '- `aion://docs/dependencies` — outdated deps and advisories (700 tokens)',
+      '- `aion://health` — PIL freshness + watcher status (100 tokens, JSON)',
+      '- `aion://docs/policy` — the mandatory agent policy (re-read this if unsure)',
+      '- `aion://observability/summary` — recent MCP call stats (300 tokens)',
+      '',
+      '### Confidence signaling (CRITICAL — read this)',
+      'Every tool/resource response includes `_meta.confidence`. This tells you **how much to trust the result**:',
+      '',
+      '- `high` (green) — index is fresh (< 5 min since last sync, 0 files changed). **Trust and cite directly.**',
+      '- `medium` (yellow) — index is slightly stale. **Cite with a note** about the timestamp.',
+      '- `stale` (red) — index is outdated. **Re-read the source before citing** — or ask the user to run `aion sync`.',
+      '',
+      'Other `_meta` fields: `pilVersion`, `indexedAt`, `filesChangedSince`, `syncRecommended`, `estTokens`, `tokensSaved`, `traceId`.',
+      '',
+      '### When to use what',
+      '- User asks "how does X work?" → you already have this file via `aion://project/context`. For specific code, call `search_memory("X")`.',
+      '- User asks "what should I work on?" → call `get_hot_zones(10)` and `get_health_score()`.',
+      '- User asks "is it safe to change X?" → call `get_impact("src/X.ts")` and check `_meta.confidence`.',
+      '- User asks "review this PR" → use the `aion://prompt/pre_pr_review` prompt.',
+      '- User asks "onboard me to this project" → use the `aion://prompt/onboard_new_dev` prompt.',
+      '- User asks "explain circular dep" → use the `aion://prompt/explain_cycle` prompt.',
+      '- User asks "find security issues" → use the `aion://prompt/find_security_issue` prompt.',
+      '',
+      '### Re-syncing',
+      '- **Auto-sync runs on MCP connect** — you do not need to ask the user to run `aion sync` first.',
+      '- **Background watcher** fires on file changes in `src/` and `lib/`, incrementing `filesChangedSince`.',
+      '- **Manual sync**: ask the user to run `aion sync` (or `aion wiki --refresh` to regenerate this file).',
+      '- **When in doubt**: read `aion://health` — it shows PIL freshness, watcher status, and provider reachability in one JSON blob.',
+    ]);
+  }
 
   const md = lines.join('');
   return { md, estimatedTokens: estimateTokens(md), sections };

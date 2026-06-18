@@ -111,6 +111,19 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readDependencies(args, ctx),
     },
     {
+      uri: 'aion://docs/policy',
+      name: 'Agent policy (MANDATORY)',
+      mimeType: 'text/markdown',
+      annotations: {
+        audience: 'assistant',
+        priority: 0.8,
+        freshness: 'lazy',
+        tokenCost: 600,
+        description: 'The mandatory aion agent policy. Auto-attached. Re-read if unsure about workflow.',
+      },
+      handler: async (args) => readPolicy(args, ctx),
+    },
+    {
       uri: 'aion://docs/modules/{name}',
       name: 'Module deep dive',
       mimeType: 'text/markdown',
@@ -264,6 +277,70 @@ async function readDependencies(_args: { cwd: string; params: Record<string, str
   return {
     contents: [{ uri: 'aion://docs/dependencies', mimeType: 'text/markdown', text }],
     meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://docs/dependencies', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+  };
+}
+
+async function readPolicy(_args: { cwd: string; params: Record<string, string> }, ctx: ResourceContext): Promise<ResourceResult> {
+  const text = `# aion Agent Policy (MANDATORY)
+
+## Before you do ANY raw \`Read\` or \`Grep\`
+
+You MUST first try an aion resource or tool. This is not optional.
+
+## Why
+
+aion pre-computes a token-budgeted, freshness-tracked index of the entire project:
+- Using aion: ~2k tokens per question
+- Doing 5 raw Reads: ~10k tokens AND no freshness guarantee
+
+Every aion response includes \`_meta.estTokens\` and \`_meta.tokensSaved\` (estimate vs raw Read).
+If you find yourself reaching for \`Read\` without trying aion first, you are wasting the user's tokens and your context window.
+
+## The rule
+
+1. **Start** by reading \`aion://project/context\` (this file or the dashboard PROJECT.md, ~1.5k tokens)
+2. **For specific code**, call \`search_memory(query, topK=5)\` instead of reading files
+3. **For module-level detail**, read \`aion://docs/modules/{path}\` or \`aion://docs/{domain}.md\`
+4. **Only fall back to raw \`Read\` when:**
+   - aion returns \`_meta.confidence: "stale"\` AND the user has not run \`aion sync\` recently
+   - you need exact line-by-line text that aion chunks do not preserve
+   - the user explicitly asks you to read a specific file
+
+## Available tools
+
+- \`search_memory(query, topK=5)\` — semantic search over source code chunks
+- \`get_dep_graph()\` — module dependency graph, hotspots, circular dependencies
+- \`get_health_score()\` — composite health score (0–100, A–F grade)
+- \`get_hot_zones(limit=10)\` — top-N files by churn + complexity
+- \`get_impact(file)\` — transitive impact of changing a file
+
+## Available resources
+
+- \`aion://project/context\` — dashboard (1.5k tokens, auto-attached)
+- \`aion://docs/architecture\` — modules, deps, cycles (800 tokens)
+- \`aion://docs/recent-changes\` — live file-change counter (300 tokens)
+- \`aion://docs/test-coverage\` — source files without tests (500 tokens)
+- \`aion://docs/dependencies\` — outdated deps and advisories (700 tokens)
+- \`aion://health\` — PIL freshness + watcher status (100 tokens, JSON)
+- \`aion://docs/policy\` — this file
+- \`aion://observability/summary\` — recent MCP call stats (300 tokens)
+
+## Confidence signaling
+
+Every tool/resource response includes \`_meta.confidence\`:
+
+- \`high\` (green) — index is fresh. **Trust and cite directly.**
+- \`medium\` (yellow) — index is slightly stale. **Cite with a note** about the timestamp.
+- \`stale\` (red) — index is outdated. **Re-read the source before citing.**
+
+Other \`_meta\` fields: \`pilVersion\`, \`indexedAt\`, \`filesChangedSince\`, \`syncRecommended\`, \`estTokens\`, \`tokensSaved\`, \`traceId\`.
+
+## When in doubt
+
+Read \`aion://health\`. It shows PIL freshness, watcher status, and provider reachability in one JSON blob.`;
+  return {
+    contents: [{ uri: 'aion://docs/policy', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://docs/policy', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
