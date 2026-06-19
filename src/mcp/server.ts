@@ -24,6 +24,7 @@ interface ServerInternals {
   watcher?: FileWatcher;
   wikiRegenTimer?: NodeJS.Timeout;
   resyncInFlight?: Promise<void>;
+  notifyResource?: (uri: string) => Promise<void>;
 }
 
 const internals: ServerInternals = {};
@@ -125,6 +126,24 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
   const scopedLog = log.child('mcp.server');
   scopedLog.info('starting MCP server', { version: getCurrentVersion(), cwd: options.cwd });
 
+  const resourceCtx: ResourceContext = { cwd: options.cwd, traceId: 'init', watcher: undefined };
+  const resources = buildResourceList(resourceCtx);
+  const prompts = buildPromptList();
+
+  const server = new Server(
+    { name: 'aion', version: getCurrentVersion() },
+    { capabilities: { tools: {}, resources: {}, prompts: {} } },
+  );
+
+  internals.notifyResource = async (uri: string) => {
+    try {
+      await server.sendResourceUpdated({ uri });
+      scopedLog.debug('resource updated notification sent', { uri });
+    } catch (err) {
+      scopedLog.debug('resource notification failed', { uri, error: String(err) });
+    }
+  };
+
   let autoSyncResult: AutoSyncResult | null = null;
   if (options.autoSync) {
     autoSyncResult = await autoSyncIfNeeded({ cwd: options.cwd, config: options.freshness, skipEmbeddings: false, quiet: true });
@@ -148,14 +167,7 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
     scopedLog.info('watcher started', { roots: options.allowedRoots });
   }
 
-  const resourceCtx: ResourceContext = { cwd: options.cwd, traceId: 'init', watcher };
-  const resources = buildResourceList(resourceCtx);
-  const prompts = buildPromptList();
-
-  const server = new Server(
-    { name: 'aion', version: getCurrentVersion() },
-    { capabilities: { tools: {}, resources: {}, prompts: {} } },
-  );
+  resourceCtx.watcher = watcher;
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
@@ -264,6 +276,13 @@ export function scheduleWikiRegen(options: McpServerOptions): void {
       const { runWiki } = await import('../cli/commands/wiki.js');
       const result = await runWiki({ cwd: options.cwd, tokenBudget: options.tokenBudget });
       scopedLog.info('wiki regenerated', { path: result.path, bytes: result.bytes });
+      if (internals.notifyResource) {
+        await internals.notifyResource('aion://project/context');
+        await internals.notifyResource('aion://docs/architecture');
+        await internals.notifyResource('aion://docs/test-coverage');
+        await internals.notifyResource('aion://docs/dependencies');
+        await internals.notifyResource('aion://docs/recent-changes');
+      }
     } catch (err) {
       scopedLog.error('wiki regen failed', { error: String(err) });
     }
@@ -309,6 +328,11 @@ export async function maybeResyncOnStale(options: McpServerOptions): Promise<{ r
     try {
       await autoSyncIfNeeded({ cwd: options.cwd, config: options.freshness, force: true, quiet: true });
       log.child('mcp.server').info('auto-resync on stale completed');
+      if (internals.notifyResource) {
+        await internals.notifyResource('aion://project/context');
+        await internals.notifyResource('aion://docs/architecture');
+        await internals.notifyResource('aion://docs/recent-changes');
+      }
     } catch (err) {
       log.child('mcp.server').error('auto-resync failed', { error: String(err) });
     } finally {

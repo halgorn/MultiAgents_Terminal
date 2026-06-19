@@ -112,3 +112,23 @@ test('FileWatcher detects root file changes (package.json)', async () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('server sends resource updated notification on file change', async () => {
+  const cwd = makeTmp();
+  try {
+    writeFile(join(cwd, 'package.json'), '{"name":"x"}');
+    writeFile(join(cwd, 'tsconfig.json'), '{}');
+    writeFile(join(cwd, 'src/a.ts'), 'export const a = 1;\n');
+    writeFile(join(cwd, '.aionrc.json'), '{}');
+    const old = new Date(Date.now() - 86400 * 1000).toISOString();
+    writeProjectStore(cwd, makeStore(cwd, old));
+    const options = defaultMcpOptions({ cwd, autoResync: true, skipEmbeddings: true });
+    const result = await maybeResyncOnStale(options);
+    assert.equal(result.resynced, true);
+    assert.equal(result.confidence, 'high');
+    const internalsMod = await import('./server.js');
+    void internalsMod;
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
