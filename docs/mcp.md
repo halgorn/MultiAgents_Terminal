@@ -84,6 +84,27 @@ When `autoResync` is enabled (default `true`), the server:
 
 The agent sees `syncRecommended: true` and may choose to re-issue the call after a moment, or trust the cached result if the freshness window is acceptable.
 
+## Resource notifications (push from server to client)
+
+Beyond `_meta.confidence` (which is pulled per-response), the server also **pushes** `notifications/resources/updated` to the client when:
+
+- A watched file changes (debounced 1s, then auto-regen of `PROJECT.md`)
+- An auto-resync completes
+
+The MCP client (Cursor, Claude Code, Codex, OpenCode) receives these notifications and can re-read the affected resource before the next call. This means:
+
+- The agent **never** makes a tool call against a stale index unknowingly
+- The agent's next question automatically sees fresh data
+- The client may re-attach the resource to the agent's context (depends on the client)
+
+The notified URIs are:
+
+- `aion://project/context` (always on change)
+- `aion://docs/architecture` (always on change)
+- `aion://docs/recent-changes` (always on change)
+- `aion://docs/test-coverage` (on change)
+- `aion://docs/dependencies` (on change)
+
 ## Worked example
 
 ```
