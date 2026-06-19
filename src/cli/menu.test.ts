@@ -7,7 +7,7 @@ test('main menu has the expected actionable items', () => {
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
 
-  assert.deepEqual(selectable, ['local-check', 'seo', 'network-scan', 'app-security', 'bugs', 'security', 'perf', 'copilot', 'fix', 'analyze', 'assistant', 'chat-qa', 'report', 'links', 'doctor', 'providers', 'change-provider']);
+  assert.deepEqual(selectable, ['local-check', 'seo', 'network-scan', 'app-security', 'bugs', 'security', 'perf', 'copilot', 'fix', 'analyze', 'assistant', 'chat-qa', 'report', 'links', 'mcp-install', 'mcp-doctor', 'doctor', 'providers', 'change-provider']);
 });
 
 test('menu does not include old submenus', () => {
@@ -33,6 +33,8 @@ test('menu has the correct English labels', () => {
   assert.equal(labels.includes('💬 Code chat'), true);
   assert.equal(labels.includes('📋 View report'), true);
   assert.equal(labels.includes('🔗 Project links'), true);
+  assert.equal(labels.includes('🔌 MCP install'), true);
+  assert.equal(labels.includes('🩺 MCP doctor'), true);
   assert.equal(labels.includes('🧪 DeepEval quickcheck'), false);
   assert.equal(labels.includes('🕸️ AI orchestrator'), false);
   assert.equal(labels.includes('⚙️  Setup'), false);
