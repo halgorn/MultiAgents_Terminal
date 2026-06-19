@@ -34,7 +34,7 @@ Every command has a **zero-token local mode** and an **AI-powered mode**. You ch
 
 ```bash
 # 1. Install the MCP server in your favorite client
-aion mcp install --client cursor      # or claude, codex, opencode, all
+aion mcp install --client cursor      # or claude, codex, opencode
 
 # 2. Build the Project Intelligence Layer
 aion sync                             # writes .ai-runtime/project.json
@@ -43,6 +43,16 @@ aion sync                             # writes .ai-runtime/project.json
 aion wiki --all                       # PROJECT.md + 6 domain docs
 
 # 4. Restart your AI client — context is now auto-attached
+```
+
+## Quick Start: Multi-Repo Workspace
+
+```bash
+cd ~/code/my-monorepo
+aion workspace init                   # detects apps/*, packages/*, services/*
+aion workspace sync                   # parallel aion sync across all repos
+aion workspace search "auth"          # cross-repo semantic search
+aion workspace wiki                   # generates .ai-runtime/WORKSPACE.md
 ```
 
 The MCP server:
