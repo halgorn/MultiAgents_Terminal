@@ -11,6 +11,13 @@ import {
 } from '../../infra/workspace.js';
 import { runSync, type SyncOptions } from './sync.js';
 import { buildDepGraphAuto } from '../../infra/dep-graph.js';
+import {
+  runWorkspaceSearch,
+  renderWorkspaceSearchMarkdown,
+  renderWorkspaceWikiMarkdown,
+  collectWorkspaceStores,
+  writeWorkspaceWiki,
+} from './workspace-search.js';
 
 export interface WorkspaceSyncOptions extends SyncOptions {
   cwd: string;
@@ -158,6 +165,40 @@ export function registerWorkspace(program: Command): void {
       console.log(`  Repos: ${chalk.cyan(config.repos.length)}`);
       console.log(`  Created: ${chalk.dim(config.createdAt)}`);
       console.log(`  Updated: ${chalk.dim(config.updatedAt)}`);
+    });
+
+  workspace
+    .command('search <query>')
+    .description('Search across all repos in the workspace')
+    .option('--top-k <n>', 'total results', '10')
+    .option('--per-repo <n>', 'limit per repo', '5')
+    .action(async (query: string, opts: { topK?: string; perRepo?: string }) => {
+      const cwd = process.cwd();
+      const topK = parseInt(opts.topK ?? '10', 10) || 10;
+      const perRepo = parseInt(opts.perRepo ?? '5', 10) || 5;
+      const result = await runWorkspaceSearch({ workspaceRoot: cwd, query, topK, perRepoLimit: perRepo });
+      console.log(chalk.bold(`\n  Search "${query}" — ${result.results.length} result(s) from ${result.reposSearched} repo(s) in ${result.totalDurationMs}ms\n`));
+      for (const r of result.results) {
+        console.log(`  ${chalk.cyan(r.repo.path)} :: ${r.file}:${r.startLine}-${r.endLine}`);
+        console.log(`     ${chalk.dim(r.name)} (${r.type}) — ${chalk.yellow((r.score * 100).toFixed(1) + '%')}`);
+      }
+    });
+
+  workspace
+    .command('wiki')
+    .description('Generate WORKSPACE.md aggregating all repos')
+    .action(() => {
+      const cwd = process.cwd();
+      const config = readWorkspaceConfig(cwd);
+      if (!config) {
+        console.log(chalk.yellow(`  No workspace.json in ${cwd}. Run \`aion workspace init\`.`));
+        return;
+      }
+      const stores = collectWorkspaceStores(config);
+      const md = renderWorkspaceWikiMarkdown(config, stores);
+      const path = writeWorkspaceWiki(cwd, md);
+      console.log(chalk.green(`  ✓ WORKSPACE.md written: ${path}`));
+      console.log(chalk.dim(`  ${config.repos.length} repos · ${stores.size} with PIL`));
     });
 }
 
