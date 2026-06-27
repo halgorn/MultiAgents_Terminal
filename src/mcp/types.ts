@@ -4,6 +4,26 @@ export type Audience = 'user' | 'assistant' | 'both';
 
 export type FreshnessPolicy = 'realtime' | 'sync' | 'lazy';
 
+export const AionErrorCode = {
+  PIL_MISSING: 'AION_PIL_MISSING',
+  PIL_STALE: 'AION_PIL_STALE',
+  PIL_CORRUPT: 'AION_PIL_CORRUPT',
+  EMBEDDING_UNAVAILABLE: 'AION_EMBEDDING_UNAVAILABLE',
+  MODULE_NOT_FOUND: 'AION_MODULE_NOT_FOUND',
+  RATE_LIMIT: 'AION_RATE_LIMIT',
+  INVALID_PATH: 'AION_INVALID_PATH',
+  INTERNAL: 'AION_INTERNAL',
+} as const;
+
+export type AionErrorCodeValue = typeof AionErrorCode[keyof typeof AionErrorCode];
+
+export interface AionError {
+  code: AionErrorCodeValue;
+  message: string;
+  retryable?: boolean;
+  hint?: string;
+}
+
 export interface McpResponseMeta {
   pilVersion: number;
   indexedAt: string;
@@ -18,7 +38,13 @@ export interface McpResponseMeta {
   resource?: string;
   durationMs?: number;
   status?: 'ok' | 'error';
-  error?: string;
+  error?: string | AionError;
+  pagination?: {
+    cursor?: string;
+    nextCursor?: string;
+    total?: number;
+    limit?: number;
+  };
 }
 
 export const RAW_READ_TOKEN_ESTIMATE = 2000;

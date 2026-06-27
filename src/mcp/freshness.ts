@@ -45,13 +45,17 @@ export interface BuildMetaOptions {
   traceId: string;
   estTokens: number;
   config?: FreshnessConfig;
+  filesChangedSince?: number;
+  watcher?: { filesChanged(): number };
 }
 
 export function buildResponseMeta(options: BuildMetaOptions): McpResponseMeta {
   const store = readProjectStore(options.cwd);
   const indexedAt = store?.generatedAt ?? new Date(0).toISOString();
   const filesTotal = store?.stats.files ?? 0;
-  const filesChangedSince = 0;
+  const filesChangedSince = options.filesChangedSince
+    ?? options.watcher?.filesChanged()
+    ?? 0;
   const confidence = computeConfidence(
     { indexedAt, filesChangedSince, filesTotal },
     options.config ?? DEFAULT_FRESHNESS,
@@ -75,10 +79,9 @@ export function buildResponseMetaWithFiles(
   options: BuildMetaOptions,
   filesChangedSince: number,
 ): McpResponseMeta {
-  const base = buildResponseMeta(options);
+  const base = buildResponseMeta({ ...options, filesChangedSince });
   return {
     ...base,
-    filesChangedSince,
     confidence: computeConfidence(
       { indexedAt: base.indexedAt, filesChangedSince, filesTotal: base.filesTotal },
       options.config ?? DEFAULT_FRESHNESS,
