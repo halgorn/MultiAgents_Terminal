@@ -86,7 +86,7 @@ export abstract class BaseAgent<TInput, TOutput> {
     return limited;
   }
 
-  protected parseJson<T>(text: string, label: string): T {
+  protected parseJson<T>(text: string, label: string, schema?: { safeParse: (input: unknown) => { success: boolean; data?: T; error?: { issues: Array<{ path: (string | number)[]; message: string }> } } }): T {
     const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
     // Walk chars tracking string/escape state so braces inside string values are ignored
     let start = -1;
@@ -108,7 +108,8 @@ export abstract class BaseAgent<TInput, TOutput> {
         depth--;
         if (depth === 0 && start !== -1) {
           try {
-            return JSON.parse(cleaned.slice(start, i + 1)) as T;
+            const parsed = JSON.parse(cleaned.slice(start, i + 1)) as unknown;
+            return this.validateAgainstSchema(parsed, schema, label, text);
           } catch (err) {
             throw new Error(`${label}: failed to parse JSON — ${String(err)}\n\nRaw output:\n${text}`);
           }
@@ -119,9 +120,22 @@ export abstract class BaseAgent<TInput, TOutput> {
       throw new Error(`Claude CLI is not authenticated. Run: claude /login`);
     }
     try {
-      return JSON.parse(cleaned) as T;
+      const parsed = JSON.parse(cleaned) as unknown;
+      return this.validateAgainstSchema(parsed, schema, label, text);
     } catch (err) {
       throw new Error(`${label}: failed to parse JSON — ${String(err)}\n\nRaw output:\n${text}`);
     }
+  }
+
+  private validateAgainstSchema<T>(parsed: unknown, schema: { safeParse: (input: unknown) => { success: boolean; data?: T; error?: { issues: Array<{ path: (string | number)[]; message: string }> } } } | undefined, label: string, text: string): T {
+    if (!schema) return parsed as T;
+    const result = schema.safeParse(parsed);
+    if (!result.success) {
+      const issues = (result.error?.issues ?? [])
+        .map((i) => `${(i.path ?? []).join('.') || '(root)'}: ${i.message}`)
+        .join('; ');
+      throw new Error(`${label}: schema validation failed — ${issues}\n\nRaw output:\n${text}`);
+    }
+    return result.data as T;
   }
 }
