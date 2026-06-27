@@ -7,8 +7,7 @@ import { buildApiMap, auditEnvVars, measureCognitiveLoad, scanCurrentSecrets } f
 import { buildSbom } from '../../infra/sbom.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
 import { analyzeLineSize } from '../../infra/line-size-analyzer.js';
-import { analyzeSeoAndCrawlers } from '../../infra/seo-analyzer.js';
-import { formatSeoMarkdown, printSeoReport } from './scan-seo.js';
+import { analyzeSeoAndCrawlers, formatSeoMarkdown, printSeoReport } from '../../infra/seo-analyzer.js';
 
 async function refreshScanDashboard(cwd: string, scanName: string): Promise<void> {
   await refreshUnifiedReport(cwd, {

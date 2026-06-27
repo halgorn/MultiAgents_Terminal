@@ -40,7 +40,7 @@ function getCurrentVersion(): string {
 async function handleSearchMemory(args: Record<string, unknown>, ctx: { cwd: string; traceId: string }): Promise<{ content: string; meta?: Record<string, unknown> }> {
   let cwd: string;
   try {
-    cwd = safeResolvePath(ctx.cwd, args['cwd'], { allowEmpty: true });
+    cwd = safeResolvePath(ctx.cwd, args['cwd'] as string | null | undefined, { allowEmpty: true });
   } catch (err) {
     if (err instanceof PathSafetyError) return { content: `Invalid cwd: ${err.message}` };
     throw err;

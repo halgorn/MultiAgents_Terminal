@@ -173,3 +173,44 @@ export function analyzeSeoAndCrawlers(cwd: string): SeoCrawlerReport {
     issues: issues.slice(0, 20),
   };
 }
+
+export function formatSeoMarkdown(report: SeoCrawlerReport): string {
+  const lines: string[] = [];
+  lines.push(`# SEO & Crawler Report`);
+  lines.push('');
+  lines.push(`**Score:** ${report.score}/100  `);
+  lines.push(`**Files checked:** ${report.filesChecked}`);
+  lines.push('');
+  lines.push('## Signals');
+  lines.push(`- robots.txt: ${report.robotsTxt ? 'yes' : 'no'}`);
+  lines.push(`- sitemap: ${report.sitemap ? 'yes' : 'no'}`);
+  lines.push(`- Google Analytics: ${report.googleAnalytics ? 'yes' : 'no'}`);
+  lines.push(`- Google Tag Manager: ${report.googleTagManager ? 'yes' : 'no'}`);
+  lines.push(`- Search Console: ${report.searchConsole ? 'yes' : 'no'}`);
+  lines.push(`- AI crawler policy: ${report.aiCrawlerPolicy ? 'yes' : 'no'}`);
+  if (report.issues.length > 0) {
+    lines.push('');
+    lines.push('## Issues');
+    for (const issue of report.issues) {
+      lines.push(`- **[${issue.severity}]** ${issue.area}: ${issue.issue} — ${issue.recommendation}`);
+    }
+  }
+  return lines.join('\n') + '\n';
+}
+
+export function printSeoReport(report: SeoCrawlerReport): void {
+  const lines: string[] = [];
+  lines.push(`SEO score: ${report.score}/100 (${report.filesChecked} files checked)`);
+  lines.push(`  robots.txt: ${report.robotsTxt ? 'yes' : 'no'}`);
+  lines.push(`  sitemap:    ${report.sitemap ? 'yes' : 'no'}`);
+  lines.push(`  GA:         ${report.googleAnalytics ? 'yes' : 'no'}`);
+  lines.push(`  GTM:        ${report.googleTagManager ? 'yes' : 'no'}`);
+  lines.push(`  AI crawl:   ${report.aiCrawlerPolicy ? 'yes' : 'no'}`);
+  if (report.issues.length > 0) {
+    lines.push(`  issues:     ${report.issues.length}`);
+    for (const issue of report.issues.slice(0, 5)) {
+      lines.push(`    [${issue.severity}] ${issue.area}: ${issue.issue}`);
+    }
+  }
+  console.log(lines.join('\n'));
+}
