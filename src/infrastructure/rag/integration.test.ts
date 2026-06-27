@@ -25,7 +25,7 @@ test('integration: end-to-end PIL v2 search path', async () => {
     for (let i = 0; i < chunks.length; i++) {
       idx.insert(chunks[i]!.id, vectors[i]!);
     }
-    await idx.persist(join(dir, 'pil/vectors.bin'));
+    await idx.persist(join(dir, '.ai-runtime/pil/vectors.bin'));
 
     const manifest = {
       schemaVersion: 2 as const,
@@ -39,12 +39,12 @@ test('integration: end-to-end PIL v2 search path', async () => {
         modelId: `hash-${dim}`,
         dim,
         indexType: 'flat' as const,
-        vectorsPath: 'pil/vectors.bin',
+        vectorsPath: '.ai-runtime/pil/vectors.bin',
         count: 4,
         norm: 'l2' as const,
       },
     };
-    writeFileSync(join(dir, 'pil/manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+    writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
 
     const reader = new FilePilReader(dir);
     assert.equal(reader.hasManifest(), true);
@@ -75,7 +75,7 @@ test('integration: EmbeddingRegistry swap is reflected in reader', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'aion-int-'));
   try {
     initPilLayout(dir);
-    writeFileSync(join(dir, 'pil/manifest.json'), JSON.stringify({
+    writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), JSON.stringify({
       schemaVersion: 2, generatedAt: new Date().toISOString(), root: dir, repoHash: 'a', fileCount: 0, chunkCount: 0,
       embeddings: { providerId: 'custom', modelId: 'custom-128', dim: 128, indexType: 'flat', vectorsPath: 'v', count: 0 },
     }), 'utf8');
@@ -100,7 +100,7 @@ test('integration: EmbeddingRegistry swap is reflected in reader', async () => {
     const idx = new FlatVectorIndex(customDim);
     const v = new Float32Array(customDim).fill(0.5);
     idx.insert('test.ts:1', v);
-    await idx.persist(join(dir, 'pil/vectors.bin'));
+    await idx.persist(join(dir, '.ai-runtime/pil/vectors.bin'));
 
     const response = await pilSearch(reader, 'hello', 3, 'trace-2');
     assert.equal(response.meta.pilVersion, 2);
@@ -136,8 +136,8 @@ test('integration: multiple search calls reuse loaded index', async () => {
     idx.insert('a.ts:1', vecs[0]!);
     idx.insert('b.ts:1', vecs[1]!);
     idx.insert('c.ts:1', vecs[2]!);
-    await idx.persist(join(dir, 'pil/vectors.bin'));
-    writeFileSync(join(dir, 'pil/manifest.json'), JSON.stringify({
+    await idx.persist(join(dir, '.ai-runtime/pil/vectors.bin'));
+    writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), JSON.stringify({
       schemaVersion: 2, generatedAt: new Date().toISOString(), root: dir, repoHash: 'a', fileCount: 3, chunkCount: 3,
       embeddings: { providerId: 'hash', modelId: 'hash-384', dim, indexType: 'flat', vectorsPath: 'v', count: 3 },
     }), 'utf8');

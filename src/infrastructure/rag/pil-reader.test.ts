@@ -13,7 +13,7 @@ function freshDir(): string {
 
 function writeManifest(dir: string, dim: number, count = 0): void {
   initPilLayout(dir);
-  writeFileSync(join(dir, 'pil/manifest.json'), JSON.stringify({
+  writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), JSON.stringify({
     schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     root: dir,
@@ -38,7 +38,7 @@ test('FilePilReader: hasManifest returns true after init', () => {
   const dir = mkdtempSync(join(tmpdir(), 'aion-pil-'));
   try {
     initPilLayout(dir);
-    writeFileSync(join(dir, 'pil/manifest.json'), JSON.stringify({
+    writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), JSON.stringify({
       schemaVersion: 2, generatedAt: new Date().toISOString(), root: dir, repoHash: 'a', fileCount: 0, chunkCount: 0,
       embeddings: { providerId: 'hash', modelId: 'hash', dim: 4, indexType: 'flat', vectorsPath: 'v', count: 0 },
     }), 'utf8');
@@ -53,7 +53,7 @@ test('FilePilReader: readManifest returns null for corrupt JSON', () => {
   const dir = mkdtempSync(join(tmpdir(), 'aion-pil-'));
   try {
     initPilLayout(dir);
-    writeFileSync(join(dir, 'pil/manifest.json'), '{ broken', 'utf8');
+    writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), '{ broken', 'utf8');
     const reader = new FilePilReader(dir);
     assert.equal(reader.readManifest(), null);
   } finally {
@@ -80,7 +80,7 @@ test('FilePilReader: loadVectorIndex reads existing vectors.bin', async () => {
     writeManifest(dir, 4, 1);
     const idx = new FlatVectorIndex(4);
     idx.insert('a.ts:10', new Float32Array([1, 0, 0, 0]));
-    await idx.persist(join(dir, 'pil/vectors.bin'));
+    await idx.persist(join(dir, '.ai-runtime/pil/vectors.bin'));
     const reader = new FilePilReader(dir);
     const loaded = await reader.loadVectorIndex();
     assert.equal(loaded.size(), 1);
@@ -105,7 +105,7 @@ test('pilSearch: returns meta with traceId and pilVersion', async () => {
   const dir = freshDir();
   try {
     initPilLayout(dir);
-    writeFileSync(join(dir, 'pil/manifest.json'), JSON.stringify({
+    writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), JSON.stringify({
       schemaVersion: 2, generatedAt: '2025-06-01T00:00:00.000Z', root: dir, repoHash: 'a', fileCount: 5, chunkCount: 0,
       embeddings: { providerId: 'hash', modelId: 'hash-384', dim: 384, indexType: 'flat', vectorsPath: 'v', count: 0 },
     }), 'utf8');
@@ -124,13 +124,13 @@ test('pilSearch: parses file:line from chunk id', async () => {
   const dir = freshDir();
   try {
     initPilLayout(dir);
-    writeFileSync(join(dir, 'pil/manifest.json'), JSON.stringify({
+    writeFileSync(join(dir, '.ai-runtime/pil/manifest.json'), JSON.stringify({
       schemaVersion: 2, generatedAt: new Date().toISOString(), root: dir, repoHash: 'a', fileCount: 1, chunkCount: 1,
       embeddings: { providerId: 'hash', modelId: 'hash-384', dim: 384, indexType: 'flat', vectorsPath: 'v', count: 1 },
     }), 'utf8');
     const idx = new FlatVectorIndex(384);
     idx.insert('src/foo.ts:42', new Float32Array(384).fill(1));
-    await idx.persist(join(dir, 'pil/vectors.bin'));
+    await idx.persist(join(dir, '.ai-runtime/pil/vectors.bin'));
     const reader = new FilePilReader(dir);
     const result = await pilSearch(reader, 'foo', 5, 'trace');
     assert.equal(result.results[0]?.file, 'src/foo.ts');
@@ -141,12 +141,12 @@ test('pilSearch: parses file:line from chunk id', async () => {
 });
 
 test('initPilLayout + resetPil: roundtrip', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'aion-pil-'));
+  const dir = freshDir();
   try {
     initPilLayout(dir);
-    assert.ok(existsSync(join(dir, 'pil')));
+    assert.ok(existsSync(join(dir, '.ai-runtime', 'pil')));
     resetPil(dir);
-    assert.ok(!existsSync(join(dir, 'pil')));
+    assert.ok(!existsSync(join(dir, '.ai-runtime', 'pil')));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

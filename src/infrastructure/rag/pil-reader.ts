@@ -150,11 +150,11 @@ export async function pilSearch(
 }
 
 export function initPilLayout(cwd: string): void {
-  mkdirSync(join(cwd, 'pil'), { recursive: true });
+  mkdirSync(join(cwd, '.ai-runtime', 'pil'), { recursive: true });
 }
 
 export function resetPil(cwd: string): void {
-  const pilDir = join(cwd, 'pil');
+  const pilDir = join(cwd, '.ai-runtime', 'pil');
   if (existsSync(pilDir)) {
     rmSync(pilDir, { recursive: true, force: true });
   }

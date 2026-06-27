@@ -1,7 +1,7 @@
 # Aion Comparison Report
 
 **Target:** `/home/bruno/Documents/GitHub/MultiAgents_Terminal`
-**Date:** 2026-06-27T19:10:31.674Z
+**Date:** 2026-06-27T19:30:14.590Z
 **Queries:** 11 (11 succeeded, 0 with-aion path failed)
 
 ---
@@ -10,9 +10,9 @@
 
 | Metric | Without aion | With aion (PIL v2) | Savings |
 |---|---|---|---|
-| **Total tokens sent to LLM** | 4,401,166 | 2,750 | **4,398,416 (99.9%)** |
-| **Total retrieval time** | 416ms | 98ms | **4.2× faster** |
-| **Files scanned per query** | full repo (331 files) | 5 chunks | ~99% less context |
+| **Total tokens sent to LLM** | 4,495,546 | 2,750 | **4,492,796 (99.9%)** |
+| **Total retrieval time** | 494ms | 125ms | **3.9× faster** |
+| **Files scanned per query** | full repo (339 files) | 5 chunks | ~99% less context |
 
 > With-aion numbers come from `pilSearch()` — every response carries a `_meta.confidence` signal
 > that says whether the index is fresh enough to trust, plus `_meta.pilVersion`, `_meta.indexedAt`,
@@ -24,17 +24,17 @@
 
 | Query | Without aion (tokens / time) | With aion (tokens / time) | Savings |
 |---|---|---|---|
-| `How does authentication work?` | 400,106 (39ms) | 250 (22ms) | 99.9% tokens · 1.8× faster |
-| `Where is the CLI command surface defined?` | 400,106 (34ms) | 250 (10ms) | 99.9% tokens · 3.3× faster |
-| `What are the public exports of this project?` | 400,106 (38ms) | 250 (9ms) | 99.9% tokens · 4.3× faster |
-| `Which files handle MCP protocol communication?` | 400,106 (40ms) | 250 (9ms) | 99.9% tokens · 4.6× faster |
-| `Find all error handling patterns` | 400,106 (36ms) | 250 (7ms) | 99.9% tokens · 5.3× faster |
-| `Where is the test runner entry point?` | 400,106 (51ms) | 250 (7ms) | 99.9% tokens · 7.6× faster |
-| `List all files that import from 'zod'` | 400,106 (42ms) | 250 (7ms) | 99.9% tokens · 6.3× faster |
-| `What functions handle git operations?` | 400,106 (30ms) | 250 (7ms) | 99.9% tokens · 4.3× faster |
-| `Find all schema definitions` | 400,106 (32ms) | 250 (7ms) | 99.9% tokens · 4.3× faster |
-| `Explain the agent pipeline state machine` | 400,106 (40ms) | 250 (7ms) | 99.9% tokens · 5.9× faster |
-| `How does the MCP server handle freshness signals?` | 400,106 (35ms) | 250 (7ms) | 99.9% tokens · 4.8× faster |
+| `How does authentication work?` | 408,686 (65ms) | 250 (37ms) | 99.9% tokens · 1.8× faster |
+| `Where is the CLI command surface defined?` | 408,686 (43ms) | 250 (11ms) | 99.9% tokens · 4.0× faster |
+| `What are the public exports of this project?` | 408,686 (48ms) | 250 (11ms) | 99.9% tokens · 4.5× faster |
+| `Which files handle MCP protocol communication?` | 408,686 (44ms) | 250 (11ms) | 99.9% tokens · 4.0× faster |
+| `Find all error handling patterns` | 408,686 (40ms) | 250 (7ms) | 99.9% tokens · 5.9× faster |
+| `Where is the test runner entry point?` | 408,686 (47ms) | 250 (8ms) | 99.9% tokens · 5.6× faster |
+| `List all files that import from 'zod'` | 408,686 (51ms) | 250 (7ms) | 99.9% tokens · 7.0× faster |
+| `What functions handle git operations?` | 408,686 (37ms) | 250 (8ms) | 99.9% tokens · 4.7× faster |
+| `Find all schema definitions` | 408,686 (38ms) | 250 (9ms) | 99.9% tokens · 4.5× faster |
+| `Explain the agent pipeline state machine` | 408,686 (47ms) | 250 (9ms) | 99.9% tokens · 5.0× faster |
+| `How does the MCP server handle freshness signals?` | 408,686 (34ms) | 250 (8ms) | 99.9% tokens · 4.3× faster |
 
 ---
 
