@@ -5,6 +5,7 @@ import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { PlanReport } from '../schemas/plan.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
+import { fenceUserInput, fenceRepoSummary, PROMPT_INJECTION_DEFENSE_PREAMBLE } from '../security/fences.js';
 
 export interface InvestigatorInput {
   plan: PlanReport;
@@ -27,19 +28,19 @@ export class InvestigatorAgent extends BaseAgent<InvestigatorInput, EvidenceRepo
   }
 
   protected buildUserMessage(input: InvestigatorInput): string {
-    return `Bug / Task:
-${input.bugDescription}
-
-Plan summary:
-${input.plan.summary}
-
-Files likely involved (start here):
-${input.plan.estimatedFiles.join('\n')}
-
-Modules:
-${input.plan.relevantModules.join('\n')}
+    return `${PROMPT_INJECTION_DEFENSE_PREAMBLE}
 
 Domain focus: ${input.domain}
+
+${fenceUserInput(input.bugDescription, 'bug_description')}
+
+${fenceRepoSummary(`Plan summary: ${input.plan.summary}`)}
+
+Files likely involved (start here):
+${fenceUserInput(input.plan.estimatedFiles.join('\n'), 'cli_args')}
+
+Modules:
+${fenceUserInput(input.plan.relevantModules.join('\n'), 'cli_args')}
 
 Use Read, Grep, Glob to investigate.
 When reading files, read at most 500 lines from any single file; use focused offset/limit reads.
