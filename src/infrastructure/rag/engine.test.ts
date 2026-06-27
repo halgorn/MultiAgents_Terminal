@@ -155,8 +155,8 @@ test('PilEngine: LLM reranker integration works', async () => {
       return candidates.slice().reverse().map((c) => c.id);
     };
     const result = await query(engine, {
-      text: 'auth', topK: 2, mode: 'hybrid', reranker: 'llm', rerankerTopK: 5,
-    }, 'trace', reranker);
+      text: 'authentication', topK: 2, mode: 'hybrid', reranker: 'llm', rerankerTopK: 5,
+    }, 'trace', { reranker });
     assert.equal(result.meta.rerankerUsed, 'llm');
     assert.ok(result.hits.length > 0);
   } finally {

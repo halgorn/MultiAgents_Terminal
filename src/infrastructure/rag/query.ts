@@ -16,6 +16,8 @@ export interface RagQueryOptions {
   filters?: { filePrefix?: string; fileSuffix?: string; language?: string; minScore?: number };
   reranker?: 'none' | 'llm';
   rerankerTopK?: number;
+  expandQuery?: boolean;
+  maxExpansions?: number;
 }
 
 export interface RagQueryResult {
@@ -30,6 +32,7 @@ export interface RagQueryResult {
     candidatesBeforeRerank?: number;
     rerankerUsed?: 'none' | 'llm';
     filtersApplied?: number;
+    queryVariants?: number;
   };
 }
 
@@ -64,27 +67,63 @@ export interface LlmRerankFn {
   (query: string, candidates: LlmRerankHit[]): Promise<string[]>;
 }
 
+export interface QueryExpanderFn {
+  (query: string): Promise<string[]>;
+}
+
 export async function query(
   engine: RagEngine,
   q: RagQueryOptions,
   traceId = 'rag',
-  reranker?: LlmRerankFn,
+  options: { reranker?: LlmRerankFn; expander?: QueryExpanderFn } = {},
 ): Promise<RagQueryResult> {
   const mode = q.mode ?? 'hybrid';
   const topK = Math.max(1, q.topK ?? 10);
   const expandedK = Math.max(topK * 6, 60);
+
+  let queryVariants: string[] = [q.text];
+  if (q.expandQuery && options.expander) {
+    try {
+      queryVariants = await options.expander(q.text);
+    } catch {
+      queryVariants = [q.text];
+    }
+  }
+  queryVariants = queryVariants.slice(0, Math.max(1, q.maxExpansions ?? 4));
 
   let bm25Hits: Array<{ id: string; score: number }> = [];
   let vectorHits: ScoredId[] = [];
 
   if (mode !== 'vector') {
     const bm = engine.bm25();
-    if (bm) bm25Hits = bm.search(q.text, expandedK);
+    if (bm) {
+      const bmResultsPerVariant = queryVariants.map((v) => bm.search(v, expandedK));
+      const seen = new Set<string>();
+      for (const results of bmResultsPerVariant) {
+        for (const r of results) {
+          if (!seen.has(r.id)) {
+            seen.add(r.id);
+            bm25Hits.push(r);
+          }
+        }
+      }
+    }
   }
 
   if (mode !== 'bm25') {
-    const queryVec = await engine.embed(q.text);
-    vectorHits = engine.vectorIndex().search(queryVec, expandedK);
+    const allVecHits: ScoredId[] = [];
+    const seen = new Set<string>();
+    for (const variant of queryVariants) {
+      const queryVec = await engine.embed(variant);
+      const hits = engine.vectorIndex().search(queryVec, expandedK);
+      for (const h of hits) {
+        if (!seen.has(h.id)) {
+          seen.add(h.id);
+          allVecHits.push(h);
+        }
+      }
+    }
+    vectorHits = allVecHits;
   }
 
   let fused: RagHit[] = reciprocalRankFusion(bm25Hits, vectorHits).map((h) => ({
@@ -100,16 +139,16 @@ export async function query(
 
   let rerankerUsed: 'none' | 'llm' = 'none';
   const candidatesBeforeRerank = fused.length;
-  if (q.reranker === 'llm' && reranker && fused.length > topK) {
+  if (q.reranker === 'llm' && options.reranker && fused.length > topK) {
     const rerankInput: LlmRerankHit[] = fused.slice(0, q.rerankerTopK ?? Math.max(topK * 3, 30))
       .map((h) => ({ id: h.id, score: h.fusedScore }));
     try {
-      const rerankedIds = await reranker(q.text, rerankInput);
+      const rerankedIds = await options.reranker(q.text, rerankInput);
       const rerankedSet = new Set(rerankedIds);
       const preserved = fused.filter((h) => !rerankedSet.has(h.id));
       const rerankedHits = rerankedIds
-        .map((id) => fused.find((h) => h.id === id))
-        .filter((h): h is NonNullable<typeof h> => h !== undefined);
+        .map((id: string) => fused.find((h: RagHit) => h.id === id))
+        .filter((h): h is RagHit => h !== undefined);
       fused = [...rerankedHits, ...preserved];
       rerankerUsed = 'llm';
     } catch {
@@ -140,6 +179,7 @@ export async function query(
       candidatesBeforeRerank: rerankerUsed === 'llm' ? candidatesBeforeRerank : undefined,
       rerankerUsed,
       filtersApplied: filtersApplied > 0 ? filtersApplied : undefined,
+      queryVariants: q.expandQuery ? queryVariants.length : undefined,
     },
   };
 }
