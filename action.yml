@@ -1,0 +1,46 @@
+name: 'aion'
+description: 'Run aion audit, scan, and sync on your repo via MCP'
+author: 'Aion Labs'
+
+branding:
+  icon: 'shield-check'
+  color: 'blue'
+
+inputs:
+  command:
+    description: 'aion command to run (e.g. "audit .", "sync", "scan secrets")'
+    required: true
+    default: 'audit . --local-only'
+  cwd:
+    description: 'Working directory (defaults to workspace root)'
+    required: false
+  version:
+    description: 'Aion version to use'
+    required: false
+    default: 'latest'
+  api-key:
+    description: 'Provider API key (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)'
+    required: false
+  fail-on-high:
+    description: 'Exit non-zero on any high-severity finding'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
+  args:
+    - 'mcp'
+    - 'serve'
+
+branding:
+  icon: 'shield-check'
+  color: 'blue'
+
+# Example usage in .github/workflows/ci.yml:
+#   - name: Aion audit
+#     uses: aionlabs/aion-action@v1
+#     with:
+#       command: 'audit . --ci'
+#       api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+#       fail-on-high: 'true'
