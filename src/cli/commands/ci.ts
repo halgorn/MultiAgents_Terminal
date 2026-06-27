@@ -32,7 +32,7 @@ function parseFailOn(v: string): FailSeverity {
 export function registerCi(program: Command): void {
   const ci = program
     .command('ci [target]')
-    .description('CI-mode audit: structured output + exit codes (0=clean, 1=high, 2=critical)')
+    .description('[DEPRECATED] audit: structured output + exit codes (0=clean, 1=high, 2=critical)')
     .option('--budget <budget>', 'low | normal | deep', 'low')
     .option('--preset <name>', 'persona preset')
     .option('--domains <list>', 'comma-separated scanner domains')

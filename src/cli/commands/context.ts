@@ -53,7 +53,7 @@ async function buildTopicContext(cwd: string, topic: string, tokens: number): Pr
 export function registerContext(program: Command): void {
   program
     .command('context [topic...]')
-    .description('Generate compact AI-safe context instead of sending raw reports or all files')
+    .description('[DEPRECATED] compact AI-safe context instead of sending raw reports or all files')
     .option('--budget <tokens>', 'approximate max output tokens', '8000')
     .option('--audit', 'use the latest audit as source')
     .option('--out <file>', 'output file path')

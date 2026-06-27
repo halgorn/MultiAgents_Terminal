@@ -172,7 +172,7 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
 export function registerSetup(program: Command): void {
   program
     .command('setup')
-    .description('Run initial project wizard (config, indexes, optional semantic RAG)')
+    .description('[DEPRECATED] initial project wizard (config, indexes, optional semantic RAG)')
     .option('--status', 'show setup status and exit')
     .option('--json', 'output status as JSON (use with --status)')
     .option('--reset', 'reset setup state and exit')

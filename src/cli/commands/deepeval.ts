@@ -23,7 +23,7 @@ print("DeepEval quickcheck: passed")
 export function registerDeepEval(program: Command): void {
   const cmd = program
     .command('deepeval')
-    .description('Manage DeepEval quick regression checks for portfolio and CI');
+    .description('[DEPRECATED] DeepEval quick regression checks for portfolio and CI');
 
   cmd
     .command('init')

@@ -71,7 +71,7 @@ function render(node: Node, depth: number, maxDepth: number, hotspots: boolean, 
 export function registerTree(program: Command): void {
   program
     .command('tree')
-    .description('Show repository tree with file, LOC, and latest audit finding counts')
+    .description('[DEPRECATED] repository tree with file, LOC, and latest audit finding counts')
     .option('--depth <n>', 'max tree depth', '4')
     .option('--hotspots', 'sort folders/files by latest finding count')
     .option('--rebuild', 'rebuild the repository index before rendering')

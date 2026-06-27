@@ -17,7 +17,7 @@ export function registerCloud(program: Command): void {
   // ── aion cloud status ─────────────────────────────────────────────────────
   cloud
     .command('status')
-    .description('Show which cloud providers are detected and authenticated')
+    .description('[DEPRECATED] which cloud providers are detected and authenticated')
     .action(() => {
       const detected = detectProviders();
 

@@ -15,7 +15,7 @@ import { collectAuditStats } from '../../core/pipelines/audit-file-scanner.js';
 export function registerMemory(program: Command): void {
   const memory = program
     .command('memory')
-    .description('Manage the .ai-memory knowledge base');
+    .description('[DEPRECATED] the .ai-memory knowledge base');
 
   // ── ai memory build ───────────────────────────────────────────────────────
   memory

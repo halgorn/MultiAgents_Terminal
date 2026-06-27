@@ -66,7 +66,7 @@ function renderFinding(f: AuditFinding, prefix: string, prefixColor: (s: string)
 export function registerDiff(program: Command): void {
   program
     .command('diff [before] [after]')
-    .description('Compare two audit runs. Defaults: before=prev, after=latest. Pass file paths or "prev"/"latest".')
+    .description('[DEPRECATED] two audit runs. Defaults: before=prev, after=latest. Pass file paths or "prev"/"latest".')
     .option('--json', 'output raw JSON diff')
     .action(async (before: string = 'prev', after: string = 'latest', options: { json?: boolean }) => {
       const cwd = process.cwd();

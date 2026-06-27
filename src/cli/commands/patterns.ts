@@ -24,7 +24,7 @@ const PRIORITY_COLOR: Record<string, (s: string) => string> = {
 export function registerPatterns(program: Command): void {
   program
     .command('patterns')
-    .description('Detect architectural patterns, anti-patterns, and improvement recommendations')
+    .description('[DEPRECATED] architectural patterns, anti-patterns, and improvement recommendations')
     .action(async () => {
       const cwd = process.cwd();
       console.log(chalk.bold.cyan('\nArchitecture Pattern Analysis\n'));

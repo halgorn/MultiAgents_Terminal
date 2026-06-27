@@ -31,7 +31,7 @@ function printPlan(path: string, plan: { artifacts: unknown[]; remoteSteps: unkn
 export function registerDeploy(program: Command): void {
   const deploy = program
     .command('deploy')
-    .description('Assisted CI/deploy planning, SSH dry-runs, and healthchecks');
+    .description('[DEPRECATED] CI/deploy planning, SSH dry-runs, and healthchecks');
 
   deploy
     .command('plan')

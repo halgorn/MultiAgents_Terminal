@@ -321,7 +321,7 @@ export function writeGraphHtml(cwd: string, index: RepoIndex, dep: DepGraph): st
 export function registerGraph(program: Command): void {
   program
     .command('graph [target]')
-    .description('Generate interactive dependency graph (HTML + D3.js, opens in browser)')
+    .description('[DEPRECATED] interactive dependency graph (HTML + D3.js, opens in browser)')
     .option('--no-open', 'generate HTML without opening browser')
     .option('--output <file>', 'copy generated HTML to this file')
     .option('--rebuild', 'force rebuild of repo index before generating')

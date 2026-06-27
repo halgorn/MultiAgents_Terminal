@@ -49,20 +49,26 @@ import { applyArtifacts, formatArtifactSummary } from './infra/assist/apply-arti
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 import { shouldRunInitialWizard } from './infra/setup/project-setup.js';
+import { printTldr, emitDeprecation } from './cli/deprecation.js';
 
 runMigrations();
 await checkForUpdate();
 
 program
-  .name('ai')
-  .description('Multi-agent AI engineering runtime')
+  .name('aion')
+  .description('The project gateway for code-aware AI agents')
   .version(getCurrentVersion())
   .option('-C, --cwd <path>', 'working directory (defaults to current directory)')
-  .argument('[request...]', 'natural language request (e.g. "corrija o bug de login")')
-  .action(async (requestWords: string[]) => {
-    const opts = program.opts() as { cwd?: string };
-    if (opts.cwd) {
-      const dir = resolve(opts.cwd);
+  .option('--tldr', 'show short command overview (8 commands) and exit')
+  .argument('[request...]', 'natural language request (e.g. "fix the login bug")')
+  .allowExcessArguments(true)
+  .action(async (requestWords: string[], options: { cwd?: string; tldr?: boolean }) => {
+    if (options.tldr) {
+      printTldr();
+      process.exit(0);
+    }
+    if (options.cwd) {
+      const dir = resolve(options.cwd);
       if (!existsSync(dir) || !statSync(dir).isDirectory()) {
         console.error(`error: directory not found: ${dir}`);
         process.exit(1);
@@ -71,7 +77,6 @@ program
     }
 
     if (requestWords.length === 0) {
-      // No args → always try menu first; falls back to NL REPL if no TTY
       if (shouldRunInitialWizard(process.cwd(), Boolean(process.stdin.isTTY))) {
         await runProjectSetupWizard(process.cwd());
       }
@@ -96,33 +101,49 @@ program.hook('preSubcommand', (thisCommand) => {
 registerAnalyze(program);
 registerFix(program);
 registerReview(program);
+emitDeprecation('memory', 'aion sync | aion find');
 registerMemory(program);
 registerAudit(program);
+emitDeprecation('graph', 'aion find --mode hotspots');
 registerGraph(program);
+emitDeprecation('churn', 'aion find --mode churn');
 registerChurn(program);
 registerScan(program);
+emitDeprecation('patterns', 'removed in v1.0');
 registerPatterns(program);
+emitDeprecation('health', 'aion doctor --scope project');
 registerHealth(program);
 registerReport(program);
 registerExplain(program);
 registerInit(program);
+emitDeprecation('diff', 'aion doctor --scope audit-diff');
 registerDiff(program);
 registerChat(program);
+emitDeprecation('context', 'aion wiki --mode context');
 registerContext(program);
+emitDeprecation('search', 'aion find --mode symbol');
 registerSearch(program);
+emitDeprecation('tree', 'aion find --mode tree');
 registerTree(program);
 registerNext(program);
+emitDeprecation('ci', 'aion audit --ci');
 registerCi(program);
 registerEval(program);
+emitDeprecation('deepeval', 'removed in v1.0');
 registerDeepEval(program);
 registerTrace(program);
 registerMcp(program);
+emitDeprecation('impact-local', 'aion impact');
 registerImpactLocal(program);
 registerDocs(program);
+emitDeprecation('cloud', 'removed in v1.0');
 registerCloud(program);
+emitDeprecation('deploy', 'removed in v1.0');
 registerDeploy(program);
+emitDeprecation('setup', 'aion init');
 registerSetup(program);
 registerCopilot(program);
+emitDeprecation('index', 'aion sync');
 registerIndex(program);
 registerSync(program);
 registerWiki(program);
@@ -135,7 +156,7 @@ registerProviders(program);
 
 program
   .command('assist')
-  .description('Assisted setup for CI, tests, deploy workflows, Nginx, and healthchecks')
+  .description('[DEPRECATED] Assisted setup for CI, tests, deploy workflows. Use `aion init` or `aion chat`.')
   .option('--apply', 'write generated artifacts')
   .option('--overwrite', 'overwrite existing artifact files')
   .option('--domain <domain>', 'deployment domain')

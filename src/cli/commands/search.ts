@@ -6,7 +6,7 @@ import { ensureRepoVectorIndex, queryRepoVectors } from '../../infra/repo-vector
 export function registerSearch(program: Command): void {
   program
     .command('search <query...>')
-    .description('Search the repo index by file, symbol, and code chunks without AI tokens')
+    .description('[DEPRECATED] the repo index by file, symbol, and code chunks without AI tokens')
     .option('--limit <n>', 'number of matches to show', '10')
     .option('--semantic', 'use chunk-level semantic-style search over indexed code')
     .option('--rebuild', 'rebuild the repository index before searching')
