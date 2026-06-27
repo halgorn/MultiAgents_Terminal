@@ -17,6 +17,11 @@ export interface AgentRun<T> {
   output: T;
   rawText: string;
   durationMs: number;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
 }
 
 export abstract class BaseAgent<TInput, TOutput> {
@@ -35,12 +40,17 @@ export abstract class BaseAgent<TInput, TOutput> {
     const start = Date.now();
     const worktreePath = this.getWorktreePath(input);
     this.writeClaudeMd(worktreePath);
+    const usageEvents: Array<{ inputTokens: number; outputTokens: number }> = [];
+    const onUsage = (u: { inputTokens: number; outputTokens: number; totalTokens: number; agentName: string; provider: string; timestamp: string }) => {
+      usageEvents.push({ inputTokens: u.inputTokens, outputTokens: u.outputTokens });
+    };
 
     const attempt = async (charOverride?: number): Promise<string> => {
       const userMessage = this.applyLimits(this.buildUserMessage(input), policy, charOverride);
       return createProvider(this.config.provider, policy).run(
         { agentName: this.config.name, cwd: worktreePath, systemPrompt: this.config.systemPrompt, userMessage, policy },
         onChunk,
+        onUsage,
       );
     };
 
@@ -54,12 +64,21 @@ export abstract class BaseAgent<TInput, TOutput> {
       output = this.parseOutput(rawText);
     }
 
+    const totalUsage = usageEvents.reduce(
+      (acc, u) => ({
+        inputTokens: acc.inputTokens + u.inputTokens,
+        outputTokens: acc.outputTokens + u.outputTokens,
+      }),
+      { inputTokens: 0, outputTokens: 0 },
+    );
+
     return {
       agentName: this.config.name,
       resolvedState: this.resolveState(output),
       output,
       rawText,
       durationMs: Date.now() - start,
+      usage: { ...totalUsage, totalTokens: totalUsage.inputTokens + totalUsage.outputTokens },
     };
   }
 

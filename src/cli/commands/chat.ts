@@ -5,6 +5,7 @@ import * as readline from 'readline';
 import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { GraphAgent } from '../../agents/graph-agent.js';
+import { FilePilReader, pilSearch } from '../../infrastructure/rag/pil-reader.js';
 import { createRuntimePolicy, BUDGET_NAMES, PROVIDER_NAMES, type ProviderName, type BudgetName, type RuntimePolicy } from '../../core/runtime-policy.js';
 import { displayProjectName } from '../../infra/project-name.js';
 import { createProvider } from '../../providers/cli-provider.js';
@@ -136,7 +137,7 @@ export function registerChat(program: Command): void {
         console.log(chalk.dim(`  Session resumed (${pastEntries.length} previous messages) — /history to review  /clear to reset`));
       }
       console.log(chalk.dim('  Type "exit" or Ctrl+C to quit.'));
-      console.log(chalk.dim('  /context [query]  /history  /clear  /context-show\n'));
+      console.log(chalk.dim('  /context [query]  /search <query>  /history  /clear  /context-show\n'));
 
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
       rl.on('close', () => console.log(chalk.dim('\nBye!\n')));
@@ -176,6 +177,29 @@ export function registerChat(program: Command): void {
               repoContext = await graph.queryWithContext(newQuery, 20, contextLimit);
               console.log(chalk.dim(`  Context updated (${repoContext.length} chars)\n`));
             } catch { console.log(chalk.dim('  Could not update context\n')); }
+            ask(); return;
+          }
+
+          if (question.startsWith('/search ') || question.startsWith('/search\n')) {
+            const q = question.slice('/search '.length).trim();
+            if (q) {
+              const reader = new FilePilReader(cwd);
+              const res = await pilSearch(reader, q, 5, 'chat-search');
+              if (res.note) {
+                console.log(chalk.yellow(`\n  ⚠ ${res.note}\n`));
+              } else if (res.results.length === 0) {
+                console.log(chalk.dim('\n  No matches.\n'));
+              } else {
+                console.log(chalk.dim(`\n  Search results (pil v${res.meta.pilVersion}):`));
+                res.results.forEach((r, i) => {
+                  const pct = Math.round(r.score * 100);
+                  console.log(`  ${chalk.cyan(`${i + 1}.`)} ${chalk.bold(r.file)}:${r.startLine} ${chalk.green(`${pct}%`)}`);
+                });
+                console.log();
+              }
+            } else {
+              console.log(chalk.dim('  Usage: /search <query>\n'));
+            }
             ask(); return;
           }
 

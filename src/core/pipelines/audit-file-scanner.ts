@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, statSync, type Dirent } from 'fs';
 import { join as pathJoin } from 'path';
 import { spawnSync } from 'child_process';
 import { loadIgnorePatterns, isIgnored } from '../../infra/aion-ignore.js';
@@ -51,32 +51,36 @@ export function collectAuditStats(cwd: string, target: string): AuditFileStats {
   const rootRel = target && target !== '.' ? target.replace(/^[./]+/, '') : '';
 
   const walk = (dir: string, rel: string) => {
-    let entries: string[];
-    try { entries = readdirSync(dir); } catch { return; }
+    let entries: Dirent[];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
 
     for (const entry of entries) {
-      const fullPath = pathJoin(dir, entry);
-      const relPath = rel ? `${rel}/${entry}` : entry;
+      const entryName = entry.name;
+      const fullPath = pathJoin(dir, entryName);
+      const relPath = rel ? `${rel}/${entryName}` : entryName;
       try {
-        const st = statSync(fullPath);
-        if (isIgnoredDirName(entry)) {
-          if (st.isDirectory()) stats.ignoredDirs++;
-          else stats.ignoredFiles++;
+        if (entry.isDirectory()) {
+          if (isIgnoredDirName(entryName)) { stats.ignoredDirs++; continue; }
+          walk(fullPath, relPath);
           continue;
         }
-        if (st.isDirectory()) { walk(fullPath, relPath); continue; }
+        if (!entry.isFile()) continue;
 
         stats.totalFiles++;
-        const ext = SOURCE_EXTS.find((candidate) => entry.endsWith(candidate));
+        const ext = SOURCE_EXTS.find((candidate) => entryName.endsWith(candidate));
         if (!ext) { stats.ignoredFiles++; continue; }
         stats.byExtension[ext] = (stats.byExtension[ext] ?? 0) + 1;
 
         if (IGNORE_PATTERNS.some((p) => p.test(relPath)) || isGeneratedArtifact(relPath) || isIgnored(relPath, ignorePatterns)) {
           stats.ignoredFiles++;
-        } else if (st.size >= MAX_FILE_SIZE) {
-          stats.oversizedFiles++;
         } else {
-          stats.auditFiles.push(rootRel ? `${rootRel}/${relPath}` : relPath);
+          let st: import('fs').Stats | undefined;
+          try { st = statSync(fullPath); } catch { /* skip */ }
+          if (st && st.size >= MAX_FILE_SIZE) {
+            stats.oversizedFiles++;
+          } else if (st) {
+            stats.auditFiles.push(rootRel ? `${rootRel}/${relPath}` : relPath);
+          }
         }
       } catch { /* skip unreadable */ }
     }
