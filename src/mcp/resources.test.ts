@@ -14,17 +14,17 @@ test('buildResourceList returns all expected resources', () => {
   const list = buildResourceList(ctx);
   const uris = list.map((r) => r.uri);
   for (const expected of [
-    'aion://project/context',
-    'aion://docs/architecture',
-    'aion://docs/recent-changes',
-    'aion://docs/security',
-    'aion://docs/performance',
-    'aion://docs/test-coverage',
-    'aion://docs/dependencies',
-    'aion://docs/modules/{name}',
-    'aion://health',
-    'aion://observability/recent',
-    'aion://observability/summary',
+    'aion://v3/project/context',
+    'aion://v3/docs/architecture',
+    'aion://v3/docs/recent-changes',
+    'aion://v3/docs/security',
+    'aion://v3/docs/performance',
+    'aion://v3/docs/test-coverage',
+    'aion://v3/docs/dependencies',
+    'aion://v3/docs/modules/{name}',
+    'aion://v3/health',
+    'aion://v3/observability/recent',
+    'aion://v3/observability/summary',
   ]) {
     assert.ok(uris.includes(expected), `missing ${expected}`);
   }
@@ -32,19 +32,19 @@ test('buildResourceList returns all expected resources', () => {
 
 test('security resource is user-only', () => {
   const list = buildResourceList({ cwd: '.', traceId: 't' });
-  const sec = list.find((r) => r.uri === 'aion://docs/security')!;
+  const sec = list.find((r) => r.uri === 'aion://v3/docs/security')!;
   assert.equal(sec.annotations.audience, 'user');
 });
 
 test('context resource has high priority', () => {
   const list = buildResourceList({ cwd: '.', traceId: 't' });
-  const ctx = list.find((r) => r.uri === 'aion://project/context')!;
+  const ctx = list.find((r) => r.uri === 'aion://v3/project/context')!;
   assert.ok(ctx.annotations.priority >= 0.8);
 });
 
 test('module resource requires name param', async () => {
   const list = buildResourceList({ cwd: '.', traceId: 't' });
-  const mod = list.find((r) => r.uri === 'aion://docs/modules/{name}')!;
+  const mod = list.find((r) => r.uri === 'aion://v3/docs/modules/{name}')!;
   const result = await mod.handler({ cwd: '.', params: {} });
   assert.match(result.contents[0]?.text ?? '', /Missing/);
 });
@@ -53,7 +53,7 @@ test('context resource returns helpful text when no PIL', async () => {
   const cwd = makeTmp();
   try {
     const list = buildResourceList({ cwd, traceId: 't' });
-    const ctx = list.find((r) => r.uri === 'aion://project/context')!;
+    const ctx = list.find((r) => r.uri === 'aion://v3/project/context')!;
     const result = await ctx.handler({ cwd, params: {} });
     assert.match(result.contents[0]?.text ?? '', /No PIL/);
   } finally {
@@ -65,7 +65,7 @@ test('health resource returns JSON with required fields', async () => {
   const cwd = makeTmp();
   try {
     const list = buildResourceList({ cwd, traceId: 't' });
-    const h = list.find((r) => r.uri === 'aion://health')!;
+    const h = list.find((r) => r.uri === 'aion://v3/health')!;
     const result = await h.handler({ cwd, params: {} });
     const parsed = JSON.parse(result.contents[0]?.text ?? '{}');
     assert.equal(parsed.pilExists, false);
@@ -104,7 +104,7 @@ test('observability summary resource returns object', async () => {
   const cwd = makeTmp();
   try {
     const list = buildResourceList({ cwd, traceId: 't' });
-    const r = list.find((res) => res.uri === 'aion://observability/summary')!;
+    const r = list.find((res) => res.uri === 'aion://v3/observability/summary')!;
     const result = await r.handler({ cwd, params: {} });
     const parsed = JSON.parse(result.contents[0]?.text ?? '{}');
     assert.equal(parsed.total, 0);
@@ -116,7 +116,7 @@ test('observability summary resource returns object', async () => {
 
 test('policy resource is included and audience=assistant', () => {
   const list = buildResourceList({ cwd: '.', traceId: 't' });
-  const policy = list.find((r) => r.uri === 'aion://docs/policy');
+  const policy = list.find((r) => r.uri === 'aion://v3/docs/policy');
   assert.ok(policy, 'expected policy resource');
   assert.equal(policy.annotations.audience, 'assistant');
   assert.ok(policy.annotations.priority >= 0.7);
@@ -124,13 +124,13 @@ test('policy resource is included and audience=assistant', () => {
 
 test('policy resource has high priority for auto-attach', () => {
   const list = buildResourceList({ cwd: '.', traceId: 't' });
-  const policy = list.find((r) => r.uri === 'aion://docs/policy')!;
+  const policy = list.find((r) => r.uri === 'aion://v3/docs/policy')!;
   assert.ok(policy.annotations.priority >= 0.7, 'policy should auto-attach');
 });
 
 test('policy handler returns markdown with MANDATORY keyword', async () => {
   const list = buildResourceList({ cwd: '.', traceId: 't' });
-  const policy = list.find((r) => r.uri === 'aion://docs/policy')!;
+  const policy = list.find((r) => r.uri === 'aion://v3/docs/policy')!;
   const result = await policy.handler({ cwd: '.', params: {} });
   const text = result.contents[0]?.text ?? '';
   assert.match(text, /MANDATORY/);

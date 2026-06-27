@@ -20,7 +20,7 @@ export interface ResourceContext {
 export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
   return [
     {
-      uri: 'aion://project/context',
+      uri: 'aion://v3/project/context',
       name: 'Project context (PROJECT.md)',
       mimeType: 'text/markdown',
       annotations: {
@@ -33,7 +33,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readProjectContext(args, ctx),
     },
     {
-      uri: 'aion://docs/architecture',
+      uri: 'aion://v3/docs/architecture',
       name: 'Architecture overview',
       mimeType: 'text/markdown',
       annotations: {
@@ -46,7 +46,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readArchitecture(args, ctx),
     },
     {
-      uri: 'aion://docs/recent-changes',
+      uri: 'aion://v3/docs/recent-changes',
       name: 'Recent file changes',
       mimeType: 'text/markdown',
       annotations: {
@@ -59,7 +59,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readRecentChanges(args, ctx),
     },
     {
-      uri: 'aion://docs/security',
+      uri: 'aion://v3/docs/security',
       name: 'Security findings',
       mimeType: 'text/markdown',
       annotations: {
@@ -72,7 +72,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readSecurity(args, ctx),
     },
     {
-      uri: 'aion://docs/performance',
+      uri: 'aion://v3/docs/performance',
       name: 'Performance hotspots',
       mimeType: 'text/markdown',
       annotations: {
@@ -85,7 +85,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readPerformance(args, ctx),
     },
     {
-      uri: 'aion://docs/test-coverage',
+      uri: 'aion://v3/docs/test-coverage',
       name: 'Test coverage gaps',
       mimeType: 'text/markdown',
       annotations: {
@@ -98,7 +98,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readTestCoverage(args, ctx),
     },
     {
-      uri: 'aion://docs/dependencies',
+      uri: 'aion://v3/docs/dependencies',
       name: 'Dependencies and advisories',
       mimeType: 'text/markdown',
       annotations: {
@@ -111,7 +111,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readDependencies(args, ctx),
     },
     {
-      uri: 'aion://docs/policy',
+      uri: 'aion://v3/docs/policy',
       name: 'Agent policy (MANDATORY)',
       mimeType: 'text/markdown',
       annotations: {
@@ -124,7 +124,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readPolicy(args, ctx),
     },
     {
-      uri: 'aion://docs/modules/{name}',
+      uri: 'aion://v3/docs/modules/{name}',
       name: 'Module deep dive',
       mimeType: 'text/markdown',
       annotations: {
@@ -137,7 +137,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readModuleDoc(args, ctx),
     },
     {
-      uri: 'aion://health',
+      uri: 'aion://v3/health',
       name: 'Server health',
       mimeType: 'application/json',
       annotations: {
@@ -150,7 +150,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readHealth(args, ctx),
     },
     {
-      uri: 'aion://observability/recent',
+      uri: 'aion://v3/observability/recent',
       name: 'Recent MCP requests',
       mimeType: 'application/json',
       annotations: {
@@ -163,7 +163,7 @@ export function buildResourceList(ctx: ResourceContext): ResourceDescriptor[] {
       handler: async (args) => readObservabilityRecent(args, ctx),
     },
     {
-      uri: 'aion://observability/summary',
+      uri: 'aion://v3/observability/summary',
       name: 'Observability summary',
       mimeType: 'application/json',
       annotations: {
@@ -182,21 +182,21 @@ async function readProjectContext(args: { cwd: string; params: Record<string, st
   const store = readProjectStore(args.cwd);
   if (!store) {
     return {
-      contents: [{ uri: 'aion://project/context', mimeType: 'text/markdown', text: '# No PIL found\n\nRun `aion sync` first.' }],
+      contents: [{ uri: 'aion://v3/project/context', mimeType: 'text/markdown', text: '# No PIL found\n\nRun `aion sync` first.' }],
     };
   }
   const budget = parseInt(args.params['budget'] ?? '1500', 10) || 1500;
   const { md } = renderProjectMarkdown(store, budget);
   return {
-    contents: [{ uri: 'aion://project/context', mimeType: 'text/markdown', text: md }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://project/context', traceId: ctx.traceId, estTokens: estimateTokens(md) }),
+    contents: [{ uri: 'aion://v3/project/context', mimeType: 'text/markdown', text: md }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://v3/project/context', traceId: ctx.traceId, estTokens: estimateTokens(md) }),
   };
 }
 
 async function readArchitecture(args: { cwd: string; params: Record<string, string> }, ctx: ResourceContext): Promise<ResourceResult> {
   const store = readProjectStore(args.cwd);
   if (!store) {
-    return { contents: [{ uri: 'aion://docs/architecture', mimeType: 'text/markdown', text: 'No PIL. Run `aion sync`.' }] };
+    return { contents: [{ uri: 'aion://v3/docs/architecture', mimeType: 'text/markdown', text: 'No PIL. Run `aion sync`.' }] };
   }
   const graph = buildDepGraphAuto(args.cwd);
   const lines: string[] = ['# Architecture\n'];
@@ -218,8 +218,8 @@ async function readArchitecture(args: { cwd: string; params: Record<string, stri
   }
   const text = lines.join('\n');
   return {
-    contents: [{ uri: 'aion://docs/architecture', mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://docs/architecture', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/docs/architecture', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://v3/docs/architecture', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
@@ -227,31 +227,31 @@ async function readRecentChanges(args: { cwd: string; params: Record<string, str
   const changed = ctx.watcher?.filesChanged() ?? 0;
   const text = `# Recent changes\n\n${changed} file(s) changed since last sync.`;
   return {
-    contents: [{ uri: 'aion://docs/recent-changes', mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://docs/recent-changes', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/docs/recent-changes', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://v3/docs/recent-changes', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
 async function readSecurity(_args: { cwd: string; params: Record<string, string> }, ctx: ResourceContext): Promise<ResourceResult> {
   const text = '# Security findings\n\nThis resource is user-only. Use `aion scan security` for full results.';
   return {
-    contents: [{ uri: 'aion://docs/security', mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://docs/security', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/docs/security', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://v3/docs/security', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
 async function readPerformance(_args: { cwd: string; params: Record<string, string> }, ctx: ResourceContext): Promise<ResourceResult> {
   const text = '# Performance\n\nUse `aion scan cognitive-load` and `aion scan api-map` for detailed performance analysis.';
   return {
-    contents: [{ uri: 'aion://docs/performance', mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://docs/performance', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/docs/performance', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://v3/docs/performance', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
 async function readTestCoverage(args: { cwd: string; params: Record<string, string> }, ctx: ResourceContext): Promise<ResourceResult> {
   const store = readProjectStore(args.cwd);
   if (!store) {
-    return { contents: [{ uri: 'aion://docs/test-coverage', mimeType: 'text/markdown', text: 'No PIL. Run `aion sync`.' }] };
+    return { contents: [{ uri: 'aion://v3/docs/test-coverage', mimeType: 'text/markdown', text: 'No PIL. Run `aion sync`.' }] };
   }
   const sources = store.files.filter((f) => !f.isTest);
   const testedSources = new Set(store.tests.map((t) => t.source));
@@ -267,16 +267,16 @@ async function readTestCoverage(args: { cwd: string; params: Record<string, stri
   ];
   const text = lines.join('\n');
   return {
-    contents: [{ uri: 'aion://docs/test-coverage', mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://docs/test-coverage', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/docs/test-coverage', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://v3/docs/test-coverage', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
 async function readDependencies(_args: { cwd: string; params: Record<string, string> }, ctx: ResourceContext): Promise<ResourceResult> {
   const text = '# Dependencies\n\nUse `aion scan sbom --unpinned-only` for full SBOM with outdated deps.';
   return {
-    contents: [{ uri: 'aion://docs/dependencies', mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://docs/dependencies', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/docs/dependencies', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://v3/docs/dependencies', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
@@ -298,9 +298,9 @@ If you find yourself reaching for \`Read\` without trying aion first, you are wa
 
 ## The rule
 
-1. **Start** by reading \`aion://project/context\` (this file or the dashboard PROJECT.md, ~1.5k tokens)
+1. **Start** by reading \`aion://v3/project/context\` (this file or the dashboard PROJECT.md, ~1.5k tokens)
 2. **For specific code**, call \`search_memory(query, topK=5)\` instead of reading files
-3. **For module-level detail**, read \`aion://docs/modules/{path}\` or \`aion://docs/{domain}.md\`
+3. **For module-level detail**, read \`aion://v3/docs/modules/{path}\` or \`aion://docs/{domain}.md\`
 4. **Only fall back to raw \`Read\` when:**
    - aion returns \`_meta.confidence: "stale"\` AND the user has not run \`aion sync\` recently
    - you need exact line-by-line text that aion chunks do not preserve
@@ -316,14 +316,14 @@ If you find yourself reaching for \`Read\` without trying aion first, you are wa
 
 ## Available resources
 
-- \`aion://project/context\` — dashboard (1.5k tokens, auto-attached)
-- \`aion://docs/architecture\` — modules, deps, cycles (800 tokens)
-- \`aion://docs/recent-changes\` — live file-change counter (300 tokens)
-- \`aion://docs/test-coverage\` — source files without tests (500 tokens)
-- \`aion://docs/dependencies\` — outdated deps and advisories (700 tokens)
-- \`aion://health\` — PIL freshness + watcher status (100 tokens, JSON)
-- \`aion://docs/policy\` — this file
-- \`aion://observability/summary\` — recent MCP call stats (300 tokens)
+- \`aion://v3/project/context\` — dashboard (1.5k tokens, auto-attached)
+- \`aion://v3/docs/architecture\` — modules, deps, cycles (800 tokens)
+- \`aion://v3/docs/recent-changes\` — live file-change counter (300 tokens)
+- \`aion://v3/docs/test-coverage\` — source files without tests (500 tokens)
+- \`aion://v3/docs/dependencies\` — outdated deps and advisories (700 tokens)
+- \`aion://v3/health\` — PIL freshness + watcher status (100 tokens, JSON)
+- \`aion://v3/docs/policy\` — this file
+- \`aion://v3/observability/summary\` — recent MCP call stats (300 tokens)
 
 ## Confidence signaling
 
@@ -337,21 +337,21 @@ Other \`_meta\` fields: \`pilVersion\`, \`indexedAt\`, \`filesChangedSince\`, \`
 
 ## When in doubt
 
-Read \`aion://health\`. It shows PIL freshness, watcher status, and provider reachability in one JSON blob.`;
+Read \`aion://v3/health\`. It shows PIL freshness, watcher status, and provider reachability in one JSON blob.`;
   return {
-    contents: [{ uri: 'aion://docs/policy', mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://docs/policy', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/docs/policy', mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: _args.cwd, resource: 'aion://v3/docs/policy', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
 async function readModuleDoc(args: { cwd: string; params: Record<string, string> }, ctx: ResourceContext): Promise<ResourceResult> {
   const name = args.params['name'] ?? '';
   if (!name) {
-    return { contents: [{ uri: `aion://docs/modules/`, mimeType: 'text/markdown', text: 'Missing {name} parameter.' }] };
+    return { contents: [{ uri: `aion://v3/docs/modules/`, mimeType: 'text/markdown', text: 'Missing {name} parameter.' }] };
   }
   const store = readProjectStore(args.cwd);
   if (!store) {
-    return { contents: [{ uri: `aion://docs/modules/${name}`, mimeType: 'text/markdown', text: 'No PIL. Run `aion sync`.' }] };
+    return { contents: [{ uri: `aion://v3/docs/modules/${name}`, mimeType: 'text/markdown', text: 'No PIL. Run `aion sync`.' }] };
   }
   const node = store.deps.nodes.find((n) => n.file === name);
   const symbols = store.symbols.filter((s) => s.file === name);
@@ -371,8 +371,8 @@ async function readModuleDoc(args: { cwd: string; params: Record<string, string>
   ];
   const text = lines.join('\n');
   return {
-    contents: [{ uri: `aion://docs/modules/${name}`, mimeType: 'text/markdown', text }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: `aion://docs/modules/${name}`, traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: `aion://v3/docs/modules/${name}`, mimeType: 'text/markdown', text }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: `aion://v3/docs/modules/${name}`, traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
@@ -397,8 +397,8 @@ async function readHealth(args: { cwd: string; params: Record<string, string> },
   };
   const text = JSON.stringify(health, null, 2);
   return {
-    contents: [{ uri: 'aion://health', mimeType: 'application/json', text }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://health', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/health', mimeType: 'application/json', text }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://v3/health', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
@@ -407,8 +407,8 @@ async function readObservabilityRecent(args: { cwd: string; params: Record<strin
   const entries = recentEntries(limit);
   const text = JSON.stringify(entries, null, 2);
   return {
-    contents: [{ uri: 'aion://observability/recent', mimeType: 'application/json', text }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://observability/recent', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/observability/recent', mimeType: 'application/json', text }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://v3/observability/recent', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }
 
@@ -416,7 +416,7 @@ async function readObservabilitySummary(args: { cwd: string; params: Record<stri
   const summary = observabilitySummary();
   const text = JSON.stringify(summary, null, 2);
   return {
-    contents: [{ uri: 'aion://observability/summary', mimeType: 'application/json', text }],
-    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://observability/summary', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
+    contents: [{ uri: 'aion://v3/observability/summary', mimeType: 'application/json', text }],
+    meta: buildResponseMeta({ cwd: args.cwd, resource: 'aion://v3/observability/summary', traceId: ctx.traceId, estTokens: estimateTokens(text) }),
   };
 }

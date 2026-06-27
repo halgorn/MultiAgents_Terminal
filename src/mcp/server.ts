@@ -209,7 +209,7 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
         case 'get_impact': { const r = await handleImpact(args, { cwd: options.cwd }); content = r.content; break; }
         default: content = `Unknown tool: ${toolName}`;
       }
-      const fullMeta = buildResponseMeta({ cwd: options.cwd, tool: toolName, traceId, estTokens: estimateTokens(content) });
+      const fullMeta = buildResponseMeta({ cwd: options.cwd, tool: toolName, traceId, estTokens: estimateTokens(content), watcher });
       const meta = { ...fullMeta, syncRecommended: resyncInfo.confidence === 'stale' };
       return { content, meta: meta as unknown as Record<string, unknown> };
     });
@@ -241,7 +241,7 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
     const { result } = await withObservability({ resource: uri, args: { uri } }, async (traceId) => {
       const args: ResourceArgs = { cwd: options.cwd, params: parseResourceParams(uri, resource) };
       const r = await resource.handler(args);
-      const meta = buildResponseMeta({ cwd: options.cwd, resource: uri, traceId, estTokens: estimateTokens(r.contents[0]?.text ?? '') });
+      const meta = buildResponseMeta({ cwd: options.cwd, resource: uri, traceId, estTokens: estimateTokens(r.contents[0]?.text ?? ''), watcher });
       return r.meta ? { contents: r.contents, meta: { ...meta, ...r.meta } } : { contents: r.contents, meta };
     });
     return { contents: result.contents, _meta: result.meta };
@@ -291,11 +291,11 @@ export function scheduleWikiRegen(options: McpServerOptions): void {
       const result = await runWiki({ cwd: options.cwd, tokenBudget: options.tokenBudget });
       scopedLog.info('wiki regenerated', { path: result.path, bytes: result.bytes });
       if (internals.notifyResource) {
-        await internals.notifyResource('aion://project/context');
-        await internals.notifyResource('aion://docs/architecture');
-        await internals.notifyResource('aion://docs/test-coverage');
-        await internals.notifyResource('aion://docs/dependencies');
-        await internals.notifyResource('aion://docs/recent-changes');
+        await internals.notifyResource('aion://v3/project/context');
+        await internals.notifyResource('aion://v3/docs/architecture');
+        await internals.notifyResource('aion://v3/docs/test-coverage');
+        await internals.notifyResource('aion://v3/docs/dependencies');
+        await internals.notifyResource('aion://v3/docs/recent-changes');
       }
     } catch (err) {
       scopedLog.error('wiki regen failed', { error: String(err) });
@@ -343,9 +343,9 @@ export async function maybeResyncOnStale(options: McpServerOptions): Promise<{ r
       await autoSyncIfNeeded({ cwd: options.cwd, config: options.freshness, force: true, quiet: true });
       log.child('mcp.server').info('auto-resync on stale completed');
       if (internals.notifyResource) {
-        await internals.notifyResource('aion://project/context');
-        await internals.notifyResource('aion://docs/architecture');
-        await internals.notifyResource('aion://docs/recent-changes');
+        await internals.notifyResource('aion://v3/project/context');
+        await internals.notifyResource('aion://v3/docs/architecture');
+        await internals.notifyResource('aion://v3/docs/recent-changes');
       }
     } catch (err) {
       log.child('mcp.server').error('auto-resync failed', { error: String(err) });

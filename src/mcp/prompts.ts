@@ -88,7 +88,7 @@ Please:
 3. Suggest 2-3 concrete refactorings to break the cycle
 4. For each refactoring, list which tests would need to be updated
 
-Use the \`aion://docs/architecture\` resource to see the full dep graph, and \`search_memory\` to look at the actual imports in each file.`,
+Use the \`aion://v3/docs/architecture\` resource to see the full dep graph, and \`search_memory\` to look at the actual imports in each file.`,
       },
     }],
   };
@@ -109,7 +109,7 @@ Focus areas:
 - **Input validation**: missing or weak validation
 - **Crypto**: weak algorithms, hardcoded keys, missing salting
 
-Use the \`aion://docs/security\` resource to see prior findings, and \`search_memory\` to find relevant code. For each issue found, report: location, severity (critical/high/medium/low), and the recommended fix.`,
+Use the \`aion://v3/docs/security\` resource to see prior findings, and \`search_memory\` to find relevant code. For each issue found, report: location, severity (critical/high/medium/low), and the recommended fix.`,
       },
     }],
   };
@@ -131,7 +131,7 @@ Group by:
 4. **Breaking changes** (will need migration)
 5. **Hot spots** (files with most churn — may indicate instability)
 
-For each change, mention the files touched. Use the \`aion://docs/recent-changes\` resource to see what the watcher has detected, and consult \`repo-index.json\` for the actual file list.`,
+For each change, mention the files touched. Use the \`aion://v3/docs/recent-changes\` resource to see what the watcher has detected, and consult \`repo-index.json\` for the actual file list.`,
       },
     }],
   };
@@ -146,9 +146,9 @@ async function onboardNewDev(_args: Record<string, string>): Promise<PromptResul
         text: `Onboard me to this project. I just joined the team.
 
 Please:
-1. Read \`aion://project/context\` for the high-level overview
-2. Read \`aion://docs/architecture\` to understand the module structure
-3. Read \`aion://docs/test-coverage\` to see what's tested
+1. Read \`aion://v3/project/context\` for the high-level overview
+2. Read \`aion://v3/docs/architecture\` to understand the module structure
+3. Read \`aion://v3/docs/test-coverage\` to see what's tested
 4. Identify the 3 most important files/modules to read first
 5. Walk me through the typical dev workflow (build, test, deploy)
 6. Point me to the most useful tools (\`aion search\`, \`aion chat\`, \`aion watch\`)
