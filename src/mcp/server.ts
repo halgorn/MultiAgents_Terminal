@@ -20,6 +20,7 @@ import { buildResponseMeta, computeConfidence } from './freshness.js';
 import { readProjectStore } from '../infra/project-store.js';
 import { defaultMcpOptions, estimateTokens, DEFAULT_FRESHNESS, type McpServerOptions, type ResourceArgs, type ResourceDescriptor, type ResourceResult } from './types.js';
 import { safeResolvePath, PathSafetyError } from './path-safety.js';
+import { FilePilReader, pilSearch } from '../infrastructure/rag/pil-reader.js';
 
 interface ServerInternals {
   watcher?: FileWatcher;
@@ -49,21 +50,16 @@ async function handleSearchMemory(args: Record<string, unknown>, ctx: { cwd: str
   const topK = Math.max(1, Math.min(50, Number(args['topK'] ?? 5) || 5));
   if (!query) return { content: 'Missing required arg: query' };
 
-  const { embedTextRemote, embedText } = await import('../infra/embeddings.js');
-  const { createVectorStore } = await import('../infra/vector-store.js');
-  const store = createVectorStore(cwd);
+  const reader = new FilePilReader(cwd);
+  const response = await pilSearch(reader, query, topK, ctx.traceId);
 
-  if (store.size() === 0) return { content: 'No vector index. Run `aion memory build` first.' };
+  if (response.note) return { content: response.note };
+  if (response.results.length === 0) return { content: 'No results found.' };
 
-  const remote = await embedTextRemote(query);
-  const queryVec = remote ?? Array.from(embedText(query, 500));
-  const results = await store.search(queryVec, topK);
-  if (results.length === 0) return { content: 'No results found.' };
   return {
-    content: results.map((r, i) =>
-      `[${i + 1}] ${r.payload['file']}:${r.payload['startLine']} — ${r.payload['name']}\n` +
-      `    score: ${(r.score * 100).toFixed(1)}%\n` +
-      `    ${String(r.payload['preview'] ?? '').split('\n').slice(0, 3).join('\n    ')}`,
+    content: response.results.map((r, i) =>
+      `[${i + 1}] ${r.file}:${r.startLine}\n` +
+      `    score: ${(r.score * 100).toFixed(1)}%`,
     ).join('\n\n'),
   };
 }
