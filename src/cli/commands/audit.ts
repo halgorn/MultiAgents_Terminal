@@ -13,6 +13,7 @@ import type { AuditFinding, AuditReport, FixSeverity } from '../../schemas/audit
 import { FIX_SEVERITIES } from '../../schemas/audit.js';
 import { parseBudget, parsePositiveInt } from '../cli-utils.js';
 import { refreshUnifiedReport } from '../../infra/report-refresh.js';
+import { validateWebhookUrl, sanitizeWebhookPayload, WebhookValidationError } from '../../security/webhook-guard.js';
 
 interface AuditOptions {
   scanners?: string;
@@ -317,21 +318,30 @@ export function registerAudit(program: Command): void {
         await orch.flushTrace();
         if (options.notifyWebhook) {
           try {
-            await fetch(options.notifyWebhook, {
+            const validatedUrl = validateWebhookUrl(options.notifyWebhook);
+            const payload = sanitizeWebhookPayload({
+              project: process.cwd(),
+              findings: report.findings.length,
+              critical: report.criticalCount,
+              high: report.highCount,
+              summary: report.summary,
+              durationMs,
+              reportHtml: saved.html,
+            });
+            await fetch(validatedUrl.toString(), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                project: process.cwd(),
-                findings: report.findings.length,
-                critical: report.criticalCount,
-                high: report.highCount,
-                summary: report.summary,
-                durationMs,
-                reportHtml: saved.html,
-              }),
+              body: JSON.stringify(payload),
             });
-            console.log(chalk.dim(`  webhook notified: ${options.notifyWebhook}`));
-          } catch { console.log(chalk.yellow(`  webhook failed: ${options.notifyWebhook}`)); }
+            console.log(chalk.dim(`  webhook notified: ${validatedUrl.hostname}`));
+          } catch (err) {
+            if (err instanceof WebhookValidationError) {
+              console.log(chalk.red(`  webhook rejected: ${err.message}`));
+              console.log(chalk.yellow(`  pass --allow-insecure-webhook or use https:// to a public host`));
+            } else {
+              console.log(chalk.yellow(`  webhook failed: ${String(err)}`));
+            }
+          }
         }
         await maybeAutoFix(options, report, orch);
         process.exit(report.criticalCount > 0 ? 2 : report.highCount > 0 ? 1 : 0);
