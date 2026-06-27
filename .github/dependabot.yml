@@ -1,0 +1,66 @@
+version: 2
+updates:
+  # npm dependencies (runtime + dev)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "bruno"
+    labels:
+      - "dependencies"
+      - "automated"
+    groups:
+      runtime-minor:
+        patterns:
+          - "@anthropic-ai/*"
+          - "@modelcontextprotocol/*"
+          - "chalk"
+          - "commander"
+          - "dotenv"
+          - "ora"
+          - "zod"
+        update-types:
+          - "minor"
+          - "patch"
+      runtime-major:
+        patterns:
+          - "@anthropic-ai/*"
+          - "@modelcontextprotocol/*"
+          - "chalk"
+          - "commander"
+          - "dotenv"
+          - "ora"
+          - "zod"
+        update-types:
+          - "major"
+        # Major updates require manual review
+    ignore:
+      # Langfuse + LangGraph pinned loosely — major bumps need manual testing
+      - dependency-name: "@langchain/langgraph"
+      - dependency-name: "@langfuse/*"
+      - dependency-name: "langfuse"
+      # Tree-sitter ecosystem — grammar updates need validation
+      - dependency-name: "tree-sitter*"
+      - dependency-name: "@xenova/transformers"
+        # Model files are large; manual control preferred
+      - dependency-name: "ts-morph"
+        # Major versions have breaking AST API changes
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+      - "automated"
