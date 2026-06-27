@@ -9,7 +9,7 @@ test('CLI exposes non-TTY menu fallback without hanging', () => {
     const result = runSourceCli(repo, ['menu']);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Run in an interactive terminal/);
-    assert.match(result.stdout, /aion scan secrets/);
+    assert.match(result.stdout, /aion sync/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

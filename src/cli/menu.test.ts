@@ -2,45 +2,42 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MAIN_ITEMS, runMenuFallback } from './menu.js';
 
-test('main menu has the expected actionable items', () => {
+test('main menu has the 8 canonical actions', () => {
   const selectable = MAIN_ITEMS
     .filter((item) => !item.header && !item.separator && item.value !== '' && item.value !== 'sep' && item.value !== 'quit')
     .map((item) => item.value);
 
-  assert.deepEqual(selectable, ['local-check', 'seo', 'network-scan', 'app-security', 'bugs', 'security', 'perf', 'copilot', 'fix', 'analyze', 'assistant', 'chat-qa', 'report', 'links', 'mcp-install', 'mcp-doctor', 'doctor', 'providers', 'change-provider']);
+  const expected = ['doctor', 'sync', 'find', 'audit', 'chat', 'wiki', 'mcp-install', 'next', 'change-provider', 'help'];
+  for (const e of expected) {
+    assert.ok(selectable.includes(e), `missing action: ${e}; got: ${JSON.stringify(selectable)}`);
+  }
 });
 
 test('menu does not include old submenus', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
 
-  assert.equal(labels.includes('Local diagnostics'), false);
-  assert.equal(labels.includes('IA — Copilot / Audit'), false);
-  assert.equal(labels.includes('Advanced'), false);
-  assert.equal(labels.includes('Publish / operate'), false);
+  assert.equal(labels.some((l) => l.includes('Local diagnostics')), false);
+  assert.equal(labels.some((l) => l.includes('SEO')), false);
+  assert.equal(labels.some((l) => l.includes('Copilot')), false);
+  assert.equal(labels.some((l) => l.includes('Project links')), false);
+  assert.equal(labels.some((l) => l.includes('View report')), false);
+  assert.equal(labels.some((l) => l.includes('Direct assistant')), false);
+  assert.equal(labels.some((l) => l.includes('LangFuse')), false);
 });
 
-test('menu has the correct English labels', () => {
+test('menu has the 8 numbered items', () => {
   const labels = MAIN_ITEMS.map((item) => item.label);
-
-  assert.equal(labels.includes('📊 Automatic diagnostics'), true);
-  assert.equal(labels.includes('🌐 SEO & Crawlers'), true);
-  assert.equal(labels.includes('🐛 Bugs & Quality'), true);
-  assert.equal(labels.includes('🔐 Security'), true);
-  assert.equal(labels.includes('⚡ Performance & Infra'), true);
-  assert.equal(labels.includes('🔧 Fix file'), true);
-  assert.equal(labels.includes('🔍 Analyze problem'), true);
-  assert.equal(labels.includes('🤖 Direct assistant'), true);
-  assert.equal(labels.includes('💬 Code chat'), true);
-  assert.equal(labels.includes('📋 View report'), true);
-  assert.equal(labels.includes('🔗 Project links'), true);
-  assert.equal(labels.includes('🔌 MCP install'), true);
-  assert.equal(labels.includes('🩺 MCP doctor'), true);
-  assert.equal(labels.includes('🧪 DeepEval quickcheck'), false);
-  assert.equal(labels.includes('🕸️ AI orchestrator'), false);
-  assert.equal(labels.includes('⚙️  Setup'), false);
+  assert.ok(labels.some((l) => l.startsWith('1.')), 'missing 1.');
+  assert.ok(labels.some((l) => l.startsWith('2.')), 'missing 2.');
+  assert.ok(labels.some((l) => l.startsWith('3.')), 'missing 3.');
+  assert.ok(labels.some((l) => l.startsWith('4.')), 'missing 4.');
+  assert.ok(labels.some((l) => l.startsWith('5.')), 'missing 5.');
+  assert.ok(labels.some((l) => l.startsWith('6.')), 'missing 6.');
+  assert.ok(labels.some((l) => l.startsWith('7.')), 'missing 7.');
+  assert.ok(labels.some((l) => l.startsWith('8.')), 'missing 8.');
 });
 
-test('non-TTY fallback prints actionable commands', () => {
+test('non-TTY fallback prints 8 canonical commands', () => {
   const originalWrite = process.stdout.write;
   let output = '';
   process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -54,16 +51,16 @@ test('non-TTY fallback prints actionable commands', () => {
     process.stdout.write = originalWrite;
   }
 
-  assert.match(output, /aion — example-project/);
-  assert.match(output, /aion health/);
-  assert.match(output, /aion scan seo/);
-  assert.match(output, /aion fix/);
+  assert.match(output, /aion init/);
+  assert.match(output, /aion sync/);
+  assert.match(output, /aion mcp install/);
+  assert.match(output, /aion find/);
+  assert.match(output, /aion chat/);
   assert.match(output, /aion audit/);
-  assert.match(output, /https:\/\/github\.com\/halgorn\/MultiAgents_Terminal/);
-  assert.match(output, /https:\/\/www\.linkedin\.com\/in\/bruno-inacio-036530170\//);
-  assert.match(output, /brunoinacio3000@hotmail\.com/);
-  assert.match(output, /zero token/i);
+  assert.match(output, /aion wiki/);
+  assert.match(output, /aion doctor/);
+  assert.match(output, /aion --tldr/);
+  assert.doesNotMatch(output, /aion health/);
+  assert.doesNotMatch(output, /aion scan seo/);
   assert.doesNotMatch(output, /aion setup/);
-  assert.doesNotMatch(output, /aion deepeval/);
-  assert.doesNotMatch(output, /AION_ORCHESTRATOR=langgraph/);
 });

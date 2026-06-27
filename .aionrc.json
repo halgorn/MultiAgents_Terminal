@@ -7,5 +7,9 @@
     "**/*.generated.*"
   ],
   "fixMax": 5,
-  "fixMinSeverity": "high"
+  "fixMinSeverity": "high",
+  "domains": [
+    "security"
+  ],
+  "scanners": 1
 }
