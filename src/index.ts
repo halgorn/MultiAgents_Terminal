@@ -13,7 +13,6 @@ import { registerAudit } from './cli/commands/audit.js';
 import { registerGraph } from './cli/commands/graph.js';
 import { registerChurn } from './cli/commands/churn.js';
 import { registerScan } from './cli/commands/scan.js';
-import { registerPatterns } from './cli/commands/patterns.js';
 import { registerHealth } from './cli/commands/health.js';
 import { registerReport } from './cli/commands/report.js';
 import { registerExplain } from './cli/commands/explain.js';
@@ -26,13 +25,10 @@ import { registerTree } from './cli/commands/tree.js';
 import { registerNext } from './cli/commands/next.js';
 import { registerCi } from './cli/commands/ci.js';
 import { registerEval } from './cli/commands/eval.js';
-import { registerDeepEval } from './cli/commands/deepeval.js';
 import { registerTrace } from './cli/commands/trace.js';
 import { registerMcp } from './cli/commands/mcp.js';
 import { registerImpactLocal } from './cli/commands/impact-local.js';
 import { registerDocs } from './cli/commands/docs.js';
-import { registerCloud } from './cli/commands/cloud.js';
-import { registerDeploy } from './cli/commands/deploy.js';
 import { registerSetup, runProjectSetupWizard } from './cli/commands/setup.js';
 import { registerCopilot } from './cli/commands/copilot.js';
 import { registerIndex } from './cli/commands/index.js';
@@ -109,8 +105,6 @@ registerGraph(program);
 emitDeprecation('churn', 'aion find --mode churn');
 registerChurn(program);
 registerScan(program);
-emitDeprecation('patterns', 'removed in v1.0');
-registerPatterns(program);
 emitDeprecation('health', 'aion doctor --scope project');
 registerHealth(program);
 registerReport(program);
@@ -129,17 +123,11 @@ registerNext(program);
 emitDeprecation('ci', 'aion audit --ci');
 registerCi(program);
 registerEval(program);
-emitDeprecation('deepeval', 'removed in v1.0');
-registerDeepEval(program);
 registerTrace(program);
 registerMcp(program);
 emitDeprecation('impact-local', 'aion impact');
 registerImpactLocal(program);
 registerDocs(program);
-emitDeprecation('cloud', 'removed in v1.0');
-registerCloud(program);
-emitDeprecation('deploy', 'removed in v1.0');
-registerDeploy(program);
 emitDeprecation('setup', 'aion init');
 registerSetup(program);
 registerCopilot(program);
@@ -156,7 +144,7 @@ registerProviders(program);
 
 program
   .command('assist')
-  .description('[DEPRECATED] Assisted setup for CI, tests, deploy workflows. Use `aion init` or `aion chat`.')
+  .description('[DEPRECATED → removed in v1.2] Assisted setup for CI/tests/deploy. Use `aion init` or `aion chat`.')
   .option('--apply', 'write generated artifacts')
   .option('--overwrite', 'overwrite existing artifact files')
   .option('--domain <domain>', 'deployment domain')
