@@ -8,7 +8,7 @@ import { SdkProvider } from './sdk-provider.js';
 import { OpenRouterProvider } from './openrouter-provider.js';
 import { KimiProvider } from './kimi-provider.js';
 import { MiniMaxProvider } from './minimax-provider.js';
-import type { ProviderRunInput, AgentProvider } from './types.js';
+import type { ProviderRunInput, AgentProvider, ProviderCapabilities } from './types.js';
 export type { ProviderRunInput, AgentProvider } from './types.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -27,6 +27,22 @@ export const AGENT_TOOLS: Record<string, string[]> = {
 };
 
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
+
+const CLI_PROVIDER_CAPABILITIES: ProviderCapabilities = {
+  hasToolAccess: true,
+  hasFileAccess: true,
+  supportsJsonSchema: false,
+  supportsEmbeddings: false,
+  maxContextTokens: 200000,
+};
+
+const SDK_PROVIDER_CAPABILITIES: ProviderCapabilities = {
+  hasToolAccess: false,
+  hasFileAccess: false,
+  supportsJsonSchema: true,
+  supportsEmbeddings: false,
+  maxContextTokens: 200000,
+};
 
 export function safeProcessEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   const allowed = [
@@ -115,6 +131,7 @@ function runProcess(
 
 export class ClaudeCliProvider implements AgentProvider {
   readonly name = 'claude' as const;
+  readonly capabilities: ProviderCapabilities = CLI_PROVIDER_CAPABILITIES;
 
   async run(input: ProviderRunInput, onChunk?: (agentName: string, text: string) => void): Promise<string> {
     const allowedTools = AGENT_TOOLS[input.agentName] ?? DEFAULT_TOOLS;
@@ -151,6 +168,7 @@ export class ClaudeCliProvider implements AgentProvider {
 
 export class CodexCliProvider implements AgentProvider {
   readonly name = 'codex' as const;
+  readonly capabilities: ProviderCapabilities = CLI_PROVIDER_CAPABILITIES;
 
   async run(input: ProviderRunInput, onChunk?: (agentName: string, text: string) => void): Promise<string> {
     const tempDir = mkdtempSync(join(tmpdir(), 'ai-runtime-codex-'));
