@@ -3,6 +3,7 @@ import { dirname, join, relative } from 'path';
 import { chunkFile } from './chunker.js';
 import { isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 import { AI_RUNTIME_DIR } from './paths.js';
+import { shouldExcludePath } from '../security/exclude-list.js';
 
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rb', '.rs', '.cs', '.php', '.kt', '.swift', '.c', '.cpp', '.h']);
 const MAX_FILE_SIZE = 200 * 1024;
@@ -86,6 +87,7 @@ function collectFiles(cwd: string): RepoFile[] {
       const ext = extOf(entry);
       const rel = relative(cwd, full);
       if (isGeneratedArtifact(rel)) continue;
+      if (shouldExcludePath(rel).excluded) continue;
       if (!SOURCE_EXTS.has(ext) || st.size > MAX_FILE_SIZE) continue;
       const text = safeRead(full);
       files.push({
