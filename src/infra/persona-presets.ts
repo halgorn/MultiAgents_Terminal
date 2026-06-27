@@ -81,15 +81,16 @@ export function resolvePreset(name: string): PersonaPreset | null {
   return BUILT_IN_PRESETS[name] ?? null;
 }
 
-export function parseDomains(raw: string): ScanDomain[] {
+export function parseDomains(raw: string | readonly string[]): ScanDomain[] {
   const valid = new Set<string>([
     'security', 'bugs', 'redundancy', 'error-handling', 'architecture',
     'testing', 'performance', 'infrastructure', 'observability', 'resilience',
     'data', 'dependencies', 'compliance', 'multitenancy', 'prompt-audit',
   ]);
-  return raw.split(',')
+  const tokens = Array.isArray(raw) ? raw : String(raw).split(',');
+  return tokens
     .map((d) => d.trim())
-    .filter((d) => valid.has(d)) as ScanDomain[];
+    .filter((d) => d.length > 0 && valid.has(d)) as ScanDomain[];
 }
 
 export function loadPersonaConfig(cwd: string): PersonaConfig | null {

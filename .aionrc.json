@@ -11,5 +11,8 @@
   "domains": [
     "security"
   ],
-  "scanners": 1
+  "scanners": 1,
+  "mcpAutoInstalled": true,
+  "setupCompletedAt": "2026-06-27T22:55:29.043Z",
+  "setupVersion": "1.0-alpha"
 }

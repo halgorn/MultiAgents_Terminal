@@ -1,0 +1,12 @@
+{
+  "mcp": {
+    "aion": {
+      "type": "local",
+      "command": [
+        "/home/bruno/.nvm/versions/node/v22.22.3/bin/aion",
+        "mcp",
+        "serve"
+      ]
+    }
+  }
+}

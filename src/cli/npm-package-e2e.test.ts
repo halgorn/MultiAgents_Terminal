@@ -44,7 +44,7 @@ test('packed npm tarball installs and exposes aion binary', { timeout: 120_000 }
 
     const aionVersion = run(process.execPath, [installedCli, '--version'], projectDir);
     assert.equal(aionVersion.status, 0, aionVersion.stderr);
-    assert.match(aionVersion.stdout.trim(), /^\d+\.\d+\.\d+$/);
+    assert.match(aionVersion.stdout.trim(), /^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/);
   } finally {
     rmSync(packDir, { recursive: true, force: true });
     rmSync(projectDir, { recursive: true, force: true });

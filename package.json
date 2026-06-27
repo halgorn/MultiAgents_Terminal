@@ -1,6 +1,6 @@
 {
   "name": "@aionlabsai/aion",
-  "version": "0.6.6",
+  "version": "1.0.0-alpha",
   "description": "The project gateway for code-aware AI agents — cuts tokens, kills hallucinations, sits between your IDE and your codebase.",
   "type": "module",
   "bin": {
@@ -67,6 +67,7 @@
     "email": "security@aion.dev"
   },
   "dependencies": {
+    "@aionlabsai/aion": "^1.0.0-alpha",
     "@anthropic-ai/sdk": "0.100.1",
     "@langchain/langgraph": "^1.3.6",
     "@langfuse/client": "^5.4.1",

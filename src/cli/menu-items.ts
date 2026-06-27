@@ -14,7 +14,7 @@ export const MAIN_ITEMS: ReadonlyArray<MenuItem<MenuAction>> = [
   {
     label: '1. 🩺🐛 Audit + Doctor',
     hint: 'health check + multi-agent analysis',
-    description: 'Run `aion doctor --scope all` (PIL/provider/MCP/watcher check) followed by `aion audit . --local-only` (zero-token static scan) or `--budget normal` (AI-powered, 15 domains, parallel scanners).',
+    description: 'Run `aion doctor` (PIL/provider/MCP/watcher check) followed by `aion audit . --local-only` (zero-token static scan) or `--budget normal` (AI-powered, 15 domains, parallel scanners).',
     value: 'audit-doctor',
     key: '1',
   },

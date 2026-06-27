@@ -45,7 +45,7 @@ export function runMenuFallback(cwd: string): void {
   console.log(chalk.dim('  ─────────────────────────────────────'));
   console.log(chalk.dim('  Run in an interactive terminal to access the menu.'));
   console.log('');
-  console.log(chalk.bold('  1. ') + chalk.cyan('aion doctor --scope all') + chalk.dim('  # health check'));
+  console.log(chalk.bold('  1. ') + chalk.cyan('aion doctor') + chalk.dim('  # health check'));
   console.log(chalk.bold('     ') + chalk.cyan('aion audit . --local-only') + chalk.dim('  # zero-token scan'));
   console.log(chalk.bold('  2. ') + chalk.cyan('aion mcp install --client <name>') + chalk.dim('  # connect AI client'));
   console.log('');
@@ -119,7 +119,7 @@ export async function runMenu(cwd: string): Promise<void> {
     }
 
     if (action === 'audit-doctor') {
-      run(['--cwd', cwd, 'doctor', '--scope', 'all']);
+      run(['--cwd', cwd, 'doctor']);
       await promptAuditMode(cwd);
       continue;
     }
