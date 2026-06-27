@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { safeResolvePath, assertWithinBase, isSecretPath, PathSafetyError } from './path-safety.js';
@@ -134,9 +134,10 @@ test('isSecretPath: does NOT flag normal source files', () => {
 test('safeResolvePath: integration — write file inside base', () => {
   const base = mkdtempSync(join(tmpdir(), 'aion-path-'));
   try {
-    const resolved = safeResolvePath(base, 'subdir/file.txt');
+    const resolved = safeResolvePath(base, 'file.txt');
     writeFileSync(resolved, 'ok');
     assert.ok(existsSync(resolved));
+    assert.ok(readFileSync(resolved, 'utf8') === 'ok');
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

@@ -7,7 +7,7 @@ export function wrapUntrusted(label: string, content: string): string {
 }
 
 export function wrapUntrustedMulti(label: string, items: readonly string[]): string {
-  const filtered = items.filter((s) => s && s.length > 0);
+  const filtered = items.filter((s) => s != null && String(s).trim().length > 0);
   if (filtered.length === 0) return '';
   return wrapUntrusted(label, filtered.join('\n'));
 }

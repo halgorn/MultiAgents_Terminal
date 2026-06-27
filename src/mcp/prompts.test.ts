@@ -48,8 +48,8 @@ test('summarizeRecentChanges defaults to 7d', async () => {
 test('onboardNewDev mentions key resources', async () => {
   const result = await onboardNewDev({});
   const text = result.messages[0]?.content.text ?? '';
-  assert.match(text, /aion:\/\/project\/context/);
-  assert.match(text, /aion:\/\/docs\/architecture/);
+  assert.match(text, /aion:\/\/v3\/project\/context/);
+  assert.match(text, /aion:\/\/v3\/docs\/architecture/);
 });
 
 test('prePrReview mentions PIL sync', async () => {

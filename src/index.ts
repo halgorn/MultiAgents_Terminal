@@ -45,7 +45,7 @@ import { applyArtifacts, formatArtifactSummary } from './infra/assist/apply-arti
 import { runNaturalLanguage, runInteractive } from './cli/interactive.js';
 import { runMenu } from './cli/menu.js';
 import { shouldRunInitialWizard } from './infra/setup/project-setup.js';
-import { printTldr, emitDeprecation } from './cli/deprecation.js';
+import { printTldr, emitDeprecation, lookupDeprecation } from './cli/deprecation.js';
 
 runMigrations();
 await checkForUpdate();
@@ -94,44 +94,47 @@ program.hook('preSubcommand', (thisCommand) => {
   }
 });
 
+function deprecationHook(thisCommand: import('commander').Command) {
+  const opts = thisCommand.optsWithGlobals();
+  if (opts.help || opts.version || opts.tldr) return;
+  const cmd = thisCommand.name();
+  if (!cmd || !thisCommand.parent) return;
+  const migration = lookupDeprecation(cmd);
+  if (migration) {
+    emitDeprecation(cmd, migration.replacement, {
+      removedIn: migration.removedIn,
+      notes: migration.notes,
+    });
+  }
+}
+program.hook('preSubcommand', deprecationHook);
+
 registerAnalyze(program);
 registerFix(program);
 registerReview(program);
-emitDeprecation('memory', 'aion sync | aion find');
 registerMemory(program);
 registerAudit(program);
-emitDeprecation('graph', 'aion find --mode hotspots');
 registerGraph(program);
-emitDeprecation('churn', 'aion find --mode churn');
 registerChurn(program);
 registerScan(program);
-emitDeprecation('health', 'aion doctor --scope project');
 registerHealth(program);
 registerReport(program);
 registerExplain(program);
 registerInit(program);
-emitDeprecation('diff', 'aion doctor --scope audit-diff');
 registerDiff(program);
 registerChat(program);
-emitDeprecation('context', 'aion wiki --mode context');
 registerContext(program);
-emitDeprecation('search', 'aion find --mode symbol');
 registerSearch(program);
-emitDeprecation('tree', 'aion find --mode tree');
 registerTree(program);
 registerNext(program);
-emitDeprecation('ci', 'aion audit --ci');
 registerCi(program);
 registerEval(program);
 registerTrace(program);
 registerMcp(program);
-emitDeprecation('impact-local', 'aion impact');
 registerImpactLocal(program);
 registerDocs(program);
-emitDeprecation('setup', 'aion init');
 registerSetup(program);
 registerCopilot(program);
-emitDeprecation('index', 'aion sync');
 registerIndex(program);
 registerSync(program);
 registerWiki(program);

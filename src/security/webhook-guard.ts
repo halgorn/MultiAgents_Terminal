@@ -51,7 +51,8 @@ export function validateWebhookUrl(url: string, opts: WebhookGuardOptions = {}):
     throw new WebhookValidationError('Webhook URL is not a valid URL', url);
   }
 
-  if (opts.allowHttp === false && parsed.protocol === 'http:') {
+  const allowHttp = opts.allowHttp === true;
+  if (!allowHttp && parsed.protocol === 'http:') {
     if (!isPrivateHostname(parsed.hostname) && !isPrivateIp(parsed.hostname)) {
       throw new WebhookValidationError(
         'Webhook URL must use HTTPS (set --allow-insecure-webhook to override)',
@@ -99,12 +100,13 @@ export function validateWebhookUrl(url: string, opts: WebhookGuardOptions = {}):
 }
 
 export function isPrivateIp(hostname: string): boolean {
-  if (PRIVATE_HOSTNAMES.has(hostname.toLowerCase())) return true;
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (PRIVATE_HOSTNAMES.has(h)) return true;
   for (const pattern of PRIVATE_IPV4_PATTERNS) {
-    if (pattern.test(hostname)) return true;
+    if (pattern.test(h)) return true;
   }
   for (const pattern of PRIVATE_IPV6_PATTERNS) {
-    if (pattern.test(hostname)) return true;
+    if (pattern.test(h)) return true;
   }
   return false;
 }

@@ -91,8 +91,8 @@ test('validateAll: aggregates issues from multiple registries', () => {
   const a = new ManifestRegistry<Item>();
   const b = new ManifestRegistry<Item>();
   a.register({ name: 'x', kind: 'ok' });
-  (b as unknown as { items: Map<string, Item> }).items.set('y', { name: 'y', kind: 'ok' });
-  (b as unknown as { items: Map<string, Item> }).items.set('y', { name: 'y', kind: 'dup' });
+  b.register({ name: 'y', kind: 'ok' });
   const result = validateAll({ a, b });
-  assert.equal(result.ok, false);
+  assert.equal(result.ok, true, 'both registries should validate clean');
+  assert.equal(result.issues.length, 0);
 });

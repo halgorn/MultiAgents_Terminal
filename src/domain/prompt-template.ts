@@ -81,5 +81,6 @@ export function buildJsonOnlyPreamble(): string {
   return `Your final response must be ONLY a valid JSON object.
 Do not include any prose, explanation, or markdown code fences.
 Do not wrap the JSON in triple backticks.
-Output starts with '{' and ends with '}'.`;
+Output starts with '{' and ends with '}'.
+This is a strict requirement.`;
 }

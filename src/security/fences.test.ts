@@ -28,7 +28,10 @@ test('wrapUntrustedMulti: joins items with newlines', () => {
 
 test('wrapUntrustedMulti: skips empty items and returns empty if all empty', () => {
   assert.equal(wrapUntrustedMulti('x', []), '');
-  assert.equal(wrapUntrustedMulti('x', ['', '  ', '']), 'x'.length === 1 ? '' : wrapUntrustedMulti('x', ['a']));
+  assert.equal(wrapUntrustedMulti('x', ['', '  ', '']), '');
+  const oneItem = wrapUntrustedMulti('x', ['', '  ', 'real content']);
+  assert.ok(oneItem.length > 0, 'should produce non-empty result when any item is non-empty');
+  assert.match(oneItem, /real content/);
 });
 
 test('fenceFileContent: labels with file path', () => {

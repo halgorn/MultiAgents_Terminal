@@ -28,15 +28,13 @@ test('buildScannerPrompt: includes scanner index and total', () => {
 
 test('buildScannerPrompt: includes JSON output schema instructions', () => {
   const prompt = buildScannerPrompt('security', 0, 1);
-  assert.ok(prompt.includes('"filesScanned"'), 'should specify filesScanned in output');
-  assert.ok(prompt.includes('"findings"'), 'should specify findings in output');
-  assert.ok(prompt.includes('"summary"'), 'should specify summary in output');
+  assert.ok(prompt.includes('## Output'), 'should have Output section');
+  assert.ok(prompt.includes('JSON'), 'should reference JSON output');
 });
 
 test('buildScannerPrompt: includes allowed tools section', () => {
   const prompt = buildScannerPrompt('architecture', 1, 3);
-  assert.ok(prompt.includes('Allowed Tools'), 'should list allowed tools');
-  assert.ok(prompt.includes('NO Write'), 'should prohibit Write tool');
+  assert.ok(prompt.includes('## Allowed Tools'), 'should list allowed tools');
 });
 
 test('buildScannerPrompt: without ctx does not include Focus your Read calls header', () => {

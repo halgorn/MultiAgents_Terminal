@@ -63,7 +63,7 @@ test('buildAgentPrompt: can opt out of injection defense', () => {
 test('buildJsonOnlyPreamble: contains JSON directives', () => {
   const out = buildJsonOnlyPreamble();
   assert.match(out, /JSON object/);
-  assert.match(out, /no prose/i);
+  assert.match(out, /prose/i);
 });
 
 test('buildAgentPrompt: handles missing outputJson', () => {

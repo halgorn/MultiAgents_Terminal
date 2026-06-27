@@ -65,7 +65,7 @@ export class ManifestRegistry<T extends { name: string }> {
 
 export function validateAll<T extends { name: string }>(
   registries: Record<string, ManifestRegistry<T>>,
-): { ok: true } | { ok: false; issues: string[] } {
+): { ok: boolean; issues: string[] } {
   const issues: string[] = [];
   for (const [label, reg] of Object.entries(registries)) {
     const result = reg.validate();
@@ -75,5 +75,5 @@ export function validateAll<T extends { name: string }>(
       }
     }
   }
-  return issues.length === 0 ? { ok: true } : { ok: false, issues };
+  return { ok: issues.length === 0, issues };
 }

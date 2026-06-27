@@ -15,7 +15,7 @@ function run(command: string, args: string[], cwd: string, timeout = 60_000) {
   });
 }
 
-test('packed npm tarball installs and exposes aion and ai-runtime binaries', { timeout: 120_000 }, () => {
+test('packed npm tarball installs and exposes aion binary', { timeout: 120_000 }, () => {
   const packDir = mkdtempSync(join(tmpdir(), 'aion-pack-'));
   const projectDir = mkdtempSync(join(tmpdir(), 'aion-installed-'));
 
@@ -30,34 +30,21 @@ test('packed npm tarball installs and exposes aion and ai-runtime binaries', { t
     const install = run('npm', ['install', '--silent', '--no-audit', '--no-fund', join(packDir, tgz)], projectDir);
     assert.equal(install.status, 0, install.stderr);
     const aionBin = join(projectDir, 'node_modules', '.bin', 'aion');
-    const runtimeBin = join(projectDir, 'node_modules', '.bin', 'ai-runtime');
     const installedCli = join(projectDir, 'node_modules', '@aionlabsai', 'aion', 'dist', 'index.js');
     assert.equal(existsSync(aionBin), true);
-    assert.equal(existsSync(runtimeBin), true);
+    assert.equal(existsSync(installedCli), true);
 
     const aionHelp = run(process.execPath, [installedCli, '--help'], projectDir);
     assert.equal(aionHelp.status, 0, aionHelp.stderr);
-    assert.match(aionHelp.stdout, /Multi-agent AI engineering runtime/);
+    assert.match(aionHelp.stdout, /Usage:/);
 
-    const runtimeVersion = run(process.execPath, [installedCli, '--version'], projectDir);
-    assert.equal(runtimeVersion.status, 0, runtimeVersion.stderr);
-    assert.match(runtimeVersion.stdout.trim(), /^\d+\.\d+\.\d+$/);
+    const aionTldr = run(process.execPath, [installedCli, '--tldr'], projectDir);
+    assert.equal(aionTldr.status, 0, aionTldr.stderr);
+    assert.match(aionTldr.stdout, /project gateway/);
 
-    const menuFallback = run(process.execPath, [installedCli, 'menu'], projectDir);
-    assert.equal(menuFallback.status, 0, menuFallback.stderr);
-    assert.match(menuFallback.stdout, /Run in an interactive terminal/);
-
-    const assistHelp = run(process.execPath, [installedCli, 'assist', '--help'], projectDir);
-    assert.equal(assistHelp.status, 0, assistHelp.stderr);
-    assert.match(assistHelp.stdout, /Assisted setup/);
-
-    const deployHelp = run(process.execPath, [installedCli, 'deploy', '--help'], projectDir);
-    assert.equal(deployHelp.status, 0, deployHelp.stderr);
-    assert.match(deployHelp.stdout, /Assisted CI\/deploy/);
-
-    const releaseHelp = run(process.execPath, [installedCli, 'release-check', '--help'], projectDir);
-    assert.equal(releaseHelp.status, 0, releaseHelp.stderr);
-    assert.match(releaseHelp.stdout, /local release gates/);
+    const aionVersion = run(process.execPath, [installedCli, '--version'], projectDir);
+    assert.equal(aionVersion.status, 0, aionVersion.stderr);
+    assert.match(aionVersion.stdout.trim(), /^\d+\.\d+\.\d+$/);
   } finally {
     rmSync(packDir, { recursive: true, force: true });
     rmSync(projectDir, { recursive: true, force: true });
