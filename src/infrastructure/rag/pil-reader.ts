@@ -4,8 +4,8 @@ import { EmbeddingRegistry, HashFallbackProvider, type EmbeddingProvider } from 
 import { readFileSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 
-const VECTORS_FILE = 'pil/vectors.bin';
-const MANIFEST_FILE = 'pil/manifest.json';
+const VECTORS_FILE = '.ai-runtime/pil/vectors.bin';
+const MANIFEST_FILE = '.ai-runtime/pil/manifest.json';
 
 export interface PilReader {
   hasManifest(): boolean;
