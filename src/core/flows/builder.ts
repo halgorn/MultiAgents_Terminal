@@ -1,4 +1,4 @@
-import type { TaskState } from './state-machine.js';
+import { TaskState } from '../state-machine.js';
 
 export type FailureStrategy = 'abort' | 'skip-and-continue' | 'fallback';
 
@@ -50,7 +50,7 @@ export interface Flow<I, O> {
 
 export class FlowBuilder<I, O> {
   private steps: AnyStep<I, O>[] = [];
-  private initial: TaskState = 'PENDING';
+  private initial: TaskState = TaskState.NEW;
   private defaultTimeoutMs?: number;
 
   constructor(private readonly name: string) {}
@@ -86,10 +86,14 @@ export class FlowBuilder<I, O> {
     opts: Partial<Omit<FanOutStep<I, S>, 'name' | 'branches'>> = {},
   ): FlowBuilder<I, O> {
     const next = new FlowBuilder<I, O>(this.name);
-    next.steps = [
-      ...this.steps,
-      { name, branches, failureStrategy: opts.failureStrategy ?? 'skip-and-continue', concurrency: opts.concurrency ?? 3, merge: opts.merge },
-    ];
+    const fanStep: FanOutStep<I, O> = {
+      name,
+      branches: branches as unknown as Array<{ name: string; run: (ctx: StepContext<I>) => Promise<StepResult<O>> }>,
+      failureStrategy: opts.failureStrategy ?? 'skip-and-continue',
+      concurrency: opts.concurrency ?? 3,
+      merge: opts.merge as unknown as ((outputs: O[]) => O) | undefined,
+    };
+    next.steps = [...this.steps, fanStep];
     next.initial = this.initial;
     next.defaultTimeoutMs = this.defaultTimeoutMs;
     return next;
@@ -118,7 +122,7 @@ export class FlowBuilder<I, O> {
             }
           } catch (err) {
             const e = err instanceof Error ? err : new Error(String(err));
-            step.onError?.(e, stepCtx);
+            if ('onError' in step && step.onError) step.onError(e, stepCtx);
             if (step.failureStrategy === 'abort') {
               ctx.emit?.('flow:failed', { flow: flow.name, step: step.name, error: e.message });
               throw e;
