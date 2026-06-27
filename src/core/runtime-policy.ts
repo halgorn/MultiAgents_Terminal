@@ -27,6 +27,7 @@ export interface RuntimePolicy {
   developerProvider: ProviderName;
   reviewerProvider: ProviderName;
   claudeMaxBudgetUsd: number;
+  scannerConcurrency: number;
 }
 
 export interface RuntimePolicyInput {
@@ -43,6 +44,7 @@ export interface RuntimePolicyInput {
   openrouterModel?: string;
   kimiModel?: string;
   minimaxModel?: string;
+  scannerConcurrency?: number;
 }
 
 const DEFAULT_MAX_FILE_LINES = 500;
@@ -52,10 +54,10 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
   const deep = input.deep ?? budget === 'deep';
 
   const defaults = budget === 'deep'
-    ? { maxAgents: 7, maxOutputChars: 20000, claudeMaxBudgetUsd: 5.0, claudeModel: 'claude-opus-4-8' as ClaudeModel }
+    ? { maxAgents: 7, maxOutputChars: 20000, claudeMaxBudgetUsd: 5.0, claudeModel: 'claude-opus-4-8' as ClaudeModel, scannerConcurrency: 5 }
     : budget === 'normal'
-      ? { maxAgents: 2, maxOutputChars: 14000, claudeMaxBudgetUsd: 2.0, claudeModel: 'claude-sonnet-4-6' as ClaudeModel }
-      : { maxAgents: 1, maxOutputChars: 10000, claudeMaxBudgetUsd: 1.0, claudeModel: 'claude-haiku-4-5-20251001' as ClaudeModel };
+      ? { maxAgents: 2, maxOutputChars: 14000, claudeMaxBudgetUsd: 2.0, claudeModel: 'claude-sonnet-4-6' as ClaudeModel, scannerConcurrency: 3 }
+      : { maxAgents: 1, maxOutputChars: 10000, claudeMaxBudgetUsd: 1.0, claudeModel: 'claude-haiku-4-5-20251001' as ClaudeModel, scannerConcurrency: 2 };
 
   return {
     budget,
@@ -73,6 +75,7 @@ export function createRuntimePolicy(input: RuntimePolicyInput = {}): RuntimePoli
     developerProvider: input.developerProvider ?? 'claude',
     reviewerProvider: input.reviewerProvider ?? 'claude',
     claudeMaxBudgetUsd: defaults.claudeMaxBudgetUsd,
+    scannerConcurrency: input.scannerConcurrency ?? defaults.scannerConcurrency,
   };
 }
 

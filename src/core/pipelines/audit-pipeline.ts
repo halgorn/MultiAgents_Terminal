@@ -245,7 +245,8 @@ export class AuditPipeline {
         text: `AI file scope: ${aiTargetFiles.length}/${filesToScan.length} prioritized by risk (churn + deps + semgrep). Use --max-files to change.\n`,
       });
 
-      const aiScannerRuns = await this.runSequential(
+      const scannerConcurrency = Math.min(domains.length, this.policy.scannerConcurrency ?? 3);
+      const aiScannerRuns = await this.runWithConcurrency(
         domains.map((domain, i) => async () => {
           const wt = createWorktree(this.cwd, `scanner-${domain}`, taskId);
           worktrees.push([`scanner-${domain}`, taskId]);
@@ -268,8 +269,9 @@ export class AuditPipeline {
             return { filesScanned: [], findings: [], summary: `Scanner ${domain} failed: ${compactText(message, 500)}` };
           }
         }),
-        options.scannerTimeoutMs,
-        (err, idx) => {
+        scannerConcurrency,
+        options.scannerTimeoutMs ?? 360000,
+        (err: Error, idx: number) => {
           const domain = domains[idx] ?? 'unknown';
           this.emit('agent:output', { agentName: `scanner-${domain}`, text: `Scanner timed out; skipping: ${err.message}\n` });
           this.emit('agent:done', { agentName: `scanner-${domain}`, durationMs: options.scannerTimeoutMs ?? 360000 });
@@ -324,23 +326,43 @@ export class AuditPipeline {
     timeoutMs = 6 * 60 * 1000,
     onError?: (err: Error, index: number) => T,
   ): Promise<T[]> {
-    const results: T[] = [];
-    for (let i = 0; i < tasks.length; i++) {
-      let timer: NodeJS.Timeout | undefined;
-      const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Scanner timed out after ${timeoutMs / 1000}s`)), timeoutMs);
-      });
-      try {
-        results.push(await Promise.race([tasks[i]!(), timeout]));
-      } catch (err) {
-        if (onError) {
-          results.push(onError(err instanceof Error ? err : new Error(String(err)), i));
+    return this.runWithConcurrency(tasks, 1, timeoutMs, onError);
+  }
+
+  private async runWithConcurrency<T>(
+    tasks: Array<() => Promise<T>>,
+    concurrency: number,
+    timeoutMs = 6 * 60 * 1000,
+    onError?: (err: Error, index: number) => T,
+  ): Promise<T[]> {
+    const limit = Math.max(1, Math.min(tasks.length, concurrency));
+    if (tasks.length === 0) return [];
+    const results: Array<T | undefined> = new Array(tasks.length);
+    let nextIndex = 0;
+
+    const runOne = async (slot: number): Promise<void> => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= tasks.length) return;
+        let timer: NodeJS.Timeout | undefined;
+        const timeout = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Scanner timed out after ${timeoutMs / 1000}s`)), timeoutMs);
+        });
+        try {
+          results[i] = await Promise.race([tasks[i]!(), timeout]);
+        } catch (err) {
+          if (onError) {
+            results[i] = onError(err instanceof Error ? err : new Error(String(err)), i);
+          }
+        } finally {
+          if (timer) clearTimeout(timer);
         }
-      } finally {
-        if (timer) clearTimeout(timer);
       }
-    }
-    return results;
+    };
+
+    const workers = Array.from({ length: limit }, (_, slot) => runOne(slot));
+    await Promise.all(workers);
+    return results.map((r) => r as T);
   }
 
   collectSourceFiles(target: string): string[] {
