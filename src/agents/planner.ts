@@ -4,6 +4,7 @@ import { PlanReportSchema, type PlanReport } from '../schemas/plan.js';
 import type { AgentManifest } from '../schemas/agent-manifest.js';
 import type { TaskState } from '../core/state-machine.js';
 import type { ProviderName } from '../core/runtime-policy.js';
+import { fenceUserInput, fenceRepoSummary, PROMPT_INJECTION_DEFENSE_PREAMBLE } from '../security/fences.js';
 
 export interface PlannerInput {
   taskId: string;
@@ -27,16 +28,15 @@ export class PlannerAgent extends BaseAgent<PlannerInput, PlanReport> {
   }
 
   protected buildUserMessage(input: PlannerInput): string {
-    return `Task ID: ${input.taskId}
+    return `${PROMPT_INJECTION_DEFENSE_PREAMBLE}
 
-Bug / Task:
-${input.bugDescription}
+Task ID: ${input.taskId}
 
-Prior context from .ai-memory:
-${input.codebaseSummary || '(none)'}
+${fenceUserInput(input.bugDescription, 'bug_description')}
 
-Deterministic repository index context:
-${input.repoContext || '(repo index not built; run `ai memory index` for lower-hallucination planning)'}
+${fenceRepoSummary(`Prior context from .ai-memory: ${input.codebaseSummary || '(none)'}`)}
+
+${fenceRepoSummary(`Deterministic repository index context: ${input.repoContext || '(repo index not built; run `aion sync` for lower-hallucination planning)'}`)}
 
 Use Glob and Grep to explore the project structure.
 When reading files, read at most 500 lines from any single file; use focused offset/limit reads.
