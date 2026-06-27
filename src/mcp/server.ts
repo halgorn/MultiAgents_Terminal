@@ -19,6 +19,7 @@ import { FileWatcher } from './watcher.js';
 import { buildResponseMeta, computeConfidence } from './freshness.js';
 import { readProjectStore } from '../infra/project-store.js';
 import { defaultMcpOptions, estimateTokens, DEFAULT_FRESHNESS, type McpServerOptions, type ResourceArgs, type ResourceDescriptor, type ResourceResult } from './types.js';
+import { safeResolvePath, PathSafetyError } from './path-safety.js';
 
 interface ServerInternals {
   watcher?: FileWatcher;
@@ -37,7 +38,13 @@ function getCurrentVersion(): string {
 }
 
 async function handleSearchMemory(args: Record<string, unknown>, ctx: { cwd: string; traceId: string }): Promise<{ content: string; meta?: Record<string, unknown> }> {
-  const cwd = String(args['cwd'] ?? ctx.cwd);
+  let cwd: string;
+  try {
+    cwd = safeResolvePath(ctx.cwd, args['cwd'], { allowEmpty: true });
+  } catch (err) {
+    if (err instanceof PathSafetyError) return { content: `Invalid cwd: ${err.message}` };
+    throw err;
+  }
   const query = String(args['query'] ?? '');
   const topK = Math.max(1, Math.min(50, Number(args['topK'] ?? 5) || 5));
   if (!query) return { content: 'Missing required arg: query' };
@@ -101,8 +108,15 @@ async function handleHotZones(args: Record<string, unknown>, ctx: { cwd: string 
 }
 
 async function handleImpact(args: Record<string, unknown>, ctx: { cwd: string }): Promise<{ content: string }> {
-  const file = String(args['file'] ?? '');
-  if (!file) return { content: 'Missing required arg: file' };
+  const fileArg = String(args['file'] ?? '');
+  if (!fileArg) return { content: 'Missing required arg: file' };
+  let file: string;
+  try {
+    file = safeResolvePath(ctx.cwd, fileArg);
+  } catch (err) {
+    if (err instanceof PathSafetyError) return { content: `Invalid file path: ${err.message}` };
+    throw err;
+  }
   const { buildDepGraphAuto } = await import('../infra/dep-graph.js');
   const graph = buildDepGraphAuto(ctx.cwd);
   const visited = new Set<string>();
@@ -116,9 +130,9 @@ async function handleImpact(args: Record<string, unknown>, ctx: { cwd: string })
       }
     }
   }
-  if (visited.size === 0) return { content: `No files directly import ${file}.` };
+  if (visited.size === 0) return { content: `No files directly import ${fileArg}.` };
   const files = [...visited].sort();
-  return { content: `${files.length} file(s) transitively depend on ${file}:\n` + files.map((f) => `  - ${f}`).join('\n') };
+  return { content: `${files.length} file(s) transitively depend on ${fileArg}:\n` + files.map((f) => `  - ${f}`).join('\n') };
 }
 
 export async function startMcpServer(overrides: Partial<McpServerOptions> = {}): Promise<void> {
