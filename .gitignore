@@ -5,6 +5,8 @@ dist/
 .ai-runtime/
 .ai-memory/
 .worktrees/
+.claude/
+.serena/
 evidence/
 history/
 tasks/
@@ -30,3 +32,29 @@ traces.jsonl
 
 # build artefacts
 *.js.map
+
+# coverage
+coverage/
+*.lcov
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# assets build output
+assets/build/
+
+# temp
+tmp/
+*.tmp
+*.log
+
+# local package overrides
+.pnpm-store/
+.yarn/
+
+# aionignore patterns (when aion init runs in this repo)
+.aion/
+.aionignore
