@@ -36,6 +36,8 @@ export const SCAN_DOMAINS: ScanDomain[] = [
 export type { DomainConfig } from './scanner-domains-infra.js';
 import type { DomainConfig } from './scanner-domains-infra.js';
 import { INFRA_DOMAIN_CONFIG } from './scanner-domains-infra.js';
+import { buildAgentPrompt } from '../domain/prompt-template.js';
+import { ScanReportSchema } from '../domain/audit/finding.js';
 
 const DOMAIN_CONFIG: Record<ScanDomain, DomainConfig> = {
   ...INFRA_DOMAIN_CONFIG,
@@ -176,45 +178,23 @@ export interface ScannerContext {
 export function buildScannerPrompt(domain: ScanDomain, scannerIndex: number, totalScanners: number, ctx?: ScannerContext): string {
   const cfg = DOMAIN_CONFIG[domain];
   const contextBlock = ctx ? buildContextBlock(ctx) : '';
-  return `# ${cfg.title} (${scannerIndex + 1} of ${totalScanners})
-
-You are a specialized code auditor. Your ONLY job is to find **${domain}** issues.
-${contextBlock}
-## Allowed Tools
-- Grep — search for patterns across the codebase
-- Bash — run analysis commands (read-only: find, wc, grep, awk, sort)
-- Read — read specific sections of files (max 500 lines at a time using offset/limit)
-- NO Write, Edit, or network tools
-
-## Strategy
-${cfg.instructions}
-
-## Key patterns to search for
-${cfg.grepPatterns.map((p) => `- \`${p}\``).join('\n')}
-
-## Important
-- Do NOT read entire files — use offset/limit to read only relevant sections
-- If Target Files are provided, keep the audit scoped to those files unless a grep result proves a directly related issue elsewhere
-- Do NOT report false positives — confirm each finding before including it
-- If a pattern match is benign (e.g., in a comment or test), skip it
-- Focus on REAL issues with concrete file+line evidence
-- Return at most 10 findings. Prioritize critical/high severity and summarize repeated instances into one finding.
-- Keep each finding and recommendation concise, ideally under 280 characters each.
-
-## Output
-Your final response must be ONLY a valid JSON object — no prose, no markdown fences:
-{
-  "filesScanned": string[],
-  "findings": [
-    {
-      "file": string,
-      "line": number | null,
-      "severity": "critical" | "high" | "medium" | "low" | "info",
-      "category": "${domain}",
-      "finding": string,
-      "recommendation": string
-    }
-  ],
-  "summary": string
-}`;
+  const base = buildAgentPrompt({
+    role: `${cfg.title} (${scannerIndex + 1} of ${totalScanners}). Specialized code auditor. ONLY job: find **${domain}** issues.`,
+    allowedTools: ['Grep', 'Bash (read-only: find, wc, grep, awk, sort)', 'Read (max 500 lines via offset/limit)'],
+    constraints: [
+      'Do NOT read entire files — use offset/limit to read only relevant sections',
+      'If Target Files are provided, keep the audit scoped to those files unless a grep result proves a directly related issue elsewhere',
+      'Do NOT report false positives — confirm each finding before including it',
+      'If a pattern match is benign (e.g., in a comment or test), skip it',
+      'Focus on REAL issues with concrete file+line evidence',
+      'Return at most 10 findings. Prioritize critical/high severity and summarize repeated instances into one finding.',
+      'Keep each finding and recommendation concise, ideally under 280 characters each.',
+    ],
+    steps: cfg.instructions.split('\n').filter((s) => s.trim().length > 0),
+    outputJson: ScanReportSchema,
+    extras: {
+      'Key patterns to search for': cfg.grepPatterns.map((p) => `- \`${p}\``).join('\n'),
+    },
+  });
+  return contextBlock ? `${contextBlock}\n\n${base}` : base;
 }
