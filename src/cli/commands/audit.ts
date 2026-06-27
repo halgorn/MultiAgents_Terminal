@@ -206,7 +206,7 @@ export function registerAudit(program: Command): void {
         }
       }
       const { loadAionConfig, mergeConfig } = await import('../../infra/aion-config.js');
-      const mergedOptions = mergeConfig(options as AuditOptions & Record<string, unknown>, loadAionConfig(process.cwd())) as AuditOptions;
+      const mergedOptions = mergeConfig<Record<string, unknown>>(options as unknown as Record<string, unknown>, loadAionConfig(process.cwd()) as Record<string, unknown>) as unknown as AuditOptions;
       const explicitN = mergedOptions.scanners ? Math.max(1, Math.min(15, parseInt(String(mergedOptions.scanners), 10) || 5)) : undefined;
       const budget = parseBudget(mergedOptions.budget);
       const scannerTimeoutSeconds = mergedOptions.scannerTimeout

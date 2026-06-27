@@ -73,7 +73,11 @@ program
     }
 
     if (requestWords.length === 0) {
-      if (shouldRunInitialWizard(process.cwd(), Boolean(process.stdin.isTTY))) {
+      const { autoFirstRunSetup } = await import('./cli/auto-setup.js');
+      const { hasCompletedSetup } = await import('./infra/aion-config.js');
+      if (process.stdin.isTTY && !hasCompletedSetup(process.cwd())) {
+        await autoFirstRunSetup(process.cwd());
+      } else if (shouldRunInitialWizard(process.cwd(), Boolean(process.stdin.isTTY))) {
         await runProjectSetupWizard(process.cwd());
       }
       await runMenu(process.cwd());

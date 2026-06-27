@@ -7,92 +7,110 @@ import { AION_CONFIG_FILE } from './paths.js';
 const CONFIG_FILE = AION_CONFIG_FILE;
 
 export interface AionConfig {
-  /** Default persona preset: security | ai | backend | devops | quality | saas | fintech | full */
   preset?: string;
-  /** Default budget */
   budget?: BudgetName;
-  /** Default AI provider */
   provider?: ProviderName;
-  /** Default model override (for openrouter) */
   model?: string;
-  /** Extra glob patterns to ignore during audit (merged with .aionignore) */
   ignore?: string[];
-  /** Default domains (comma-separated), overrides preset if set */
   domains?: string[];
-  /** Default max auto-fixes */
   fixMax?: number;
-  /** Default minimum severity to auto-fix */
   fixMinSeverity?: FixSeverity;
-  /** Default scanner count override */
   scanners?: number;
-  /** Webhook URL to POST audit results to (used with aion audit --notify-webhook) */
   notifyWebhook?: string;
-  /** Watch polling interval in seconds (used with aion watch) */
-  watchInterval?: number;
-  /** Default git ref for --since filtering (e.g. "main") */
-  sinceRef?: string;
+  setupCompletedAt?: string;
+  setupVersion?: string;
+  mcpAutoInstalled?: boolean;
 }
 
 export function loadAionConfig(cwd: string): AionConfig {
   const path = join(cwd, CONFIG_FILE);
   if (!existsSync(path)) return {};
   try {
-    const raw = readFileSync(path, 'utf8');
-    return JSON.parse(raw) as AionConfig;
-  } catch { return {}; }
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as AionConfig;
+    return raw;
+  } catch {
+    return {};
+  }
 }
 
-/** Merge config defaults under CLI options (CLI wins) */
-export function mergeConfig<T extends Record<string, unknown>>(
-  cliOpts: T,
-  config: AionConfig,
-  defaults: Partial<T> = {},
-): T {
-  const result = { ...defaults } as Record<string, unknown>;
-  // Apply config fields only if CLI option is not set
-  const configMap: Record<string, keyof AionConfig> = {
-    preset: 'preset',
-    budget: 'budget',
-    provider: 'provider',
-    model: 'model',
-    domains: 'domains',
-    fixMax: 'fixMax',
-    fixMinSeverity: 'fixMinSeverity',
-    scanners: 'scanners',
-  };
-  for (const [cliKey, configKey] of Object.entries(configMap)) {
-    const configVal = config[configKey];
-    const cliVal = cliOpts[cliKey];
-    if (configVal !== undefined && (cliVal === undefined || cliVal === null)) {
-      result[cliKey] = Array.isArray(configVal) ? (configVal as string[]).join(',') : configVal;
+export function saveAionConfig(cwd: string, config: Partial<AionConfig>): void {
+  const path = join(cwd, CONFIG_FILE);
+  const existing = loadAionConfig(cwd);
+  const merged = { ...existing, ...config };
+  writeFileSync(path, JSON.stringify(merged, null, 2), 'utf8');
+}
+
+export function hasCompletedSetup(cwd: string): boolean {
+  return Boolean(loadAionConfig(cwd).setupCompletedAt);
+}
+
+export function markSetupCompleted(cwd: string, version: string): void {
+  saveAionConfig(cwd, {
+    setupCompletedAt: new Date().toISOString(),
+    setupVersion: version,
+  });
+}
+
+export interface DetectedProvider {
+  provider: ProviderName;
+  envVar: string;
+}
+
+export function detectAvailableProvider(): DetectedProvider | null {
+  if (process.env['ANTHROPIC_API_KEY']) return { provider: 'claude', envVar: 'ANTHROPIC_API_KEY' };
+  if (process.env['OPENAI_API_KEY']) return { provider: 'codex', envVar: 'OPENAI_API_KEY' };
+  if (process.env['OPENROUTER_API_KEY']) return { provider: 'openrouter', envVar: 'OPENROUTER_API_KEY' };
+  if (process.env['MOONSHOT_API_KEY']) return { provider: 'kimi', envVar: 'MOONSHOT_API_KEY' };
+  if (process.env['MINIMAX_API_KEY']) return { provider: 'minimax', envVar: 'MINIMAX_API_KEY' };
+  return null;
+}
+
+export interface DetectedMcpClient {
+  name: string;
+  path: string;
+  scope: 'project' | 'global';
+}
+
+export function detectMcpClients(cwd: string): DetectedMcpClient[] {
+  const results: DetectedMcpClient[] = [];
+  const home = process.env['HOME'] ?? '';
+  const checks: Array<{ name: string; path: string; scope: 'project' | 'global' }> = [
+    { name: 'cursor', path: join(cwd, '.cursor'), scope: 'project' },
+    { name: 'claude', path: join(home, '.claude'), scope: 'global' },
+    { name: 'codex', path: join(home, '.codex'), scope: 'global' },
+    { name: 'opencode', path: join(home, '.config', 'opencode'), scope: 'global' },
+  ];
+  for (const c of checks) {
+    try {
+      if (existsSync(c.path)) results.push(c);
+    } catch { /* skip */ }
+  }
+  return results;
+}
+
+export function ensureConfigFile(cwd: string): void {
+  const path = join(cwd, CONFIG_FILE);
+  if (!existsSync(path)) {
+    writeFileSync(path, JSON.stringify({}, null, 2), 'utf8');
+  }
+}
+
+export function writeAionConfig(cwd: string, config: Partial<AionConfig>): void {
+  return saveAionConfig(cwd, config);
+}
+
+export function writeDefaultConfig(cwd: string): void {
+  ensureConfigFile(cwd);
+}
+
+
+export function mergeConfig<T extends Record<string, unknown>>(base: T, fillIn: Partial<T>): T {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(fillIn)) {
+    if (value === undefined || value === null) continue;
+    if (result[key] === undefined || result[key] === null) {
+      (result as Record<string, unknown>)[key] = value;
     }
   }
-  // CLI overrides everything
-  for (const [k, v] of Object.entries(cliOpts)) {
-    if (v !== undefined && v !== null) result[k] = v;
-  }
-  return result as T;
-}
-
-export function generateDefaultConfig(): AionConfig {
-  return {
-    domains: ['bugs'],
-    budget: 'low',
-    scanners: 1,
-    provider: 'claude',
-    ignore: ['**/fixtures/**', '**/testdata/**', '**/*.generated.*'],
-    fixMax: 5,
-    fixMinSeverity: 'high',
-  };
-}
-
-export function writeDefaultConfig(cwd: string): string {
-  const config = generateDefaultConfig();
-  return writeAionConfig(cwd, config);
-}
-
-export function writeAionConfig(cwd: string, config: AionConfig): string {
-  const path = join(cwd, CONFIG_FILE);
-  writeFileSync(path, JSON.stringify(config, null, 2) + '\n', 'utf8');
-  return path;
+  return result;
 }

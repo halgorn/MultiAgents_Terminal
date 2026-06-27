@@ -2,12 +2,11 @@ import { spawnSync } from 'child_process';
 import chalk from 'chalk';
 import { selectOne, printHeader } from './tui.js';
 import { buildMainItems, MAIN_ITEMS } from './menu-items.js';
-export { MAIN_ITEMS } from './menu-items.js';
 import type { MenuItem } from './tui.js';
 import { displayProjectName } from '../infra/project-name.js';
 
 export type { MenuItem };
-export const MAIN_MENU_ITEMS = MAIN_ITEMS;
+export { MAIN_ITEMS } from './menu-items.js';
 
 function resetTty(): void {
   try {
@@ -46,21 +45,42 @@ export function runMenuFallback(cwd: string): void {
   console.log(chalk.dim('  ─────────────────────────────────────'));
   console.log(chalk.dim('  Run in an interactive terminal to access the menu.'));
   console.log('');
-  console.log(chalk.bold('  1. ') + chalk.cyan('aion init') + chalk.dim('     # first-time setup'));
-  console.log(chalk.bold('  2. ') + chalk.cyan('aion sync') + chalk.dim('     # build the PIL'));
-  console.log(chalk.bold('  3. ') + chalk.cyan('aion mcp install --client cursor'));
-  console.log(chalk.bold('  4. ') + chalk.cyan('aion find "<query>" --mode semantic'));
-  console.log(chalk.bold('  5. ') + chalk.cyan('aion chat'));
-  console.log(chalk.bold('  6. ') + chalk.cyan('aion audit . --local-only'));
-  console.log(chalk.bold('  7. ') + chalk.cyan('aion wiki --all'));
-  console.log(chalk.bold('  8. ') + chalk.cyan('aion doctor --scope all'));
+  console.log(chalk.bold('  1. ') + chalk.cyan('aion doctor --scope all') + chalk.dim('  # health check'));
+  console.log(chalk.bold('     ') + chalk.cyan('aion audit . --local-only') + chalk.dim('  # zero-token scan'));
+  console.log(chalk.bold('  2. ') + chalk.cyan('aion mcp install --client <name>') + chalk.dim('  # connect AI client'));
   console.log('');
-  console.log(chalk.dim('  Or run ') + chalk.cyan('aion --tldr') + chalk.dim(' outside the menu.'));
+  console.log(chalk.dim('  Or run ') + chalk.cyan('aion --tldr') + chalk.dim(' for all 8 commands.'));
 }
 
 function statusBar(provider: string, project: string): string {
-  const ready = chalk.green('●ready');
-  return `  ${chalk.dim('project:')} ${chalk.cyan(project)}   ${chalk.dim('provider:')} ${chalk.cyan(provider)}   ${chalk.dim('status:')} ${ready}`;
+  return `  ${chalk.dim('project:')} ${chalk.cyan(project)}   ${chalk.dim('provider:')} ${chalk.cyan(provider)}   ${chalk.dim('status:')} ${chalk.green('●ready')}`;
+}
+
+async function promptAuditMode(cwd: string): Promise<void> {
+  const mode = await selectOne('Audit mode', [
+    { label: '🧪 Local-only', hint: 'zero token · static scan only · ~10s', value: 'local' },
+    { label: '🤖 AI-powered', hint: 'uses provider · 15 domains · ~2-7min', value: 'ai' },
+    { label: '— back —', value: '__back__' },
+  ]);
+  if (!mode || mode === '__back__') return;
+  if (mode === 'local') {
+    run(['--cwd', cwd, 'audit', '.', '--local-only']);
+  } else {
+    run(['--cwd', cwd, 'audit', '.', '--budget', 'normal']);
+  }
+}
+
+async function promptConnect(cwd: string): Promise<void> {
+  const choice = await selectOne('Install MCP for which client?', [
+    { label: 'Cursor', hint: 'writes .cursor/mcp.json', value: 'cursor' },
+    { label: 'Claude Desktop', hint: 'writes ~/.claude/mcp.json', value: 'claude' },
+    { label: 'Codex CLI', hint: 'writes ~/.codex/config.toml', value: 'codex' },
+    { label: 'OpenCode', hint: 'writes ~/.config/opencode/opencode.json', value: 'opencode' },
+    { label: 'All (try each)', value: 'all' },
+    { label: '— back —', value: '__back__' },
+  ]);
+  if (!choice || choice === '__back__') return;
+  run(['--cwd', cwd, 'mcp', 'install', '--client', choice]);
 }
 
 export async function runMenu(cwd: string): Promise<void> {
@@ -82,18 +102,13 @@ export async function runMenu(cwd: string): Promise<void> {
     if (!action || action === 'quit') break;
     if (action === 'sep') continue;
 
-    if (action === 'help') {
-      run(['--cwd', cwd, '--tldr']);
-      continue;
-    }
-
     if (action === 'change-provider') {
       const picked = await selectOne('Select AI provider', [
-        { label: 'claude',      value: 'claude' },
-        { label: 'minimax',     value: 'minimax' },
-        { label: 'kimi',        value: 'kimi' },
-        { label: 'openrouter',  value: 'openrouter' },
-        { label: 'codex',       value: 'codex' },
+        { label: 'claude',      hint: 'recommended — requires ANTHROPIC_API_KEY', value: 'claude' },
+        { label: 'openrouter',  hint: 'requires OPENROUTER_API_KEY', value: 'openrouter' },
+        { label: 'kimi',        hint: 'requires MOONSHOT_API_KEY', value: 'kimi' },
+        { label: 'minimax',     hint: 'requires MINIMAX_API_KEY', value: 'minimax' },
+        { label: 'codex',       hint: 'requires OPENAI_API_KEY', value: 'codex' },
       ]);
       if (picked) {
         currentProvider = picked;
@@ -103,48 +118,14 @@ export async function runMenu(cwd: string): Promise<void> {
       continue;
     }
 
-    if (action === 'doctor') {
+    if (action === 'audit-doctor') {
       run(['--cwd', cwd, 'doctor', '--scope', 'all']);
+      await promptAuditMode(cwd);
       continue;
     }
-    if (action === 'sync') {
-      run(['--cwd', cwd, 'sync']);
-      continue;
-    }
-    if (action === 'find') {
-      const q = (await promptLine('Search query (e.g. "auth middleware")')) ?? '';
-      if (q.trim()) {
-        run(['--cwd', cwd, 'find', q, '--mode', 'semantic']);
-      }
-      continue;
-    }
-    if (action === 'audit') {
-      run(['--cwd', cwd, 'audit', '.', '--local-only']);
-      continue;
-    }
-    if (action === 'chat') {
-      run(['--cwd', cwd, 'chat']);
-      continue;
-    }
-    if (action === 'wiki') {
-      run(['--cwd', cwd, 'wiki', '--refresh']);
-      continue;
-    }
-    if (action === 'mcp-install') {
-      const picked = await selectOne('Install MCP for which client?', [
-        { label: 'Cursor', value: 'cursor' },
-        { label: 'Claude Desktop', value: 'claude' },
-        { label: 'Codex CLI', value: 'codex' },
-        { label: 'OpenCode', value: 'opencode' },
-        { label: 'All (try each)', value: 'all' },
-      ]);
-      if (picked) {
-        run(['--cwd', cwd, 'mcp', 'install', '--client', picked]);
-      }
-      continue;
-    }
-    if (action === 'next') {
-      run(['--cwd', cwd, 'next']);
+
+    if (action === 'connect') {
+      await promptConnect(cwd);
       continue;
     }
   }

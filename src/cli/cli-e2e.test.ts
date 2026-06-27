@@ -9,7 +9,7 @@ test('CLI exposes non-TTY menu fallback without hanging', () => {
     const result = runSourceCli(repo, ['menu']);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Run in an interactive terminal/);
-    assert.match(result.stdout, /aion sync/);
+    assert.match(result.stdout, /aion doctor/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }
@@ -37,7 +37,7 @@ test('CLI tldr flag shows short command overview', () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, /project gateway/);
     assert.match(result.stdout, /aion init/);
-    assert.match(result.stdout, /aion sync/);
+    assert.match(result.stdout, /aion doctor/);
   } finally {
     rmSync(repo, { recursive: true, force: true });
   }

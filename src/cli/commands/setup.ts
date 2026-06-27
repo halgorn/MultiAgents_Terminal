@@ -130,7 +130,8 @@ export async function runProjectSetupWizard(cwd: string, options: SetupRunOption
   const hadConfig = existsSync(join(cwd, AION_CONFIG_FILE));
   if (!hadConfig) writeDefaultConfig(cwd);
   const merged = mergeSetupDefaultsIntoConfig(loadAionConfig(cwd), { domain, budget, scanners });
-  const setupFile = writeAionConfig(cwd, merged);
+  writeAionConfig(cwd, merged);
+  const setupFile = join(cwd, AION_CONFIG_FILE);
 
   const index = await buildRepoIndex(cwd);
   writeRepoIndex(cwd, index);
