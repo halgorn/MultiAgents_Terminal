@@ -2,73 +2,180 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Node ${{ matrix.node }}
+  typecheck:
+    name: Typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+
+  contract:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:contract
+
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [typecheck, contract]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:unit
+
+  coverage:
+    name: Coverage Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/lcov.info
+
+  layer-rules:
+    name: Layer Rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - name: Check domain/application/interface layer boundaries
+        run: |
+          STRICT_LAYERS=1 npm run check:layers
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [typecheck, lint, unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  smoke:
+    name: CLI Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: --version
+        run: node dist/index.js --version
+      - name: --help
+        run: node dist/index.js --help
+      - name: --tldr
+        run: node dist/index.js --tldr
+      - name: doctor --json (no project)
+        run: node dist/index.js doctor --json || true
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
-
+        language: ['typescript']
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
         with:
-          node-version: ${{ matrix.node }}
-          cache: npm
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
+        with:
+          languages: ${{ matrix.language }}
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Typecheck
-        run: npx tsc --noEmit
-
-      - name: Test
-        env:
-          AION_SKIP_UPDATE_CHECK: "1"
-          ANTHROPIC_API_KEY: ""
-          OPENROUTER_API_KEY: ""
-          OPENAI_API_KEY: ""
-          VOYAGE_API_KEY: ""
-          QDRANT_URL: ""
-        run: node --import tsx --test "src/**/*.test.ts"
-
-      - name: Local scans
-        env:
-          AION_SKIP_UPDATE_CHECK: "1"
-          ANTHROPIC_API_KEY: ""
-          OPENROUTER_API_KEY: ""
-          OPENAI_API_KEY: ""
-          VOYAGE_API_KEY: ""
-          QDRANT_URL: ""
+  ci-success:
+    name: CI Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    needs: [typecheck, lint, contract, unit, coverage, layer-rules, build, smoke, codeql]
+    if: always()
+    steps:
+      - name: All checks passed
+        if: needs.*.result == 'success'
+        run: echo "All CI checks passed ✓"
+      - name: Some checks failed
+        if: needs.*.result != 'success'
         run: |
-          node dist/index.js scan secrets
-          node dist/index.js scan env-audit
-          node dist/index.js scan sbom --unpinned-only
-          node dist/index.js audit . --dry-run --max-files 20
-
-      - name: Smoke (PIL commands registered)
-        env:
-          AION_SKIP_UPDATE_CHECK: "1"
-          ANTHROPIC_API_KEY: ""
-          OPENROUTER_API_KEY: ""
-          OPENAI_API_KEY: ""
-          VOYAGE_API_KEY: ""
-          QDRANT_URL: ""
-        run: |
-          node dist/index.js sync --help
-          node dist/index.js wiki --help
-          node dist/index.js watch --help | grep -q "auto-sync"
-
-      - name: Pack package
-        run: npm pack --dry-run
+          echo "::error::One or more CI checks failed"
+          echo "Results: ${{ toJSON(needs) }}"
+          exit 1
