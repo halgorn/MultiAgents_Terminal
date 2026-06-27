@@ -185,11 +185,36 @@ export async function startMcpServer(overrides: Partial<McpServerOptions> = {}):
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
-      { name: 'search_memory', description: 'Semantic search over source code chunks', inputSchema: { type: 'object', properties: { query: { type: 'string' }, topK: { type: 'number', default: 5 }, cwd: { type: 'string' } }, required: ['query'] } },
-      { name: 'get_dep_graph', description: 'Read the dependency graph (modules, cycles, hotspots)', inputSchema: { type: 'object', properties: { cwd: { type: 'string' } } } },
-      { name: 'get_health_score', description: 'Zero-token composite health score', inputSchema: { type: 'object', properties: { cwd: { type: 'string' } } } },
-      { name: 'get_hot_zones', description: 'Highest-risk files by churn + complexity', inputSchema: { type: 'object', properties: { limit: { type: 'number', default: 10 } } } },
-      { name: 'get_impact', description: 'Transitive impact of changing a file', inputSchema: { type: 'object', properties: { file: { type: 'string' } }, required: ['file'] } },
+      {
+        name: 'search_memory',
+        description: 'Semantic search over source code chunks',
+        inputSchema: { type: 'object', properties: { query: { type: 'string' }, topK: { type: 'number', default: 5 }, cwd: { type: 'string' } }, required: ['query'] },
+        outputSchema: { type: 'object', properties: { results: { type: 'array', items: { type: 'object', properties: { file: { type: 'string' }, startLine: { type: 'number' }, score: { type: 'number' }, preview: { type: 'string' } } } }, meta: { type: 'object' } }, required: ['results'] },
+      },
+      {
+        name: 'get_dep_graph',
+        description: 'Read the dependency graph (modules, cycles, hotspots)',
+        inputSchema: { type: 'object', properties: { cwd: { type: 'string' } } },
+        outputSchema: { type: 'object', properties: { nodes: { type: 'array' }, cycles: { type: 'array' }, hotspots: { type: 'array' }, meta: { type: 'object' } } },
+      },
+      {
+        name: 'get_health_score',
+        description: 'Zero-token composite health score',
+        inputSchema: { type: 'object', properties: { cwd: { type: 'string' } } },
+        outputSchema: { type: 'object', properties: { total: { type: 'number' }, grade: { type: 'string' }, topRisks: { type: 'array' }, dimensions: { type: 'object' }, meta: { type: 'object' } } },
+      },
+      {
+        name: 'get_hot_zones',
+        description: 'Highest-risk files by churn + complexity',
+        inputSchema: { type: 'object', properties: { limit: { type: 'number', default: 10 }, offset: { type: 'number', default: 0 } } },
+        outputSchema: { type: 'object', properties: { items: { type: 'array' }, meta: { type: 'object' } } },
+      },
+      {
+        name: 'get_impact',
+        description: 'Transitive impact of changing a file',
+        inputSchema: { type: 'object', properties: { file: { type: 'string' }, depth: { type: 'number', default: 3 } }, required: ['file'] },
+        outputSchema: { type: 'object', properties: { file: { type: 'string' }, dependents: { type: 'array' }, depth: { type: 'number' }, meta: { type: 'object' } } },
+      },
     ],
   }));
 
