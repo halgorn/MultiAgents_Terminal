@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSSF best practices: LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CHANGELOG, dependabot.
 - CI gates: typecheck, lint, contract tests, integration tests, CodeQL.
 
+## [1.0.2-alpha] - 2026-07-05
+
+### Fixed
+- `aion doctor --scope <scope>` now actually works. The TLDR / deprecation map / tui examples all advertise it, but the option was never wired up. Supports `project` (default project checks), `mcp` (inspect `.mcp.json` and list servers), `all` (default — both). JSON output now includes the active scope and per-check scope.
+
 ## [1.0.1-alpha] - 2026-07-05
 
 ### Fixed
