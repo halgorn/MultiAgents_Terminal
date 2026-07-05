@@ -24,6 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenSSF best practices: LICENSE, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CHANGELOG, dependabot.
 - CI gates: typecheck, lint, contract tests, integration tests, CodeQL.
 
+## [1.0.1-alpha] - 2026-07-05
+
+### Fixed
+- `aion doctor`: drop unsupported `--scope all` (legacy global install was crashing the menu).
+- `aion audit . --local-only`: `parseDomains` now accepts both string (CLI) and array (`.ai-personas.json` preset config), preventing `TypeError: raw.split is not a function` when a config file feeds in a `domains: []` array.
+- `policy.test`: use dynamic date in `recordUsage appends to usage.jsonl` so the test stays valid across months.
+- Menu reduced to 2 actions (`Audit + Doctor`, `Connect`) + provider switcher + quit; audit/doctor merged.
+
+## [1.0.0-alpha] - 2026-06-27
+
+First public alpha. See [`docs/SPEC-V1.md`](docs/SPEC-V1.md) for the full v1.0 scope.
+
 ## [1.0.0] - 2026-Q3 (planned)
 
 See [`docs/SPEC-V1.md`](docs/SPEC-V1.md) for the full v1.0 scope. Highlights:
