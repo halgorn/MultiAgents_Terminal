@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
-import { dirname, join, relative, resolve } from 'path';
+import { basename, dirname, join, relative, resolve } from 'path';
 import { isIgnoredDirName } from './file-filter.js';
 
 export interface WorkspaceConfig {
@@ -113,6 +113,5 @@ export function resolveRepoPath(workspaceRoot: string, repo: WorkspaceRepo): str
 }
 
 export function deriveName(root: string): string {
-  const parts = root.split('/').filter(Boolean);
-  return parts[parts.length - 1] ?? 'workspace';
+  return basename(root) || 'workspace';
 }

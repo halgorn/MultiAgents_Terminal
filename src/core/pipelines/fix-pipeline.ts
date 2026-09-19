@@ -11,6 +11,7 @@ import { GraphAgent } from '../../agents/graph-agent.js';
 import { TestsAgent } from '../../agents/tests-agent.js';
 import { detectLang } from '../../infra/lang-detect.js';
 import { transition, makeWorktreeTracker } from '../pipeline-context.js';
+import { applyDiffToRepo } from '../../infra/worktree.js';
 import type { PipelineContext } from '../pipeline-context.js';
 import type { TaskResult } from '../task.js';
 import type { InvestigatorDomain } from '../../prompts/investigator.js';
@@ -163,6 +164,16 @@ export async function runFixPipeline(ctx: PipelineContext, target: string): Prom
 
     await transition(task, 'TESTED', ctx.emit, 'qa');
     await transition(task, 'VERIFIED', ctx.emit, 'qa');
+
+    const applyResult = applyDiffToRepo(ctx.cwd, patch.diff);
+    if (!applyResult.ok) {
+      // Keep the developer worktree/branch alive so the patch isn't lost;
+      // wt.cleanup() in finally will skip it once excluded here.
+      wt.exclude('developer', task.id);
+      errors.push(`Patch could not be auto-applied to ${ctx.cwd}: ${applyResult.error}. Recover it from worktree ${devWT} (branch ai/developer-${task.id.slice(0, 8)}).`);
+      ctx.emit('error', { taskId: task.id, message: errors[errors.length - 1]! });
+    }
+
     await transition(task, 'DONE', ctx.emit, 'qa');
 
     if (evidence && patch) {
@@ -176,7 +187,19 @@ export async function runFixPipeline(ctx: PipelineContext, target: string): Prom
       } catch { /* best-effort */ }
     }
 
-    const result: TaskResult = { taskId: task.id, state: 'DONE', plan, evidence, patch, review, qaResult, errors: [], durationMs: Date.now() - start };
+    const result: TaskResult = {
+      taskId: task.id,
+      state: 'DONE',
+      plan,
+      evidence,
+      patch,
+      review,
+      qaResult,
+      applied: applyResult.ok,
+      applyError: applyResult.ok ? undefined : applyResult.error,
+      errors,
+      durationMs: Date.now() - start,
+    };
     saveTaskResult(task.id, result);
     return result;
 

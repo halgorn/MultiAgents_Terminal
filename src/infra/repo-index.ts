@@ -1,5 +1,5 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
-import { dirname, join, relative } from 'path';
+import { dirname, join, relative, sep } from 'path';
 import { chunkFile } from './chunker.js';
 import { isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 import { AI_RUNTIME_DIR } from './paths.js';
@@ -60,6 +60,13 @@ export interface RepoIndex {
   };
 }
 
+// Index paths are stored posix-style (forward slashes) so they're portable across
+// platforms; path.join/relative return backslashes on Windows and would otherwise
+// silently break every prefix/lookup match against these paths.
+function toPosix(p: string): string {
+  return p.split(sep).join('/');
+}
+
 function extOf(file: string): string {
   const idx = file.lastIndexOf('.');
   return idx === -1 ? '' : file.slice(idx);
@@ -84,7 +91,7 @@ function collectFiles(cwd: string): RepoFile[] {
       }
 
       const ext = extOf(entry);
-      const rel = relative(cwd, full);
+      const rel = toPosix(relative(cwd, full));
       if (isGeneratedArtifact(rel)) continue;
       if (!SOURCE_EXTS.has(ext) || st.size > MAX_FILE_SIZE) continue;
       const text = safeRead(full);
@@ -206,7 +213,7 @@ function resolveImport(from: string, specifier: string, allFiles: Set<string>): 
       `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.py`,
       join(base, 'index.ts'), join(base, 'index.tsx'), join(base, 'index.js'),
     ];
-    return candidates.find((c) => allFiles.has(c));
+    return candidates.map(toPosix).find((c) => allFiles.has(c));
   }
 
   // Python absolute import: agents.foo → agents/foo.py or agents/foo/__init__.py
@@ -219,7 +226,7 @@ function resolveImport(from: string, specifier: string, allFiles: Set<string>): 
       join(dirname(from), `${asPath}.py`),
       join(dirname(from), `${asPath}/__init__.py`),
     ];
-    return candidates.find((c) => allFiles.has(c));
+    return candidates.map(toPosix).find((c) => allFiles.has(c));
   }
 
   return undefined;

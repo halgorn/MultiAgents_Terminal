@@ -7,8 +7,12 @@ import { spawnSync } from 'child_process';
 import { WORKSPACE_ROOT, isolatedEnv } from '../test-utils/fixtures.js';
 
 function run(command: string, args: string[], cwd: string, timeout = 60_000) {
+  // shell:true only for npm, so Windows can resolve its .cmd shim (CreateProcess can't exec
+  // it directly); process.execPath calls skip shell since its path may contain spaces
+  // (e.g. "C:\Program Files\nodejs\node.exe"), which shell:true would mis-tokenize.
   return spawnSync(command, args, {
     cwd,
+    shell: command === 'npm',
     encoding: 'utf8',
     env: isolatedEnv(),
     timeout,

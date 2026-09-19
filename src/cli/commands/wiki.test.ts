@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { runSync } from './sync.js';
 import { renderProjectMarkdown, writeProjectMarkdown, runWiki, renderModuleMarkdown, renderDomainMarkdown, writeDocFile, runWikiBatch } from './wiki.js';
 import { writeProjectStore } from '../../infra/project-store.js';
@@ -12,9 +12,15 @@ function makeTmp(): string {
   return mkdtempSync(join(tmpdir(), 'aion-wiki-'));
 }
 
+// Windows temp paths (\Users\...\Temp\...) contain neither "tmp" nor a POSIX
+// separator, and raw paths used as regex source have `\U`, `\b` etc. read as
+// escapes — always build path-matching regexes through this.
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function writeFile(p: string, content: string): void {
-  const dir = p.substring(0, p.lastIndexOf('/'));
-  if (dir) mkdirSync(dir, { recursive: true });
+  mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, content);
 }
 
@@ -245,7 +251,7 @@ test('runWiki output contains root path', async () => {
     makeFixture(cwd);
     const result = await runWiki({ cwd, refresh: true, tokenBudget: 8000 });
     const content = readFileSync(result.path, 'utf8');
-    assert.match(content, /Root.*tmp/);
+    assert.match(content, new RegExp(`Root[\\s\\S]*${escapeRegExp(cwd)}`));
   } finally {
     if (prevOpenai === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = prevOpenai;
@@ -326,7 +332,7 @@ test('writeProjectStore + renderProjectMarkdown roundtrip', async () => {
     const store = makeStore(cwd);
     writeProjectStore(cwd, store);
     const { md } = renderProjectMarkdown(store);
-    assert.match(md, new RegExp(store.root));
+    assert.match(md, new RegExp(escapeRegExp(store.root)));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

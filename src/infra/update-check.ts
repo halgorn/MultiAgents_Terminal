@@ -41,13 +41,18 @@ export function getCurrentVersion(): string {
   } catch { return '0.0.0'; }
 }
 
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/;
+
 async function fetchLatest(): Promise<string | null> {
   try {
     const res = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`, {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return null;
-    return ((await res.json()) as { version?: string }).version ?? null;
+    const version = ((await res.json()) as { version?: string }).version;
+    // Registry response is untrusted input; installUpdate() interpolates this into a
+    // shell:true spawn, so reject anything that isn't a plain semver before it gets there.
+    return version && SEMVER_RE.test(version) ? version : null;
   } catch { return null; }
 }
 
@@ -164,9 +169,12 @@ async function interactiveUpdateMenu(current: string, latest: string): Promise<'
 
 function installUpdate(latest: string): never {
   console.log(chalk.cyan(`\n  Instalando ${PACKAGE_NAME}@${latest}...\n`));
+  // shell:true so Windows can resolve npm's .cmd shim (CreateProcess can't exec it directly).
+  // The spawned args are fixed strings (PACKAGE_NAME is a compile-time constant, the version
+  // is the literal "@latest" dist-tag) — no fetched/user-controlled value reaches this call.
   const result = spawnSync('npm', ['install', '-g', `${PACKAGE_NAME}@latest`], {
     stdio: 'inherit',
-    shell: false,
+    shell: true,
   });
   if (result.status === 0) {
     console.log(chalk.green.bold(`\n  ✓ Atualizado para ${latest}. Execute o comando novamente.\n`));

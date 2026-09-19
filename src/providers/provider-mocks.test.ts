@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { join, delimiter } from 'path';
+import { tmpdir, platform } from 'os';
 import type { ProviderRunInput } from './types.js';
 import { createRuntimePolicy } from '../core/runtime-policy.js';
 import { ClaudeCliProvider, CodexCliProvider, safeProcessEnv } from './cli-provider.js';
@@ -26,10 +26,21 @@ function input(userMessage = 'user'): ProviderRunInput {
 function makeBin(name: string, body: string): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'aion-provider-bin-'));
   mkdirSync(dir, { recursive: true });
-  const file = join(dir, name);
-  writeFileSync(file, `#!/usr/bin/env node\n${body}\n`, 'utf8');
-  chmodSync(file, 0o755);
+  if (platform() === 'win32') {
+    // spawn() has no shell here, so the fake bin must be something Windows'
+    // PATHEXT resolution can find and run directly: a .cmd shim delegating to node.
+    writeFileSync(join(dir, `${name}.js`), body, 'utf8');
+    writeFileSync(join(dir, `${name}.cmd`), `@node "%~dp0${name}.js" %*\n`, 'utf8');
+  } else {
+    const file = join(dir, name);
+    writeFileSync(file, `#!/usr/bin/env node\n${body}\n`, 'utf8');
+    chmodSync(file, 0o755);
+  }
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+function prependToPath(dir: string): string {
+  return `${dir}${delimiter}${process.env['PATH'] ?? ''}`;
 }
 
 test('SdkProvider streams text and token usage from a mocked Anthropic client', async () => {
@@ -83,7 +94,12 @@ test('OpenRouterProvider handles streamed content, auth errors, and malformed SS
   globalThis.fetch = originalFetch;
 });
 
-test('ClaudeCliProvider parses success, raw invalid JSON, and budget errors from mocked CLI', async () => {
+// On win32, Node refuses to spawn .cmd/.bat files without shell:true (hardened after
+// CVE-2024-27980), so this fake claude.cmd shim can never be resolved by cli-provider.ts's
+// shell:false spawn() call — the real installed claude.exe gets invoked instead. Production
+// code correctly avoids shell:true here (prompts are untrusted content), and CI only runs
+// ubuntu-latest, so this is a Windows-local-dev test-infra gap, not an aion bug.
+test('ClaudeCliProvider parses success, raw invalid JSON, and budget errors from mocked CLI', { skip: platform() === 'win32' ? 'fake claude.cmd cannot be spawned without shell:true on Windows (Node CVE-2024-27980 hardening); CI runs Linux only' : false }, async () => {
   const fake = makeBin('claude', `
 const mode = process.argv.includes('budget') ? 'budget' : process.argv.includes('invalid-json') ? 'invalid-json' : 'success';
 if (mode === 'budget') {
@@ -95,7 +111,7 @@ if (mode === 'budget') {
 }
 `);
   try {
-    const path = `${fake.dir}:${process.env.PATH ?? ''}`;
+    const path = prependToPath(fake.dir);
     await withEnv({ PATH: path }, async () => {
       assert.equal(await new ClaudeCliProvider().run(input()), 'structured result');
     });
@@ -110,7 +126,8 @@ if (mode === 'budget') {
   }
 });
 
-test('CodexCliProvider reads mocked output file and cleans temporary files', async () => {
+// Same win32 .cmd-without-shell limitation as the claude fake above.
+test('CodexCliProvider reads mocked output file and cleans temporary files', { skip: platform() === 'win32' ? 'fake codex.cmd cannot be spawned without shell:true on Windows (Node CVE-2024-27980 hardening); CI runs Linux only' : false }, async () => {
   const fake = makeBin('codex', `
 const outputIndex = process.argv.indexOf('-o');
 if (process.argv.some((arg) => arg.includes('fail'))) process.exit(2);
@@ -118,7 +135,7 @@ require('fs').writeFileSync(process.argv[outputIndex + 1], 'codex final answer',
 process.stdout.write('codex progress');
 `);
   try {
-    const path = `${fake.dir}:${process.env.PATH ?? ''}`;
+    const path = prependToPath(fake.dir);
     await withEnv({ PATH: path }, async () => {
       const chunks: string[] = [];
       const out = await new CodexCliProvider().run(input(), (_agent, text) => chunks.push(text));

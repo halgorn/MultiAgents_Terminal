@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { extname, join, relative } from 'path';
+import { extname, join, relative, sep } from 'path';
 import { isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 import type { ApiEndpoint } from './code-metrics.js';
 
@@ -36,7 +36,7 @@ function walk(cwd: string): string[] {
     for (const entry of entries) {
       if (isIgnoredDirName(entry.name)) continue;
       const full = join(dir, entry.name);
-      const rel = relative(cwd, full);
+      const rel = relative(cwd, full).split(sep).join('/');
       if (entry.isDirectory()) { scan(full); continue; }
       if (isGeneratedArtifact(rel)) continue;
       const ext = extname(entry.name).toLowerCase();

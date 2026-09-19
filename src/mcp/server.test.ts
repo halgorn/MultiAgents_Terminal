@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { maybeResyncOnStale } from './server.js';
 import { writeProjectStore } from '../infra/project-store.js';
 import { FileWatcher } from './watcher.js';
@@ -15,8 +15,7 @@ function makeTmp(): string {
 }
 
 function writeFile(p: string, content: string): void {
-  const dir = p.substring(0, p.lastIndexOf('/'));
-  if (dir) mkdirSync(dir, { recursive: true });
+  mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, content);
 }
 

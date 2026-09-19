@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { extname, join, relative } from 'path';
+import { extname, join, relative, sep } from 'path';
 
 export interface SeoRouteCheck {
   route: string;
@@ -58,7 +58,7 @@ function walk(cwd: string, roots: string[], exts: Set<string>, limit = 300): str
       if (out.length >= limit) break;
       const full = join(abs, entry.name);
       if (entry.isDirectory()) { visit(full); continue; }
-      if (exts.has(extname(entry.name))) out.push(relative(cwd, full));
+      if (exts.has(extname(entry.name))) out.push(relative(cwd, full).split(sep).join('/'));
     }
   };
   roots.forEach((root) => existsSync(join(cwd, root)) && visit(join(cwd, root)));

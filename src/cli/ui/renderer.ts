@@ -158,6 +158,11 @@ export class Renderer {
       console.log(chalk.bold('\nPatch:'));
       console.log(`  Files: ${result.patch.filesChanged.join(', ')}`);
       console.log(`  ${result.patch.description}`);
+      if (result.applied === true) {
+        console.log(`  ${chalk.green('Applied to working tree')}`);
+      } else if (result.applied === false) {
+        console.log(`  ${chalk.red('NOT applied')}: ${result.applyError ?? 'unknown error'}`);
+      }
     }
 
     if (result.review) {

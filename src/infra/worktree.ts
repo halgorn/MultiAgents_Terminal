@@ -1,7 +1,10 @@
 import { spawnSync } from 'child_process';
 import { join } from 'path';
-import { existsSync, rmSync } from 'fs';
+import { existsSync, rmSync, writeFileSync, unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
 import { WORKTREES_DIR } from './paths.js';
+import { readPolicy, matchesDenyList } from './policy.js';
 
 export interface WorktreeInfo {
   path: string;
@@ -33,8 +36,39 @@ export function createWorktree(cwd: string, agentName: string, taskId: string): 
 
   assertGit(cwd, ['rev-parse', '--verify', 'HEAD']);
   assertGit(cwd, ['worktree', 'add', worktreePath, '-b', branch, 'HEAD']);
+  stripDeniedFiles(cwd, worktreePath);
 
   return worktreePath;
+}
+
+// Agents get raw Read/Bash access inside the worktree; strip files the policy
+// deny-lists (secrets, keys) so they're never exposed to an agent process.
+function stripDeniedFiles(cwd: string, worktreePath: string): void {
+  const policy = readPolicy(cwd);
+  if (!policy.denyList.length) return;
+  const { stdout } = git(worktreePath, ['ls-files']);
+  for (const rel of stdout.split('\n').filter(Boolean)) {
+    if (matchesDenyList(rel, policy.denyList)) {
+      try { rmSync(join(worktreePath, rel), { force: true }); } catch { /* best-effort */ }
+    }
+  }
+}
+
+// Applies a developer agent's captured diff to the real working tree. Diffs
+// are relative to the repo root, so they apply cleanly from any worktree of
+// the same repo (git worktrees share one object store).
+export function applyDiffToRepo(cwd: string, diff: string): { ok: boolean; error?: string } {
+  const patchFile = join(tmpdir(), `aion-patch-${randomUUID()}.diff`);
+  writeFileSync(patchFile, diff, 'utf8');
+  try {
+    const result = git(cwd, ['apply', '--whitespace=nowarn', patchFile]);
+    if (!result.ok) {
+      return { ok: false, error: (result.stderr.trim() || result.stdout.trim() || 'git apply failed') };
+    }
+    return { ok: true };
+  } finally {
+    try { unlinkSync(patchFile); } catch { /* best-effort */ }
+  }
 }
 
 export function removeWorktree(cwd: string, agentName: string, taskId: string): void {

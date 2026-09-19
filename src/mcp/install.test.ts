@@ -12,9 +12,16 @@ import {
   doctorCheck,
   type InstallOptions,
 } from './install.js';
+import { withEnv } from '../test-utils/fixtures.js';
 
 function makeTmp(): string {
   return mkdtempSync(join(tmpdir(), 'aion-install-'));
+}
+
+// os.homedir() reads USERPROFILE on Windows and HOME on POSIX — both must be
+// overridden or these tests silently fall through to the real home directory.
+function withFakeHome<T>(fakeHome: string, fn: () => T): T {
+  return withEnv({ HOME: fakeHome, USERPROFILE: fakeHome }, fn) as T;
 }
 
 function baseOpts(cwd: string, overrides: Partial<InstallOptions> = {}): InstallOptions {
@@ -89,25 +96,25 @@ test('installCursor uninstall is no-op when not present', () => {
 });
 
 test('installClaude creates config in home dir', () => {
-  // We can only test that the function runs without throwing on a fake home
-  // (won't actually write to the real ~/.claude).
   const cwd = makeTmp();
+  const fakeHome = makeTmp();
   try {
-    const r = installClaude(baseOpts(cwd));
-    assert.ok(r.path.includes('.claude'));
+    withFakeHome(fakeHome, () => {
+      const r = installClaude(baseOpts(cwd));
+      assert.ok(r.path.includes('.claude'));
+      assert.ok(r.path.startsWith(fakeHome), 'must write under the fake home, not the real one');
+    });
   } finally {
     rmSync(cwd, { recursive: true, force: true });
+    rmSync(fakeHome, { recursive: true, force: true });
   }
 });
 
 test('installCodex creates TOML config', () => {
   const cwd = makeTmp();
+  const fakeHome = makeTmp();
   try {
-    // We need to mock the home dir to avoid clobbering real config
-    const fakeHome = makeTmp();
-    const prevHome = process.env['HOME'];
-    process.env['HOME'] = fakeHome;
-    try {
+    withFakeHome(fakeHome, () => {
       const r = installCodex(baseOpts(cwd));
       assert.equal(r.written, true);
       const path = join(fakeHome, '.codex', 'config.toml');
@@ -116,62 +123,53 @@ test('installCodex creates TOML config', () => {
       assert.match(content, /\[mcp_servers\.aion\]/);
       assert.match(content, /command = "\/usr\/local\/bin\/aion"/);
       assert.match(content, /args = \["mcp", "serve"\]/);
-    } finally {
-      if (prevHome === undefined) delete process.env['HOME'];
-      else process.env['HOME'] = prevHome;
-      rmSync(fakeHome, { recursive: true, force: true });
-    }
+    });
   } finally {
     rmSync(cwd, { recursive: true, force: true });
+    rmSync(fakeHome, { recursive: true, force: true });
   }
 });
 
 test('installCodex preserves other sections', () => {
   const fakeHome = makeTmp();
-  const prevHome = process.env['HOME'];
-  process.env['HOME'] = fakeHome;
   try {
-    mkdirSync(join(fakeHome, '.codex'), { recursive: true });
-    writeFileSync(join(fakeHome, '.codex', 'config.toml'), '[other]\nkey = "value"\n');
-    installCodex(baseOpts(makeTmp()));
-    const content = readFileSync(join(fakeHome, '.codex', 'config.toml'), 'utf8');
-    assert.match(content, /\[other\]/);
-    assert.match(content, /\[mcp_servers\.aion\]/);
+    withFakeHome(fakeHome, () => {
+      mkdirSync(join(fakeHome, '.codex'), { recursive: true });
+      writeFileSync(join(fakeHome, '.codex', 'config.toml'), '[other]\nkey = "value"\n');
+      installCodex(baseOpts(makeTmp()));
+      const content = readFileSync(join(fakeHome, '.codex', 'config.toml'), 'utf8');
+      assert.match(content, /\[other\]/);
+      assert.match(content, /\[mcp_servers\.aion\]/);
+    });
   } finally {
-    if (prevHome === undefined) delete process.env['HOME'];
-    else process.env['HOME'] = prevHome;
     rmSync(fakeHome, { recursive: true, force: true });
   }
 });
 
 test('installCodex escapes quotes in args', () => {
   const fakeHome = makeTmp();
-  const prevHome = process.env['HOME'];
-  process.env['HOME'] = fakeHome;
   try {
-    installCodex(baseOpts(makeTmp(), { args: ['with "quote"'] }));
-    const content = readFileSync(join(fakeHome, '.codex', 'config.toml'), 'utf8');
-    assert.match(content, /\\"/);
+    withFakeHome(fakeHome, () => {
+      installCodex(baseOpts(makeTmp(), { args: ['with "quote"'] }));
+      const content = readFileSync(join(fakeHome, '.codex', 'config.toml'), 'utf8');
+      assert.match(content, /\\"/);
+    });
   } finally {
-    if (prevHome === undefined) delete process.env['HOME'];
-    else process.env['HOME'] = prevHome;
     rmSync(fakeHome, { recursive: true, force: true });
   }
 });
 
 test('installCodex uninstall removes section', () => {
   const fakeHome = makeTmp();
-  const prevHome = process.env['HOME'];
-  process.env['HOME'] = fakeHome;
   try {
-    installCodex(baseOpts(makeTmp()));
-    const r = installCodex(baseOpts(makeTmp(), { uninstall: true }));
-    assert.equal(r.written, true);
-    const content = readFileSync(join(fakeHome, '.codex', 'config.toml'), 'utf8');
-    assert.doesNotMatch(content, /\[mcp_servers\.aion\]/);
+    withFakeHome(fakeHome, () => {
+      installCodex(baseOpts(makeTmp()));
+      const r = installCodex(baseOpts(makeTmp(), { uninstall: true }));
+      assert.equal(r.written, true);
+      const content = readFileSync(join(fakeHome, '.codex', 'config.toml'), 'utf8');
+      assert.doesNotMatch(content, /\[mcp_servers\.aion\]/);
+    });
   } finally {
-    if (prevHome === undefined) delete process.env['HOME'];
-    else process.env['HOME'] = prevHome;
     rmSync(fakeHome, { recursive: true, force: true });
   }
 });
@@ -205,19 +203,17 @@ test('installOpencode uninstall removes entry', () => {
 test('installClient with "all" tries all 4', () => {
   const cwd = makeTmp();
   const fakeHome = makeTmp();
-  const prevHome = process.env['HOME'];
-  process.env['HOME'] = fakeHome;
   try {
-    const results = installClient({ client: 'all', cwd, binPath: '/a', args: ['mcp', 'serve'] });
-    assert.equal(results.length, 4);
-    const clients = results.map((r) => r.client);
-    assert.ok(clients.includes('cursor'));
-    assert.ok(clients.includes('claude'));
-    assert.ok(clients.includes('codex'));
-    assert.ok(clients.includes('opencode'));
+    withFakeHome(fakeHome, () => {
+      const results = installClient({ client: 'all', cwd, binPath: '/a', args: ['mcp', 'serve'] });
+      assert.equal(results.length, 4);
+      const clients = results.map((r) => r.client);
+      assert.ok(clients.includes('cursor'));
+      assert.ok(clients.includes('claude'));
+      assert.ok(clients.includes('codex'));
+      assert.ok(clients.includes('opencode'));
+    });
   } finally {
-    if (prevHome === undefined) delete process.env['HOME'];
-    else process.env['HOME'] = prevHome;
     rmSync(cwd, { recursive: true, force: true });
     rmSync(fakeHome, { recursive: true, force: true });
   }
@@ -279,18 +275,15 @@ test('doctorCheck covers all 4 clients when no arg', () => {
 
 test('homedir is used for claude/codex', () => {
   const fakeHome = makeTmp();
-  const prevHome = process.env['HOME'];
-  process.env['HOME'] = fakeHome;
   try {
-    installClaude({ client: 'claude', cwd: makeTmp(), binPath: '/a', args: ['mcp', 'serve'] });
-    const claudePath = join(fakeHome, '.claude', 'mcp.json');
-    if (existsSync(claudePath)) {
+    withFakeHome(fakeHome, () => {
+      installClaude({ client: 'claude', cwd: makeTmp(), binPath: '/a', args: ['mcp', 'serve'] });
+      const claudePath = join(fakeHome, '.claude', 'mcp.json');
+      assert.ok(existsSync(claudePath), 'must write under the fake home, not the real one');
       const cfg = JSON.parse(readFileSync(claudePath, 'utf8'));
       assert.ok(cfg.mcpServers.aion);
-    }
+    });
   } finally {
-    if (prevHome === undefined) delete process.env['HOME'];
-    else process.env['HOME'] = prevHome;
     rmSync(fakeHome, { recursive: true, force: true });
   }
 });

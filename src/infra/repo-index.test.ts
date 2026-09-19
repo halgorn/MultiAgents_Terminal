@@ -48,7 +48,7 @@ test('writeRepoIndex persists under .ai-runtime', async () => {
     const index = await buildRepoIndex(dir);
     const path = writeRepoIndex(dir, index);
 
-    assert.equal(path.endsWith('.ai-runtime/repo-index.json'), true);
+    assert.equal(path.endsWith(join('.ai-runtime', 'repo-index.json')), true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

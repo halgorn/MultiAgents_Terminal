@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import {
   DEFAULT_POLICY,
   readPolicy,
@@ -23,8 +23,7 @@ function makeTmp(): string {
 }
 
 function writeFile(p: string, content: string): void {
-  const dir = p.substring(0, p.lastIndexOf('/'));
-  if (dir) mkdirSync(dir, { recursive: true });
+  mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, content);
 }
 
@@ -158,7 +157,7 @@ test('recordUsage appends to usage.jsonl', () => {
   const cwd = makeTmp();
   try {
     const record: UsageRecord = {
-      ts: '2026-06-18T12:00:00Z',
+      ts: new Date().toISOString(),
       tool: 'search_memory',
       estTokens: 500,
       estimatedCostUsd: 0.01,

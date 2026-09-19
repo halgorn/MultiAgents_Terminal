@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { join, delimiter } from 'path';
+import { tmpdir, platform } from 'os';
 import { spawnSync } from 'child_process';
 import { EventEmitter } from 'events';
 import { Orchestrator } from './orchestrator.js';
@@ -24,8 +24,7 @@ function initGitRepo(repo: string): void {
 
 function makeFakeClaude(): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'aion-pipeline-bin-'));
-  const file = join(dir, 'claude');
-  writeFileSync(file, `#!/usr/bin/env node
+  const body = `
 const promptIndex = process.argv.indexOf('-p');
 const prompt = promptIndex >= 0 ? process.argv[promptIndex + 1] : '';
 const usage = ' tokens:10:5:0:0 ';
@@ -47,21 +46,36 @@ if (prompt.includes('Then output the plan JSON')) {
 }
 process.stderr.write(usage);
 process.stdout.write(JSON.stringify({ result: JSON.stringify(result) }));
-`, 'utf8');
-  chmodSync(file, 0o755);
+`;
+  if (platform() === 'win32') {
+    // spawn() has no shell here, so the fake bin must be something Windows'
+    // PATHEXT resolution can find and run directly: a .cmd shim delegating to node.
+    writeFileSync(join(dir, 'claude.js'), body, 'utf8');
+    writeFileSync(join(dir, 'claude.cmd'), `@node "%~dp0claude.js" %*\n`, 'utf8');
+  } else {
+    const file = join(dir, 'claude');
+    writeFileSync(file, `#!/usr/bin/env node\n${body}`, 'utf8');
+    chmodSync(file, 0o755);
+  }
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 function withPath<T>(pathPrefix: string, fn: () => Promise<T>): Promise<T> {
   const originalPath = process.env.PATH;
+  const originalPathExt = process.env.PATHEXT;
   const originalAnthropic = process.env.ANTHROPIC_API_KEY;
   const originalOpenRouter = process.env.OPENROUTER_API_KEY;
-  process.env.PATH = `${pathPrefix}:${originalPath ?? ''}`;
+  process.env.PATH = `${pathPrefix}${delimiter}${originalPath ?? ''}`;
+  // Windows resolves bare commands extension-by-extension across the whole PATH, so a
+  // real claude.exe elsewhere on PATH would win over our fake claude.cmd unless .CMD is tried first.
+  if (platform() === 'win32') process.env.PATHEXT = `.CMD;${originalPathExt ?? ''}`;
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.OPENROUTER_API_KEY;
   return fn().finally(() => {
     if (originalPath === undefined) delete process.env.PATH;
     else process.env.PATH = originalPath;
+    if (originalPathExt === undefined) delete process.env.PATHEXT;
+    else process.env.PATHEXT = originalPathExt;
     if (originalAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
     else process.env.ANTHROPIC_API_KEY = originalAnthropic;
     if (originalOpenRouter === undefined) delete process.env.OPENROUTER_API_KEY;
@@ -88,7 +102,12 @@ test('pipeline transition helper emits state changes and rejects invalid jumps',
   assert.throws(() => assertTransition(task.state, TaskState.DONE), /Illegal state transition/);
 });
 
-test('orchestrator analyze and review pipelines use fake provider and clean worktrees', async () => {
+// On win32, Node refuses to spawn .cmd/.bat files without shell:true (hardened after
+// CVE-2024-27980), so this fake claude.cmd shim can never be resolved by cli-provider.ts's
+// shell:false spawn() call — the real installed claude.exe gets invoked instead. Production
+// code correctly avoids shell:true here (prompts are untrusted content), and CI only runs
+// ubuntu-latest, so this is a Windows-local-dev test-infra gap, not an aion bug.
+test('orchestrator analyze and review pipelines use fake provider and clean worktrees', { skip: platform() === 'win32' ? 'fake claude.cmd cannot be spawned without shell:true on Windows (Node CVE-2024-27980 hardening); CI runs Linux only' : false }, async () => {
   const repo = makeFixtureRepo('aion-pipeline-');
   const fake = makeFakeClaude();
   try {

@@ -28,8 +28,11 @@ export function runPackageGuard(cwd: string, maxPackageKb = 750): PackageGuardRe
   const cache = join(tmpdir(), 'aion-npm-cache');
   const packDir = mkdtempSync(join(tmpdir(), 'aion-pack-guard-'));
   mkdirSync(cache, { recursive: true });
+  // shell:true so Windows can resolve npm's .cmd shim (CreateProcess can't exec it directly);
+  // args are fixed strings plus an mkdtempSync path, never attacker/user input.
   const result = spawnSync('npm', ['pack', '--pack-destination', packDir, '--ignore-scripts'], {
     cwd,
+    shell: true,
     encoding: 'utf8',
     env: { ...process.env, npm_config_cache: cache },
     timeout: 60_000,
@@ -48,7 +51,9 @@ export function runPackageGuard(cwd: string, maxPackageKb = 750): PackageGuardRe
     return { ok: false, packageSizeKb: 0, unpackedSizeKb: 0, fileCount: 0, files: [], problems: ['npm pack did not create a tarball'] };
   }
   const tarPath = join(packDir, tarball);
-  const listing = spawnSync('tar', ['-tvzf', tarPath], { encoding: 'utf8', timeout: 30_000, maxBuffer: 5 * 1024 * 1024 });
+  // --force-local: on Windows, Git for Windows ships an MSYS tar ahead of System32's on PATH,
+  // and MSYS tar misreads a `C:\...` path as a `host:path` remote-archive spec without this flag.
+  const listing = spawnSync('tar', ['--force-local', '-tvzf', tarPath], { encoding: 'utf8', timeout: 30_000, maxBuffer: 5 * 1024 * 1024 });
   if (listing.status !== 0) {
     cleanup();
     return { ok: false, packageSizeKb: 0, unpackedSizeKb: 0, fileCount: 0, files: [], problems: ['tarball listing failed'] };

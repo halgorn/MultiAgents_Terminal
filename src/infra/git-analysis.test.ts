@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { analyzeChurn, analyzeBusFactor, totalCommits, gitAuthors, buildChurnReport } from './git-analysis.js';
 
-const PROJECT_DIR = new URL('../../', import.meta.url).pathname;
+const PROJECT_DIR = fileURLToPath(new URL('../../', import.meta.url));
 
 function makeDir(): string {
   return mkdtempSync(join(tmpdir(), 'git-analysis-'));
@@ -74,7 +75,10 @@ test('buildChurnReport: periodDays defaults to 90', () => {
 // ── real git repo: functions succeed ─────────────────────────────────────────
 
 test('totalCommits: real git repo returns > 0 commits', () => {
-  const count = totalCommits(PROJECT_DIR);
+  // Large `days` window so this doesn't flake once the repo's last commit
+  // falls outside the function's default 90-day lookback. Stay under ~24855
+  // days: git's `--since=N.days.ago` overflows a 32-bit second count past that.
+  const count = totalCommits(PROJECT_DIR, 3650);
   assert.ok(count > 0, `expected > 0 commits in project, got ${count}`);
 });
 

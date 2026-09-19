@@ -457,6 +457,8 @@ aion audit diff                          # compare last two audits for free
 
 CLI subprocesses run in a minimal isolated environment. Codex `--ignore-rules` is disabled by default:
 
+Agent isolation is git-only: developer, investigator, and QA agents run in disposable `git worktree` checkouts, not an OS-level sandbox. The `Bash` tool granted to those agents can still run arbitrary shell commands with your user's OS permissions (network access, other paths on disk, etc.) — worktrees confine *file edits* to a disposable branch, they do not confine *command execution*. Deny-listed files (`.env*`, `secrets/**`, `credentials/**`, `*.pem`, `*.key`) are stripped from each worktree before an agent can read them, but do not treat worktree isolation as a security sandbox.
+
 ```bash
 export AION_CODEX_IGNORE_RULES=1         # explicit opt-in required
 ```

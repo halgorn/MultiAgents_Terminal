@@ -26,6 +26,8 @@ export interface TaskResult {
   patch?: PatchReport;
   review?: ReviewReport;
   qaResult?: QAResult;
+  applied?: boolean;
+  applyError?: string;
   errors: string[];
   durationMs: number;
 }

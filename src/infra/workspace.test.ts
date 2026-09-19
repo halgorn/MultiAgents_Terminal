@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, dirname, resolve } from 'path';
 import {
   detectRepos,
   initWorkspace,
@@ -21,8 +21,7 @@ function makeTmp(): string {
 }
 
 function writeFile(p: string, content: string): void {
-  const dir = p.substring(0, p.lastIndexOf('/'));
-  if (dir) mkdirSync(dir, { recursive: true });
+  mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, content);
 }
 
@@ -211,8 +210,9 @@ test('removeRepoFromWorkspace returns null when no workspace', () => {
 });
 
 test('resolveRepoPath joins workspace root with relative repo path', () => {
-  const resolved = resolveRepoPath('/home/user/workspace', { name: 'a', path: 'apps/a' });
-  assert.equal(resolved, '/home/user/workspace/apps/a');
+  const root = resolve('/', 'home', 'user', 'workspace');
+  const resolved = resolveRepoPath(root, { name: 'a', path: 'apps/a' });
+  assert.equal(resolved, resolve(root, 'apps', 'a'));
 });
 
 test('deriveName takes last path segment', () => {

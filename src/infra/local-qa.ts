@@ -31,18 +31,15 @@ function sanitizeCommand(cmd: string, fallback: string): string {
   return fallback;
 }
 
-function parseCommand(command: string): { bin: string; args: string[] } {
-  const parts = command.trim().split(/\s+/);
-  return { bin: parts[0]!, args: parts.slice(1) };
-}
-
 function runCommand(cwd: string, command: string, maxOutputChars: number): { ok: boolean; output: string } {
-  const { bin, args } = parseCommand(command);
   // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
-  // command is sanitized through ALLOWED_COMMANDS and shell execution is disabled.
-  const result = spawnSync(bin, args, {
+  // shell:true is required so Windows can resolve .cmd shims (npm, yarn, pnpm);
+  // command is restricted by sanitizeCommand to a fixed allow-list or a narrow
+  // `(npm|yarn|pnpm) run <script>` pattern, so no attacker-controlled shell
+  // metacharacters ever reach this call.
+  const result = spawnSync(command, {
     cwd,
-    shell: false,
+    shell: true,
     encoding: 'utf8',
     timeout: 5 * 60 * 1000,
     maxBuffer: 1024 * 1024,

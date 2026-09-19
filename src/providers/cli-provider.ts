@@ -30,7 +30,7 @@ const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
 
 export function safeProcessEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   const allowed = [
-    'PATH', 'HOME', 'USER', 'SHELL', 'TMPDIR', 'TEMP', 'TMP',
+    'PATH', 'PATHEXT', 'HOME', 'USER', 'SHELL', 'TMPDIR', 'TEMP', 'TMP',
     'LANG', 'LC_ALL', 'TERM', 'COLORTERM',
     'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX',
     'OPENROUTER_BASE_URL', 'AI_RUNTIME_CODEX_MODEL',

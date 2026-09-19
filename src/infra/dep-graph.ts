@@ -1,5 +1,5 @@
 import { Project } from 'ts-morph';
-import { join, relative, dirname } from 'path';
+import { join, relative, dirname, sep } from 'path';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { isGeneratedArtifact, isIgnoredDirName } from './file-filter.js';
 
@@ -17,6 +17,11 @@ export interface DepGraph {
   hotspots: Array<{ file: string; fanIn: number; fanOut: number; score: number }>;
 }
 
+// Keep dep-graph keys POSIX-style so they match store paths elsewhere, even on Windows.
+function toPosix(p: string): string {
+  return p.split(sep).join('/');
+}
+
 export function buildDepGraph(cwd: string): DepGraph {
   const tsconfigPath = join(cwd, 'tsconfig.json');
   const project = existsSync(tsconfigPath)
@@ -30,7 +35,7 @@ export function buildDepGraph(cwd: string): DepGraph {
   const nodes = new Map<string, DepNode>();
 
   for (const sf of project.getSourceFiles()) {
-    const rel = relative(cwd, sf.getFilePath());
+    const rel = toPosix(relative(cwd, sf.getFilePath()));
     if (rel.startsWith('..') || rel.includes('node_modules') || isGeneratedArtifact(rel)) continue;
     nodes.set(rel, {
       file: rel,
@@ -42,13 +47,13 @@ export function buildDepGraph(cwd: string): DepGraph {
   }
 
   for (const sf of project.getSourceFiles()) {
-    const rel = relative(cwd, sf.getFilePath());
+    const rel = toPosix(relative(cwd, sf.getFilePath()));
     if (!nodes.has(rel)) continue;
     for (const decl of sf.getImportDeclarations()) {
       try {
         const resolved = decl.getModuleSpecifierSourceFile();
         if (!resolved) continue;
-        const importedRel = relative(cwd, resolved.getFilePath());
+        const importedRel = toPosix(relative(cwd, resolved.getFilePath()));
         if (importedRel.startsWith('..') || importedRel.includes('node_modules') || isGeneratedArtifact(importedRel)) continue;
         nodes.get(rel)!.imports.push(importedRel);
         nodes.get(importedRel)?.importedBy.push(rel);
@@ -72,7 +77,7 @@ function collectPyFiles(cwd: string): string[] {
       let st;
       try { st = statSync(full); } catch { continue; }
       if (st.isDirectory()) { walk(full); continue; }
-      const rel = relative(cwd, full);
+      const rel = toPosix(relative(cwd, full));
       if (entry.endsWith('.py') && !isGeneratedArtifact(rel)) files.push(rel);
     }
   };

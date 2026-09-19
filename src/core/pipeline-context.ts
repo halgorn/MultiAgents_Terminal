@@ -43,6 +43,7 @@ export async function transition(
 
 export function makeWorktreeTracker(cwd: string): {
   create: (name: string, taskId: string) => string;
+  exclude: (name: string, taskId: string) => void;
   cleanup: () => void;
 } {
   const worktrees: Array<[string, string]> = [];
@@ -51,6 +52,10 @@ export function makeWorktreeTracker(cwd: string): {
       const wt = createWorktree(cwd, name, taskId);
       worktrees.push([name, taskId]);
       return wt;
+    },
+    exclude(name, taskId) {
+      const idx = worktrees.findIndex(([n, t]) => n === name && t === taskId);
+      if (idx !== -1) worktrees.splice(idx, 1);
     },
     cleanup() {
       for (const [name, taskId] of worktrees) {
