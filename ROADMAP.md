@@ -324,6 +324,105 @@
 
 ---
 
+## 10 Steps de Entrega — v0.7
+
+> Sequência sugerida: os 4 itens da tabela acima primeiro (baixo risco, diffs pequenos), depois os scanners zero-token de maior soma ponderada do Database/Network Intelligence Roadmap (mesma arquitetura de `analyzeNetwork`/`analyzeDatabase`, só aditivo), e a reescrita ink por último (único item arquitetural, maior risco).
+
+### Step 1 — Expor `workspace`/`policy` no menu interativo
+**Prioridade: P0 · Complexidade: Baixa**
+
+- Adicionar grupo "Workspace" e "Policy" em `menu.ts` com os mesmos itens já registrados via Commander em `registerWorkspace`/`registerPolicy`
+- Reusar o padrão de `MENU_LINES`/grupos já existente para `Setup`/`Audit`
+
+**Arquivos:** `src/cli/menu.ts`
+
+---
+
+### Step 2 — Validação Zod em `policy.ts`/`workspace.ts`
+**Prioridade: P2 · Complexidade: Baixa**
+
+- Criar `PolicySchema` e `WorkspaceConfigSchema` em `src/schemas/` seguindo o modelo de `TaskRecordSchema` (commit `e7d48c8`)
+- Trocar os `JSON.parse(...) as ...` em `policy.ts:52,65` e no equivalente em `workspace.ts` por `safeParse`, mantendo o fallback para `DEFAULT_POLICY` já existente em caso de erro
+
+**Arquivos:** `src/schemas/policy.ts` (novo), `src/infra/policy.ts`, `src/infra/workspace.ts`
+
+---
+
+### Step 3 — `aion workspace audit` (rollup multi-repo)
+**Prioridade: P1 · Complexidade: Média**
+
+- Novo subcomando que itera `listRepos()` e roda o pipeline de audit local (zero-token) em cada repo, agregando score/findings num único output
+- Reusar `collectAuditStats`/`AuditPipeline` já existentes em `src/core/pipelines`
+
+**Arquivos:** `src/cli/commands/workspace.ts`, `src/core/pipelines/audit-pipeline.ts`
+
+---
+
+### Step 4 — Helper de cor/output em `renderer.ts`
+**Prioridade: P3 · Complexidade: Baixa**
+
+- Extrair `colorForScore(value, thresholds)` e padronizar em `process.stdout.write` (ou `console.log`, mas um só) nos ~10 pontos de `showResult`
+
+**Arquivos:** `src/cli/ui/renderer.ts`
+
+---
+
+### Step 5 — `aion scan db-config` (Connection Config Auditor)
+**Prioridade: Alta · Complexidade: Baixa · Soma 54 (maior do Database Intelligence Roadmap)**
+
+- Novo `src/infra/db-config-analyzer.ts`: varre `.env`, `docker-compose.yml`, `prisma/schema.prisma`, `knexfile.js`, `typeorm.config.ts`
+- Detecta `sslmode=disable`/`ssl:false`, ausência de pool/timeout, senha em texto plano na connection string
+- Zero-token, mesmo formato de report de `analyzeNetwork`
+
+**Arquivos:** `src/infra/db-config-analyzer.ts` (novo), `src/cli/commands/scan.ts` (novo subcomando `db-config`)
+
+---
+
+### Step 6 — `aion scan db-schema` (Schema Quality Analyzer)
+**Prioridade: Alta · Complexidade: Média · Soma 49**
+
+- Parseia schemas Prisma/TypeORM/Sequelize/Django; detecta FK sem índice, nullable sem default, ausência de `@unique` em email/cpf, tabela sem PK
+
+**Arquivos:** `src/infra/db-schema-analyzer.ts` (novo), `src/cli/commands/scan.ts`
+
+---
+
+### Step 7 — `aion scan db-pii` (PII & Data Column Scanner)
+**Prioridade: Alta · Complexidade: Baixa · Soma 49 · Relevante para LGPD/GDPR**
+
+- Detecta colunas sensíveis (`email`, `cpf`, `senha`, `phone`, `ssn`) em schemas/migrations sem sinal de criptografia ou `select:false`
+
+**Arquivos:** `src/infra/db-pii-analyzer.ts` (novo), `src/cli/commands/scan.ts`
+
+---
+
+### Step 8 — Request Logging / PII Leak Detector
+**Prioridade: Média · Complexidade: Baixa · item #9 pendente do Network Roadmap**
+
+- Estende `analyzeNetwork()` (não um subcomando novo — mesma arquitetura de um `NetworkReport` com mais um tipo de sinal) para detectar `console.log(req.body)` / `logger.info(req)` sem sanitização
+
+**Arquivos:** `src/infra/network-analyzer.ts`
+
+---
+
+### Step 9 — WebSocket Security Checker
+**Prioridade: Média · Complexidade: Baixa · item #10 pendente do Network Roadmap**
+
+- Mesmo padrão do Step 8: novo sinal em `analyzeNetwork()` para `ws://` sem TLS, `upgrade` sem auth, broadcast sem filtro de sala
+
+**Arquivos:** `src/infra/network-analyzer.ts`
+
+---
+
+### Step 10 — TUI ink-based (OpenCode quality)
+**Prioridade: Muito alta impacto · Complexidade: Muito alta · carregado do roadmap anterior, único item arquitetural em aberto**
+
+- Ver detalhamento completo na seção "Step 10" do roadmap original acima — sem mudanças, continua exigindo spike técnico antes de comprometer os outros 9 steps
+
+**Arquivos:** `src/cli/tui.ts`, `src/cli/menu.ts`, `src/cli/ui/renderer.ts`, `package.json`
+
+---
+
 ## Database Intelligence Roadmap
 
 > Análise com 10 personas (Backend Engineer, DBA, DevOps/SRE, Security Engineer, Junior Developer, Tech Lead, Startup CTO, QA Engineer, Full-stack Developer, Compliance/DPO).
