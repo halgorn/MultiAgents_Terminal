@@ -1,5 +1,7 @@
 import { saveEvidenceEntry, loadEvidence } from './store.js';
+import { EvidenceReportSchema } from '../../schemas/evidence.js';
 import type { EvidenceReport } from '../../schemas/evidence.js';
+import { log } from '../logger.js';
 
 export function saveEvidence(
   taskId: string,
@@ -11,5 +13,15 @@ export function saveEvidence(
 }
 
 export function getEvidenceForTask(taskId: string): EvidenceReport[] {
-  return (loadEvidence(taskId) as Array<{ report: EvidenceReport }>).map((e) => e.report);
+  const entries = loadEvidence(taskId) as Array<{ report?: unknown }>;
+  const reports: EvidenceReport[] = [];
+  for (const entry of entries) {
+    const parsed = EvidenceReportSchema.safeParse(entry.report);
+    if (parsed.success) {
+      reports.push(parsed.data);
+    } else {
+      log.warn(`Evidence entry for task "${taskId}" failed validation, skipping: ${parsed.error.message}`);
+    }
+  }
+  return reports;
 }
