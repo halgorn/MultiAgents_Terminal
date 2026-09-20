@@ -1,13 +1,24 @@
-# Aion — Roadmap Unificado v0.5.1
+# Aion — Roadmap Unificado v0.7
 
 > Consolidação completa: estado atual + 25 itens de melhoria + análise de 10 personas + gaps OpenCode → 10 steps de entrega priorizados.
+> **Atualizado 2026-09-20**: Steps 1–9 confirmados como já implementados (ver checklist abaixo); Step 10 (TUI ink-based) segue como único item grande pendente. Nova seção "Roadmap v0.7 — Novas Features" adicionada a partir de gaps encontrados em auditoria de arquitetura (menu de comandos novos não exposto, validação de leitura em stores JSON).
 
 ---
 
-## Estado Atual (v0.5.1 — 2026-06-16)
+## Estado Atual (v0.6.7 — 2026-09-20)
 
-**742 testes passando / 0 falhas.**
-**36 comandos CLI publicados em `@aionlabsai/aion`.**
+**1043 testes passando / 0 falhas (6 skipped, Windows-only mocks).**
+**36+ comandos CLI publicados em `@aionlabsai/aion`, incluindo `workspace` (multi-repo) e `policy` (budget/deny-list) adicionados após o v0.5.1.**
+
+### Desde o v0.5.1
+
+| Capability | Status |
+|---|---|
+| Windows hardening (CVE-2024-27980: `shell:true` em todos os `spawnSync`/`spawn` de `.cmd`) | ✓ |
+| `aion workspace init/list/sync/info` (multi-repo paralelo) | ✓ |
+| Busca cross-repo + `WORKSPACE.md` agregado | ✓ |
+| `aion policy` — budget caps, deny list, seleção de modelo, tracking de uso | ✓ |
+| Validação de leitura (Zod `safeParse`) em `task-repo`/`evidence-repo` — substitui cast não validado | ✓ |
 
 ### Infraestrutura Core
 
@@ -285,18 +296,31 @@
 
 ## Matriz de Impacto × Complexidade
 
-| Step | Impacto total (personas) | Complexidade | Prioridade |
+| Step | Impacto total (personas) | Complexidade | Status |
 |---|---|---|---|
-| Step 1 — Onboarding inteligente | Alto | Baixa | **P0** |
-| Step 2 — Vim navigation + filter UX | Alto | Baixa | **P0** |
-| Step 3 — Spinners + feedback | Médio | Baixa | **P1** |
-| Step 4 — REPL persistence + chat polish | Médio | Baixa | **P1** |
-| Step 5 — Audit UX polish | Médio | Baixa | **P1** |
-| Step 6 — Dívida técnica + i18n | Baixo | Baixa | **P2** |
-| Step 7 — CI/scripting & automação | Médio | Média | **P2** |
-| Step 8 — Inline output (sem Press Enter) | Alto | Média | **P2** |
-| Step 9 — Score timeline + audit diff | Alto | Média | **P3** |
-| Step 10 — TUI ink-based (OpenCode quality) | Muito alto | Muito alta | **P3** |
+| Step 1 — Onboarding inteligente | Alto | Baixa | ✓ Shipped |
+| Step 2 — Vim navigation + filter UX | Alto | Baixa | ✓ Shipped (`j`/`k` em `tui.ts`) |
+| Step 3 — Spinners + feedback | Médio | Baixa | ✓ Shipped (`chat.ts`/`explain.ts` usam `ora`) |
+| Step 4 — REPL persistence + chat polish | Médio | Baixa | ✓ Shipped (`chat-history.jsonl` + `--clear-history`) |
+| Step 5 — Audit UX polish | Médio | Baixa | ✓ Shipped |
+| Step 6 — Dívida técnica + i18n | Baixo | Baixa | ✓ Shipped |
+| Step 7 — CI/scripting & automação | Médio | Média | ✓ Shipped |
+| Step 8 — Inline output (sem Press Enter) | Alto | Média | ✓ Shipped (padrão `pressEnter` removido) |
+| Step 9 — Score timeline + audit diff | Alto | Média | ✓ Shipped (`aion audit diff`, sparkline em `health.ts`) |
+| Step 10 — TUI ink-based (OpenCode quality) | Muito alto | Muito alta | **Pendente — único item grande em aberto** |
+
+---
+
+## Roadmap v0.7 — Novas Features
+
+> Itens levantados na auditoria de arquitetura de 2026-09-20 (code-graph-mcp + grep estrutural), não em brainstorm — cada um tem uma causa concreta abaixo.
+
+| # | Feature | Prioridade | Complexidade | Evidência |
+|---|---------|:---:|:---:|---|
+| 1 | Expor `workspace` e `policy` no menu interativo | **P0** | Baixa | `grep -i "policy\|workspace" src/cli/menu.ts` não retorna nada — os dois comandos só existem via CLI direta (`program`), invisíveis para quem usa o menu TUI. Mesmo gap do Step 1 original (persona 1), agora reaberto por features novas. |
+| 2 | Endurecer leitura de `policy.ts`/`workspace.ts` com Zod `safeParse` | **P2** | Baixa | `policy.ts:52` e `65` fazem `JSON.parse(...) as Partial<Policy>` sem validação de tipo — mitigado por `mergeWithDefaults`, mas um campo com tipo errado (ex.: `monthlyUsd` como string) passa direto. Mesmo padrão já corrigido em `task-repo.ts`/`evidence-repo.ts` (commit `e7d48c8`); reaproveitar `TaskRecordSchema` como modelo. |
+| 3 | `aion workspace audit` — rollup de saúde multi-repo | **P1** | Média | A infra de sync/search cross-repo já existe (`workspace.ts`, `workspace-search.ts`), mas não há comando que agregue score/findings de `aion audit` através dos repos do workspace — hoje é rodar `audit` manualmente em cada um. |
+| 4 | Centralizar tokens de cor/output em `renderer.ts` | **P3** | Baixa | `Renderer` mistura `console.log` e `process.stdout.write` entre métodos, e repete lógica de threshold de cor (`conf >= 80 ? green : ...`) inline em ~10 pontos. Sem bug funcional hoje; vale um helper único (`colorForScore()`) antes que a próxima métrica copie o padrão de novo. |
 
 ---
 
