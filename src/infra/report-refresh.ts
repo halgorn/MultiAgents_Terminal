@@ -23,18 +23,25 @@ export function supportsHyperlinks(): boolean {
   return Boolean(process.env.WT_SESSION || process.env.TERM_PROGRAM);
 }
 
-export function openReportFile(path: string): void {
+// Resolves once the opener process has actually been created (or failed to spawn) —
+// not once the browser has loaded. Callers that process.exit() shortly after refreshing
+// the report (e.g. `aion audit`) must await this, otherwise on Windows the exit can race
+// ahead of the OS actually issuing the `start`/`open` launch and it silently never opens.
+export function openReportFile(path: string): Promise<void> {
   const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
   const target = process.platform === 'win32' ? path : `file://${path}`;
   const args = process.platform === 'win32' ? ['/c', 'start', '', path] : [target];
   const warn = () => console.log(chalk.yellow(`  Could not auto-open the browser. Open this file manually: ${path}`));
-  try {
-    const child = spawn(opener, args, { detached: true, stdio: 'ignore' });
-    child.on('error', warn);
-    child.unref();
-  } catch {
-    warn();
-  }
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(opener, args, { detached: true, stdio: 'ignore' });
+      child.on('error', () => { warn(); resolve(); });
+      child.on('spawn', () => { child.unref(); resolve(); });
+    } catch {
+      warn();
+      resolve();
+    }
+  });
 }
 
 export async function refreshUnifiedReport(cwd: string, options: RefreshReportOptions = {}): Promise<{ htmlFile?: string; mdFile: string }> {
@@ -69,6 +76,6 @@ export async function refreshUnifiedReport(cwd: string, options: RefreshReportOp
       console.log(chalk.bold.cyan('  📊 ') + terminalFileLink(chalk.bold.cyan('Open dashboard →'), written.htmlFile));
     }
   }
-  if (shouldOpen && written.htmlFile) openReportFile(written.htmlFile);
+  if (shouldOpen && written.htmlFile) await openReportFile(written.htmlFile);
   return { htmlFile: written.htmlFile, mdFile: written.mdFile };
 }

@@ -150,13 +150,13 @@ export function registerReport(program: Command): void {
     .command('latest')
     .description('Show the latest audit report paths and recommended files')
     .option('--open', 'open latest HTML report')
-    .action((options: { open?: boolean }) => {
+    .action(async (options: { open?: boolean }) => {
       const cwd = process.cwd();
       const latest = latestAuditPointer(cwd);
       printLatest(cwd);
       if (options.open && latest) {
         try {
-          openReportFile(ensureUnifiedReport(cwd));
+          await openReportFile(ensureUnifiedReport(cwd));
         } catch (err) {
           console.log(chalk.yellow(String((err as Error).message)));
         }
