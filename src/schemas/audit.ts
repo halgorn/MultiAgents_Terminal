@@ -5,6 +5,7 @@ const KNOWN_CATEGORIES = [
   'error-handling', 'types', 'maintainability', 'token-usage',
   'bugs', 'redundancy', 'infrastructure', 'observability',
   'resilience', 'data', 'dependencies', 'compliance', 'multitenancy',
+  'prompt-audit',
 ] as const;
 
 export const AuditFindingSchema = z.object({

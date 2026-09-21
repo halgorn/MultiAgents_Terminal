@@ -10,6 +10,7 @@ import { KimiProvider } from './kimi-provider.js';
 import { MiniMaxProvider } from './minimax-provider.js';
 import type { ProviderRunInput, AgentProvider } from './types.js';
 export type { ProviderRunInput, AgentProvider } from './types.js';
+import { SCAN_DOMAINS } from '../prompts/scanner.js';
 
 const AGENT_TIMEOUT_MS = 5 * 60 * 1000;
 const USAGE_UNAVAILABLE = '\0usage-unavailable\0';
@@ -24,6 +25,7 @@ export const AGENT_TOOLS: Record<string, string[]> = {
   developer:            ['Read', 'Edit', 'Write', 'Bash'],
   reviewer:             ['Read', 'Glob', 'Grep'],
   qa:                   ['Bash', 'Read'],
+  ...Object.fromEntries(SCAN_DOMAINS.map((domain) => [`scanner-${domain}`, ['Read', 'Glob', 'Grep', 'Bash']])),
 };
 
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];

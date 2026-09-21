@@ -19,7 +19,7 @@ async function refreshScanDashboard(cwd: string, scanName: string): Promise<void
 export function registerScan(program: Command): void {
   const scan = program
     .command('scan')
-    .description('Zero-token code scans: api-map, env-audit, cognitive-load, file-size, seo, secrets, sbom');
+    .description('Zero-token code scans: api-map, env-audit, cognitive-load, file-size, seo, secrets, sbom, db-config, db-schema, db-pii');
 
   // ── api-map ────────────────────────────────────────────────────────────────
   scan
@@ -291,6 +291,102 @@ export function registerScan(program: Command): void {
       }
       console.log(chalk.dim('  Full dashboard: aion report'));
       await refreshScanDashboard(cwd, 'scan network');
+    });
+
+  // ── db-config ──────────────────────────────────────────────────────────────
+  scan
+    .command('db-config')
+    .description('Database connection config audit: TLS, pooling, timeouts, plaintext credentials')
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
+      const cwd = process.cwd();
+      const { analyzeDbConfig } = await import('../../infra/db-config-analyzer.js');
+      const report = analyzeDbConfig(cwd);
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nDatabase Config Audit\n'));
+      const scoreColor = report.score >= 75 ? chalk.green : report.score >= 50 ? chalk.yellow : chalk.red;
+      console.log(`  score: ${scoreColor(`${report.score}/100`)}  · ${report.filesChecked} config files scanned\n`);
+      if (report.issues.length === 0) {
+        console.log(chalk.green('✓ No database config issues detected'));
+      } else {
+        report.issues.forEach((i) => {
+          const icon = i.severity === 'high' ? chalk.red('✗') : i.severity === 'medium' ? chalk.yellow('!') : chalk.dim('·');
+          console.log(`  ${icon}  ${chalk.bold(i.area.padEnd(16))} ${i.issue}`);
+          console.log(chalk.dim(`       → ${i.recommendation}\n`));
+        });
+      }
+      console.log(chalk.dim('  Full dashboard: aion report'));
+      await refreshScanDashboard(cwd, 'scan db-config');
+    });
+
+  // ── db-schema ──────────────────────────────────────────────────────────────
+  scan
+    .command('db-schema')
+    .description('ORM schema quality audit: missing indexes, primary keys, unique constraints, onDelete rules')
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
+      const cwd = process.cwd();
+      const { analyzeDbSchema } = await import('../../infra/db-schema-analyzer.js');
+      const report = analyzeDbSchema(cwd);
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nDatabase Schema Quality Audit\n'));
+      const scoreColor = report.score >= 75 ? chalk.green : report.score >= 50 ? chalk.yellow : chalk.red;
+      console.log(`  score: ${scoreColor(`${report.score}/100`)}  · ${report.filesChecked} schema files, ${report.modelsChecked} models scanned\n`);
+      if (report.issues.length === 0) {
+        console.log(chalk.green('✓ No schema quality issues detected'));
+      } else {
+        report.issues.forEach((i) => {
+          const icon = i.severity === 'high' ? chalk.red('✗') : i.severity === 'medium' ? chalk.yellow('!') : chalk.dim('·');
+          console.log(`  ${icon}  ${chalk.bold(i.area.padEnd(20))} ${i.issue}`);
+          console.log(chalk.dim(`       → ${i.recommendation}\n`));
+        });
+      }
+      console.log(chalk.dim('  Full dashboard: aion report'));
+      await refreshScanDashboard(cwd, 'scan db-schema');
+    });
+
+  // ── db-pii ─────────────────────────────────────────────────────────────────
+  scan
+    .command('db-pii')
+    .description('PII column scanner: sensitive fields (email, cpf, phone, etc.) without encryption signals — LGPD/GDPR')
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
+      const cwd = process.cwd();
+      const { analyzeDbPii } = await import('../../infra/db-pii-analyzer.js');
+      const report = analyzeDbPii(cwd);
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nPII Column Scan (LGPD/GDPR)\n'));
+      const scoreColor = report.score >= 75 ? chalk.green : report.score >= 50 ? chalk.yellow : chalk.red;
+      console.log(`  score: ${scoreColor(`${report.score}/100`)}  · ${report.filesChecked} files scanned\n`);
+      if (report.issues.length === 0) {
+        console.log(chalk.green('✓ No unprotected PII columns detected'));
+      } else {
+        report.issues.forEach((i) => {
+          const icon = i.severity === 'high' ? chalk.red('✗') : i.severity === 'medium' ? chalk.yellow('!') : chalk.dim('·');
+          console.log(`  ${icon}  ${chalk.bold(i.area.padEnd(16))} ${i.issue}`);
+          console.log(chalk.dim(`       → ${i.recommendation}\n`));
+        });
+      }
+      console.log(chalk.dim('  Full dashboard: aion report'));
+      await refreshScanDashboard(cwd, 'scan db-pii');
     });
 
   // ── sbom ───────────────────────────────────────────────────────────────────
