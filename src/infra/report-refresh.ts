@@ -19,11 +19,13 @@ export function openReportFile(path: string): void {
   const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
   const target = process.platform === 'win32' ? path : `file://${path}`;
   const args = process.platform === 'win32' ? ['/c', 'start', '', path] : [target];
+  const warn = () => console.log(chalk.yellow(`  Could not auto-open the browser. Open this file manually: ${path}`));
   try {
     const child = spawn(opener, args, { detached: true, stdio: 'ignore' });
+    child.on('error', warn);
     child.unref();
   } catch {
-    // Opening the browser is best-effort. The terminal link/path remains available.
+    warn();
   }
 }
 
