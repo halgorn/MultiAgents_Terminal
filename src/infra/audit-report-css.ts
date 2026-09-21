@@ -110,13 +110,15 @@ tr:hover td{background:rgba(255,255,255,.012)}
 .sec-hdr h2{margin:0;border:none;padding:0;flex:1}
 .sec-hdr-btns{display:flex;gap:6px}
 @media print{
+  /* Every rule above is built on these custom properties, so redefining them for
+     light/print output fixes tables, cards, and pills in one place — patching each
+     selector individually (background/border only, never text) left th/td/h3 text
+     colors tuned for a dark surface unreadable once that surface went white. */
+  :root{--bg:#fff;--s1:#f9f9f9;--s2:#f0f0f0;--s3:#e8e8e8;--s4:#e0e0e0;--line:#ccc;--text:#111;--muted:#555;--dim:#333}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .header,.sidebar,.export-bar,.modal-overlay,.filters,.sec-hdr-btns,.copy-btn,#select-all-cb,.row-cb{display:none!important}
-  body{background:#fff;color:#111}
   .main{margin-left:0;padding:10px}
   section{animation:none;page-break-inside:avoid}
-  table,.action-card,.stat-card,.bento-hero,.hotspot{background:#f9f9f9;border-color:#ddd}
-  th,td{border-color:#ddd}
   a{color:#000}
 }
 `;

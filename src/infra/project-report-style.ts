@@ -54,14 +54,18 @@ section{scroll-margin-top:60px;animation:fadeUp .38s ease both}
   table{display:block;overflow-x:auto}
 }
 @media print{
+  /* Every rule above is built on these custom properties, so redefining them for
+     light/print output is enough to fix tables, headings, and cards in one place —
+     patching each selector individually would miss the next one added later. */
+  :root{--bg:#fff;--s1:#f9f9f9;--s2:#f0f0f0;--s3:#e8e8e8;--line:#ccc;--text:#111;--muted:#555;--dim:#333;--accent:#0a7a2f}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   nav{display:none}
-  body{background:#fff;color:#111;font-size:11px}
+  body{font-size:11px}
   .container{max-width:100%;padding:12px}
-  .header{background:#f5f5f5;border-color:#ddd}
   .score strong{font-size:36px}
-  .card{background:#f9f9f9;border-color:#ddd}
-  .graph-wrap{overflow:hidden}
+  /* renderArchitectureSvg() fills node/edge text with hardcoded light colors made for a
+     dark backdrop, so this container must stay dark even though everything else went light */
+  .graph-wrap{overflow:hidden;background:#0f0f14;border-color:#2c2c3e}
   section{animation:none}
   a{color:#000}
 }`;
