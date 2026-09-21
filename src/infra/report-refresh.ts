@@ -15,6 +15,14 @@ export function terminalFileLink(label: string, path: string): string {
   return `\x1b]8;;${url}\x1b\\${label}\x1b]8;;\x1b\\`;
 }
 
+// Classic Windows conhost (plain PowerShell/cmd) does not render OSC-8 hyperlinks,
+// so a clickable "Open dashboard" link there is dead text. Windows Terminal and
+// VS Code's integrated terminal do support it; most non-Windows terminals do too.
+export function supportsHyperlinks(): boolean {
+  if (process.platform !== 'win32') return true;
+  return Boolean(process.env.WT_SESSION || process.env.TERM_PROGRAM);
+}
+
 export function openReportFile(path: string): void {
   const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
   const target = process.platform === 'win32' ? path : `file://${path}`;
@@ -57,7 +65,9 @@ export async function refreshUnifiedReport(cwd: string, options: RefreshReportOp
 
   if (progress && written.htmlFile) {
     console.log(chalk.gray(`  HTML: ${written.htmlFile}`));
-    console.log(chalk.bold.cyan('  📊 ') + terminalFileLink(chalk.bold.cyan('Open dashboard →'), written.htmlFile));
+    if (supportsHyperlinks()) {
+      console.log(chalk.bold.cyan('  📊 ') + terminalFileLink(chalk.bold.cyan('Open dashboard →'), written.htmlFile));
+    }
   }
   if (shouldOpen && written.htmlFile) openReportFile(written.htmlFile);
   return { htmlFile: written.htmlFile, mdFile: written.mdFile };
