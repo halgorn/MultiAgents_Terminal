@@ -8,6 +8,10 @@ import { displayProjectName } from '../../infra/project-name.js';
 import { analyzeDatabase } from '../../infra/db-analyzer.js';
 import { analyzeNetwork } from '../../infra/network-analyzer.js';
 import { runSecurityScan } from '../../infra/security-scanner.js';
+import { analyzeDbConfig } from '../../infra/db-config-analyzer.js';
+import { analyzeDbSchema } from '../../infra/db-schema-analyzer.js';
+import { analyzeDbPii } from '../../infra/db-pii-analyzer.js';
+import { analyzeDbMigrations } from '../../infra/db-migrations-analyzer.js';
 
 function ensureUnifiedReport(cwd: string): string {
   const reportPath = projectReportPath(cwd);
@@ -53,6 +57,30 @@ function printLatest(cwd: string): void {
       if (db.issues.length > 3) console.log(chalk.dim(`  … and ${db.issues.length - 3} more — see full report`));
     }
     console.log(chalk.dim('  Full view:   aion report  (visual dashboard → Database section)'));
+  } catch { /* best-effort */ }
+
+  // Database Intelligence summary: config, schema, PII, migrations (zero-token, runs locally)
+  try {
+    const dbConfig = analyzeDbConfig(cwd);
+    const dbSchema = analyzeDbSchema(cwd);
+    const dbPii = analyzeDbPii(cwd);
+    const dbMigrations = analyzeDbMigrations(cwd);
+    const dbIntelIssues = [...dbConfig.issues, ...dbSchema.issues, ...dbPii.issues, ...dbMigrations.issues];
+    const highDbIntel = dbIntelIssues.filter((i) => i.severity === 'high').length;
+    console.log('');
+    console.log(chalk.bold('── Database Intelligence (Config · Schema · PII · Migrations) ─'));
+    console.log(`  config:      ${dbConfig.score}/100   schema: ${dbSchema.score}/100   pii: ${dbPii.score}/100   migrations: ${dbMigrations.score}/100`);
+    if (dbIntelIssues.length === 0) {
+      console.log(chalk.dim('  No config, schema, PII, or migration issues detected.'));
+    } else {
+      console.log(`  issues:      ${dbIntelIssues.length} total${highDbIntel > 0 ? chalk.red(` · ${highDbIntel} high`) : ''}`);
+      dbIntelIssues.slice(0, 3).forEach((i) => {
+        const sev = i.severity === 'high' ? chalk.red(i.severity) : chalk.yellow(i.severity);
+        console.log(`  ${sev}  ${chalk.dim(i.area)}  ${i.issue}`);
+      });
+      if (dbIntelIssues.length > 3) console.log(chalk.dim(`  … and ${dbIntelIssues.length - 3} more — see full report`));
+    }
+    console.log(chalk.dim('  Full view:   aion report  (visual dashboard → DB Intel section)'));
   } catch { /* best-effort */ }
 
   // Network & API Security summary (zero-token, runs locally)
