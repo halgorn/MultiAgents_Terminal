@@ -196,6 +196,7 @@ ${sectionsByDomain.sort((a, b) => b.findings.length - a.findings.length).map((s)
     <span style="font-size:13px;color:var(--muted);font-family:'JetBrains Mono',monospace">${esc(dateStr)}</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
+    <a href="#" onclick="window.print();return false" style="padding:6px 12px;border:1px solid var(--line);border-radius:8px;color:var(--dim);font-size:13px;font-family:'JetBrains Mono',monospace">⬇ Export PDF</a>
     <a href="../../index.html" style="padding:6px 12px;border:1px solid var(--line);border-radius:8px;color:var(--dim);font-size:13px;font-family:'JetBrains Mono',monospace">← Dashboard</a>
   </div>
 </header>

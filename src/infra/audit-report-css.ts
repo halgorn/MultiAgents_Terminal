@@ -109,4 +109,14 @@ tr:hover td{background:rgba(255,255,255,.012)}
 .sec-hdr{display:flex;align-items:center;gap:10px;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:10px}
 .sec-hdr h2{margin:0;border:none;padding:0;flex:1}
 .sec-hdr-btns{display:flex;gap:6px}
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .header,.sidebar,.export-bar,.modal-overlay,.filters,.sec-hdr-btns,.copy-btn,#select-all-cb,.row-cb{display:none!important}
+  body{background:#fff;color:#111}
+  .main{margin-left:0;padding:10px}
+  section{animation:none;page-break-inside:avoid}
+  table,.action-card,.stat-card,.bento-hero,.hotspot{background:#f9f9f9;border-color:#ddd}
+  th,td{border-color:#ddd}
+  a{color:#000}
+}
 `;
