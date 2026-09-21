@@ -43,11 +43,9 @@ export function getCurrentVersion(): string {
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/;
 
-async function fetchLatest(): Promise<string | null> {
+async function fetchLatest(signal: AbortSignal): Promise<string | null> {
   try {
-    const res = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`, {
-      signal: AbortSignal.timeout(3000),
-    });
+    const res = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`, { signal });
     if (!res.ok) return null;
     const version = ((await res.json()) as { version?: string }).version;
     // Registry response is untrusted input; installUpdate() interpolates this into a
@@ -215,10 +213,12 @@ export async function checkForUpdate(): Promise<void> {
 
   const stale = shouldRefreshUpdateCache(cache, current, now);
   if (stale) {
-    const latest = await Promise.race([
-      fetchLatest(),
-      new Promise<null>((r) => setTimeout(() => r(null), 2000)),
-    ]);
+    // Aborting via the same signal (rather than racing an independent timer) ensures the
+    // fetch's socket/timer handle is torn down before this function returns, so nothing is
+    // left mid-close if the process exits right after (see index.ts for why that matters).
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const latest = await fetchLatest(controller.signal).finally(() => clearTimeout(timeout));
     if (latest) {
       writeCache({ checkedAt: now, latestVersion: latest, currentVersion: current });
       if (isNewer(latest, current)) await handleUpdate(current, latest);

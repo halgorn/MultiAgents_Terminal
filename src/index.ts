@@ -51,7 +51,12 @@ import { runMenu } from './cli/menu.js';
 import { shouldRunInitialWizard } from './infra/setup/project-setup.js';
 
 runMigrations();
-await checkForUpdate();
+// --version/--help exit synchronously inside program.parse() below (commander calls
+// process.exit(0) directly); skip the network update-check for them so no fetch/timer
+// handle is left mid-close when that exit fires (was crashing on Windows with
+// "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)").
+const isVersionOrHelpOnly = process.argv.slice(2).some((a) => ['--version', '-V', '--help', '-h'].includes(a));
+if (!isVersionOrHelpOnly) await checkForUpdate();
 
 program
   .name('ai')
