@@ -19,7 +19,7 @@ async function refreshScanDashboard(cwd: string, scanName: string): Promise<void
 export function registerScan(program: Command): void {
   const scan = program
     .command('scan')
-    .description('Zero-token code scans: api-map, env-audit, cognitive-load, file-size, seo, secrets, sbom, db-config, db-schema, db-pii');
+    .description('Zero-token code scans: api-map, env-audit, cognitive-load, file-size, seo, secrets, sbom, db-config, db-schema, db-pii, db-migrations');
 
   // ── api-map ────────────────────────────────────────────────────────────────
   scan
@@ -387,6 +387,38 @@ export function registerScan(program: Command): void {
       }
       console.log(chalk.dim('  Full dashboard: aion report'));
       await refreshScanDashboard(cwd, 'scan db-pii');
+    });
+
+  // ── db-migrations ────────────────────────────────────────────────────────────
+  scan
+    .command('db-migrations')
+    .description('Migration health scan: drop-column risk, FK without index, missing rollback, risky ALTER TABLE')
+    .option('--json', 'output as JSON')
+    .option('--output <file>', 'write JSON output to file')
+    .action(async (options: { json?: boolean; output?: string }) => {
+      const cwd = process.cwd();
+      const { analyzeDbMigrations } = await import('../../infra/db-migrations-analyzer.js');
+      const report = analyzeDbMigrations(cwd);
+      if (options.json || options.output) {
+        const out = JSON.stringify(report, null, 2) + '\n';
+        if (options.output) { mkdirSync(dirname(options.output), { recursive: true }); writeFileSync(options.output, out, 'utf8'); }
+        else process.stdout.write(out);
+        return;
+      }
+      console.log(chalk.bold.cyan('\nMigration Health Scan\n'));
+      const scoreColor = report.score >= 75 ? chalk.green : report.score >= 50 ? chalk.yellow : chalk.red;
+      console.log(`  score: ${scoreColor(`${report.score}/100`)}  · ${report.filesChecked} files scanned\n`);
+      if (report.issues.length === 0) {
+        console.log(chalk.green('✓ No migration health issues detected'));
+      } else {
+        report.issues.forEach((i) => {
+          const icon = i.severity === 'high' ? chalk.red('✗') : i.severity === 'medium' ? chalk.yellow('!') : chalk.dim('·');
+          console.log(`  ${icon}  ${chalk.bold(i.area.padEnd(16))} ${i.issue}`);
+          console.log(chalk.dim(`       → ${i.recommendation}\n`));
+        });
+      }
+      console.log(chalk.dim('  Full dashboard: aion report'));
+      await refreshScanDashboard(cwd, 'scan db-migrations');
     });
 
   // ── sbom ───────────────────────────────────────────────────────────────────
